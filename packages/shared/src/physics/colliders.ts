@@ -1,6 +1,7 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat';
 import type RAPIER_DEFAULT from '@dimforge/rapier3d-compat';
 import type { DoorDef, Element, Layout, Surface, Vec3 } from '../layout/types.ts';
+import { heliBodyBoxes } from '../sim/helicopter.ts';
 
 export type Rapier = typeof RAPIER_DEFAULT;
 
@@ -9,6 +10,10 @@ export interface ColliderInfo {
   kind: string;
   surface?: Surface;
   doorId?: string;
+  /** Semantic object (furniture id, door id, "helicopter") the collider belongs to. */
+  object?: string;
+  /** Clear glass: blocks movement but not sight. */
+  transparent?: boolean;
 }
 
 export interface StaticWorld {
@@ -18,7 +23,12 @@ export interface StaticWorld {
   doors: Map<string, RAPIER.Collider>;
   setDoorOpen(id: string, open: boolean): void;
   isDoorOpen(id: string): boolean;
+  /** Parks the helicopter on the pad with the given heading, or removes it (null). */
+  setHelicopter(padYaw: number | null): void;
+  readonly helicopterParked: boolean;
 }
+
+const TRANSPARENT_KINDS = new Set(['glass-wall']);
 
 /** Quaternion rotating +Y onto the unit vector d. */
 function quatFromUp(d: Vec3): { x: number; y: number; z: number; w: number } {
@@ -103,16 +113,27 @@ export function buildStaticWorld(R: Rapier, layout: Layout, openDoors: Record<st
     if (!el.collide) continue;
     for (const desc of descsFor(R, el)) {
       const c = world.createCollider(desc);
-      info.set(c.handle, { elementId: el.id, kind: el.kind, surface: el.surface });
+      const ci: ColliderInfo = { elementId: el.id, kind: el.kind, surface: el.surface };
+      if (el.object) ci.object = el.object;
+      if (TRANSPARENT_KINDS.has(el.kind)) ci.transparent = true;
+      info.set(c.handle, ci);
     }
   }
   const doors = new Map<string, RAPIER.Collider>();
   for (const d of layout.doors) {
     const c = world.createCollider(doorDesc(R, d));
     c.setEnabled(!openDoors[d.id]);
-    info.set(c.handle, { elementId: d.id, kind: 'door', surface: 'stone', doorId: d.id });
+    // The sliding doors are clear glass panels.
+    info.set(c.handle, { elementId: d.id, kind: 'door', surface: 'stone', doorId: d.id, object: d.id, transparent: true });
     doors.set(d.id, c);
   }
+  const heli: RAPIER.Collider[] = heliBodyBoxes(0).map((box) => {
+    const c = world.createCollider(R.ColliderDesc.cuboid(...box.half));
+    c.setEnabled(false);
+    info.set(c.handle, { elementId: 'helicopter', kind: 'helicopter', surface: 'metal', object: 'helicopter' });
+    return c;
+  });
+  let parked = false;
   world.step();
   return {
     R,
@@ -128,6 +149,20 @@ export function buildStaticWorld(R: Rapier, layout: Layout, openDoors: Record<st
     isDoorOpen(id) {
       const c = doors.get(id);
       return c ? !c.isEnabled() : false;
+    },
+    setHelicopter(padYaw) {
+      parked = padYaw !== null;
+      if (padYaw !== null) {
+        heliBodyBoxes(padYaw).forEach((box, i) => {
+          heli[i].setTranslation({ x: box.center[0], y: box.center[1], z: box.center[2] });
+          heli[i].setRotation(quatFromYaw(box.yaw));
+        });
+      }
+      for (const c of heli) c.setEnabled(parked);
+      world.step();
+    },
+    get helicopterParked() {
+      return parked;
     },
   };
 }

@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch --watch-path=src --watch-path=../../packages/shared/src src/index.ts",
-    "start": "node src/index.ts"
+    "start": "node src/index.ts",
+    "keys": "node src/cli/keys.ts"
   },
   "devDependencies": {
     "@types/ws": "^8.18.2"
@@ -12,7 +13,11 @@
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
     "@hono/node-server": "2.1.5",
+    "@hono/zod-openapi": "1.6.3",
+    "@modelcontextprotocol/server": "2.3.1",
     "@ocean-home/shared": "workspace:*",
+    "@recast-navigation/core": "0.43.1",
+    "@recast-navigation/generators": "0.43.1",
     "hono": "4.13.13",
     "ws": "8.22.0",
     "zod": "4.6.7"

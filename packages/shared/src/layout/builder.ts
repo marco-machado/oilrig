@@ -2,6 +2,7 @@ import type {
   BoxElement,
   DoorDef,
   Element,
+  FurnitureDef,
   LightDef,
   MaterialId,
   PlaceDef,
@@ -10,6 +11,7 @@ import type {
   Rect,
   Surface,
   Vec3,
+  VesselDef,
   ZoneDef,
 } from './types.ts';
 
@@ -17,6 +19,7 @@ interface Opts {
   collide?: boolean;
   render?: boolean;
   surface?: Surface;
+  object?: string;
 }
 
 /** Subtracts axis-aligned holes from a rectangle, returning disjoint rectangles. */
@@ -71,6 +74,8 @@ export class LayoutBuilder {
   readonly lights: LightDef[] = [];
   readonly places: PlaceDef[] = [];
   readonly props: PropDef[] = [];
+  readonly furniture: FurnitureDef[] = [];
+  readonly vessels: VesselDef[] = [];
   private counter = 0;
 
   nextId(kind: string): string {
@@ -90,6 +95,7 @@ export class LayoutBuilder {
       collide: o.collide ?? false,
       render: o.render ?? true,
       surface: o.surface,
+      ...(o.object ? { object: o.object } : {}),
     });
   }
 
@@ -105,6 +111,7 @@ export class LayoutBuilder {
       render: o.render ?? true,
       surface: o.surface,
     };
+    if (o.object) el.object = o.object;
     if (o.rotation) el.rotation = o.rotation;
     this.elements.push(el);
     return el;
@@ -230,6 +237,33 @@ export class LayoutBuilder {
 
   light(kind: LightDef['kind'], position: Vec3, color: number, intensity: number, distance: number, casts = true) {
     this.lights.push({ id: this.nextId(kind), kind, position, color, intensity, distance, casts });
+  }
+
+  /**
+   * Records a piece of furniture and gives it box colliders. Each collider is
+   * [local x, local z, width, depth, bottom, top] relative to the footprint centre and floor.
+   */
+  addFurniture(def: FurnitureDef, colliders: Array<[number, number, number, number, number, number]>, surface: Surface = 'wood') {
+    this.furniture.push(def);
+    const c = Math.cos(def.rotationY);
+    const s = Math.sin(def.rotationY);
+    const [px, py, pz] = def.position;
+    for (const [lx, lz, w, d, y0, y1] of colliders) {
+      // Rotation about +y: local (x, z) -> (x cos + z sin, -x sin + z cos).
+      const wx = px + lx * c + lz * s;
+      const wz = pz - lx * s + lz * c;
+      this.box(def.kind, [wx, py + (y0 + y1) / 2, wz], [w, y1 - y0, d], 'steelGrey', {
+        render: false,
+        collide: true,
+        surface,
+        object: def.id,
+        rotation: quatY(def.rotationY),
+      });
+    }
+  }
+
+  vessel(def: VesselDef) {
+    this.vessels.push(def);
   }
 
   zone(id: string, kind: ZoneDef['kind'], min: Vec3, max: Vec3) {

@@ -6,6 +6,10 @@ import {
   type ClientMessage,
   type ClockConfig,
   DEFAULT_EPOCH,
+  HeliScheduler,
+  type HeliScheduleOptions,
+  type HeliState,
+  DIMS,
   type Layout,
   NET,
   type PlayerInfo,
@@ -18,6 +22,8 @@ import {
   buildStaticWorld,
   gameTime,
   getLayout,
+  heliPose,
+  padOccupied,
 } from '@ocean-home/shared';
 import type { Store } from '../db.ts';
 import { type AcceptedPose, MovementValidator } from './validation.ts';
@@ -32,6 +38,8 @@ interface Player {
   info: PlayerInfo;
   session: string;
   conn: Connection | null;
+  /** Server-simulated AI avatar (always present until it leaves). */
+  agent: boolean;
   pose: AcceptedPose & { yaw: number; pitch: number; speed: number; grounded: boolean };
   lastSeen: number;
   chatTimes: number[];
@@ -44,14 +52,22 @@ export interface WorldEvents {
   chat: [ChatEntry];
   door: [{ id: string; open: boolean; by: string }];
   weather: [WeatherState];
+  helicopter: [HeliState];
+  displaced: [Player];
 }
+
+export type DoorResult = { ok: true; changed: boolean } | { ok: false; code: 'unknown-door' | 'too-far'; message: string };
+export type ChatResult = { ok: true; entry: ChatEntry } | { ok: false; code: 'rate-limited' | 'empty'; message: string };
 
 export interface WorldOptions {
   clock: ClockConfig;
   weatherSeed: number;
   joinPassword: string | null;
   store: Store;
+  helicopter?: Partial<HeliScheduleOptions>;
 }
+
+const HELI_DEFAULTS: HeliScheduleOptions = { intervalMs: 15 * 60_000, stayMs: 4 * 60_000, firstArrivalMs: 60_000, seed: 7 };
 
 function colorFor(name: string) {
   let h = 2166136261;
@@ -83,6 +99,7 @@ export class World extends EventEmitter<WorldEvents> {
   private readonly opts: WorldOptions;
   private timers: NodeJS.Timeout[] = [];
   private lastWeather: WeatherState;
+  readonly heli: HeliScheduler;
 
   private constructor(sw: StaticWorld, opts: WorldOptions) {
     super();
@@ -95,6 +112,11 @@ export class World extends EventEmitter<WorldEvents> {
     for (const d of this.layout.doors) this.doors.set(d.id, false);
     this.chat = opts.store.recentChat(NET.chatHistory);
     this.lastWeather = this.currentWeather();
+    this.heli = new HeliScheduler({ ...HELI_DEFAULTS, ...opts.helicopter }, Date.now(), {
+      padOccupied: () => padOccupied(this.online().map((p) => p.pose.p)),
+      windDirection: () => this.lastWeather.windDirection,
+      onChange: (next, prev) => this.onHeliChange(next, prev),
+    });
   }
 
   static async create(opts: WorldOptions) {
@@ -117,6 +139,7 @@ export class World extends EventEmitter<WorldEvents> {
       }, 1000 / NET.envHz),
     );
     this.timers.push(setInterval(() => this.expireSessions(), 30_000));
+    this.timers.push(setInterval(() => this.heli.update(Date.now()), 100));
   }
 
   stop() {
@@ -125,16 +148,29 @@ export class World extends EventEmitter<WorldEvents> {
   }
 
   get playerCount() {
+    return this.online().length;
+  }
+
+  /** Everyone currently aboard: connected people and AI agents. */
+  online(): Player[] {
+    return [...this.players.values()].filter((p) => p.conn || p.agent);
+  }
+
+  get humanCount() {
     return [...this.players.values()].filter((p) => p.conn).length;
   }
 
-  private online(): Player[] {
-    return [...this.players.values()].filter((p) => p.conn);
+  get agentCount() {
+    return [...this.players.values()].filter((p) => p.agent).length;
+  }
+
+  player(id: string) {
+    return this.players.get(id);
   }
 
   private broadcast(m: ServerMessage, except?: Player) {
     const json = JSON.stringify(m);
-    for (const p of this.online()) if (p !== except) p.conn!.sendRaw(json);
+    for (const p of this.online()) if (p !== except) p.conn?.sendRaw(json);
   }
 
   private broadcastSnapshot() {
@@ -212,9 +248,10 @@ export class World extends EventEmitter<WorldEvents> {
       const spawn = this.layout.spawn;
       const color = this.opts.store.profileColor(name) ?? colorFor(name);
       player = {
-        info: { id: randomUUID().slice(0, 8), name, color },
+        info: { id: randomUUID().slice(0, 8), name, color, kind: 'human' },
         session: randomBytes(18).toString('base64url'),
         conn,
+        agent: false,
         pose: { p: spawn.position, t: now, yaw: spawn.yaw, pitch: 0, speed: 0, grounded: true },
         lastSeen: now,
         chatTimes: [],
@@ -235,6 +272,7 @@ export class World extends EventEmitter<WorldEvents> {
       players: this.online().map((p) => p.info),
       doors: Object.fromEntries(this.doors),
       chat: this.chat,
+      heli: this.heli.state,
     });
     this.broadcast({ type: 'join', player: player.info }, player);
     this.emit('join', player.info);
@@ -278,13 +316,16 @@ export class World extends EventEmitter<WorldEvents> {
   }
 
   private onChat(p: Player, raw: string, now: number) {
+    const r = this.say(p, raw, now);
+    if (!r.ok && r.code === 'rate-limited') p.conn?.send({ type: 'error', code: r.code, message: r.message });
+  }
+
+  /** Posts a chat line from a player or agent. */
+  say(p: Player, raw: string, now = Date.now()): ChatResult {
     p.chatTimes = p.chatTimes.filter((t) => now - t < 10_000);
-    if (p.chatTimes.length >= 5) {
-      p.conn?.send({ type: 'error', code: 'rate-limited', message: 'Slow down a little.' });
-      return;
-    }
+    if (p.chatTimes.length >= 5) return { ok: false, code: 'rate-limited', message: 'Slow down a little.' };
     const text = sanitize(raw).slice(0, NET.chatMaxLength);
-    if (!text) return;
+    if (!text) return { ok: false, code: 'empty', message: 'Nothing to say.' };
     p.chatTimes.push(now);
     const entry: ChatEntry = { id: randomUUID(), from: p.info.id, name: p.info.name, text, t: now };
     this.chat.push(entry);
@@ -292,22 +333,101 @@ export class World extends EventEmitter<WorldEvents> {
     this.opts.store.addChat(entry);
     this.broadcast({ type: 'chat', entry });
     this.emit('chat', entry);
+    return { ok: true, entry };
+  }
+
+  recentChat(): readonly ChatEntry[] {
+    return this.chat;
   }
 
   private onDoor(p: Player, id: string, open: boolean) {
+    const r = this.setDoor(p, id, open);
+    if (!r.ok && r.code === 'too-far') p.conn?.send({ type: 'error', code: r.code, message: r.message });
+  }
+
+  /** Opens or closes a door for someone standing within reach of it. */
+  setDoor(p: Player, id: string, open: boolean): DoorResult {
     const def = this.layout.doors.find((d) => d.id === id);
-    if (!def) return;
+    if (!def) return { ok: false, code: 'unknown-door', message: `No door called ${id}.` };
     const [x, y, z] = p.pose.p;
     const dist = Math.hypot(def.center[0] - x, def.center[1] - (y + 1), def.center[2] - z);
-    if (dist > 4) {
-      p.conn?.send({ type: 'error', code: 'too-far', message: 'Too far from the door.' });
-      return;
-    }
-    if (this.doors.get(id) === open) return;
+    if (dist > 4) return { ok: false, code: 'too-far', message: 'Too far from the door.' };
+    if (this.doors.get(id) === open) return { ok: true, changed: false };
     this.doors.set(id, open);
     this.sw.setDoorOpen(id, open);
     this.broadcast({ type: 'door', id, open, by: p.info.id });
     this.emit('door', { id, open, by: p.info.id });
+    return { ok: true, changed: true };
+  }
+
+  doorStates(): Record<string, boolean> {
+    return Object.fromEntries(this.doors);
+  }
+
+  // ---------- AI agents ----------
+
+  /** Brings a server-simulated avatar aboard. Browsers see it as a normal avatar. */
+  addAgent(name: string, position: Vec3, yaw: number): Player {
+    const clean = sanitize(name).slice(0, NET.nameMaxLength) || 'Agent';
+    const now = Date.now();
+    const player: Player = {
+      info: { id: randomUUID().slice(0, 8), name: clean, color: colorFor(`agent:${clean}`), kind: 'agent' },
+      session: '',
+      conn: null,
+      agent: true,
+      pose: { p: position, t: now, yaw, pitch: 0, speed: 0, grounded: true },
+      lastSeen: now,
+      chatTimes: [],
+      poseTimes: [],
+    };
+    this.players.set(player.info.id, player);
+    this.broadcast({ type: 'join', player: player.info });
+    this.emit('join', player.info);
+    return player;
+  }
+
+  removeAgent(p: Player) {
+    if (!p.agent || !this.players.has(p.info.id)) return;
+    this.players.delete(p.info.id);
+    this.broadcast({ type: 'leave', id: p.info.id });
+    this.emit('leave', p.info);
+  }
+
+  /** Server-authoritative pose update for an agent (its motor already obeys the colliders). */
+  setAgentPose(p: Player, pos: Vec3, yaw: number, pitch: number, speed: number, grounded: boolean) {
+    p.pose = { p: pos, t: Date.now(), yaw, pitch, speed, grounded };
+  }
+
+  // ---------- helicopter ----------
+
+  private onHeliChange(next: HeliState, prev: HeliState) {
+    if (next.phase === 'landed') {
+      this.clearPadFootprint();
+      this.sw.setHelicopter(next.padYaw);
+    } else if (prev.phase === 'landed') {
+      this.sw.setHelicopter(null);
+    }
+    this.broadcast({ type: 'heli', state: next });
+    this.emit('helicopter', next);
+  }
+
+  /** At touchdown, anyone who walked under the descending helicopter is moved clear. */
+  private clearPadFootprint() {
+    const [px, py, pz] = DIMS.HELI.pad;
+    for (const p of this.online()) {
+      const [x, y, z] = p.pose.p;
+      const d = Math.hypot(x - px, z - pz);
+      if (d >= DIMS.HELI.clearRadius || y < py - 0.6 || y > py + 4) continue;
+      const k = d > 0.1 ? 1 / d : 1;
+      const out: Vec3 = [px + (d > 0.1 ? (x - px) * k : -1) * (DIMS.HELI.clearRadius + 0.5), py, pz + (d > 0.1 ? (z - pz) * k : 0) * (DIMS.HELI.clearRadius + 0.5)];
+      p.pose = { ...p.pose, p: out, t: Date.now() };
+      p.conn?.send({ type: 'correct', seq: -1, p: out, reason: 'helicopter' });
+      this.emit('displaced', p);
+    }
+  }
+
+  helicopterPose(now = Date.now()) {
+    return heliPose(this.heli.state, now);
   }
 
   doorState(id: string) {

@@ -3,7 +3,19 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { ChatEntry } from '@ocean-home/shared';
 
-/** Small persistence layer: chat log and player profiles. */
+export interface ApiKeyRow {
+  id: string;
+  name: string;
+  prefix: string;
+  ratePerMinute: number;
+  created: number;
+  lastUsed: number | null;
+  revoked: number | null;
+}
+
+const KEY_COLUMNS = 'id, name, prefix, rate_per_minute AS ratePerMinute, created, last_used AS lastUsed, revoked';
+
+/** Small persistence layer: chat log, player profiles and API keys (stored hashed). */
 export class Store {
   private readonly db: DatabaseSync;
 
@@ -25,7 +37,46 @@ export class Store {
         color TEXT NOT NULL,
         last_seen REAL NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        hash TEXT NOT NULL UNIQUE,
+        prefix TEXT NOT NULL,
+        rate_per_minute INTEGER NOT NULL,
+        created REAL NOT NULL,
+        last_used REAL,
+        revoked REAL
+      );
     `);
+  }
+
+  addApiKey(k: { id: string; name: string; hash: string; prefix: string; ratePerMinute: number }) {
+    this.db
+      .prepare('INSERT INTO api_keys (id, name, hash, prefix, rate_per_minute, created) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(k.id, k.name, k.hash, k.prefix, k.ratePerMinute, Date.now());
+  }
+
+  apiKeyByHash(hash: string): ApiKeyRow | null {
+    const row = this.db.prepare(`SELECT ${KEY_COLUMNS} FROM api_keys WHERE hash = ?`).get(hash) as ApiKeyRow | undefined;
+    return row ?? null;
+  }
+
+  listApiKeys(): ApiKeyRow[] {
+    return this.db.prepare(`SELECT ${KEY_COLUMNS} FROM api_keys ORDER BY created`).all() as unknown as ApiKeyRow[];
+  }
+
+  revokeApiKey(idOrPrefix: string): boolean {
+    const r = this.db.prepare('UPDATE api_keys SET revoked = ? WHERE (id = ? OR prefix = ?) AND revoked IS NULL').run(Date.now(), idOrPrefix, idOrPrefix);
+    return Number(r.changes) > 0;
+  }
+
+  touchApiKey(id: string) {
+    this.db.prepare('UPDATE api_keys SET last_used = ? WHERE id = ?').run(Date.now(), id);
+  }
+
+  /** Raw rows, for tests that check what is stored. */
+  dumpApiKeyTable(): Array<Record<string, unknown>> {
+    return this.db.prepare('SELECT * FROM api_keys').all() as Array<Record<string, unknown>>;
   }
 
   addChat(e: ChatEntry) {

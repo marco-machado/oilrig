@@ -263,6 +263,7 @@ export class UI {
       const d = el('span', { class: 'dot' });
       d.style.background = p.color;
       li.append(d, el('span', {}, p.name));
+      if (p.kind === 'agent') li.append(el('span', { class: 'badge' }, 'AI'));
       ul.append(li);
     }
     this.players.replaceChildren(el('strong', {}, 'On board'), ul);

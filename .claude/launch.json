@@ -4,14 +4,51 @@
     {
       "name": "client",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@ocean-home/client", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@ocean-home/client",
+        "dev"
+      ],
       "port": 5173
     },
     {
       "name": "server",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@ocean-home/server", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@ocean-home/server",
+        "dev"
+      ],
       "port": 8787
+    },
+    {
+      "name": "server-alt",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "PORT=8790",
+        "DB_PATH=apps/server/data/alt.db",
+        "HELI_FIRST_ARRIVAL_MINUTES=0.5",
+        "HELI_STAY_MINUTES=2",
+        "HELI_INTERVAL_MINUTES=6",
+        "node",
+        "apps/server/src/index.ts"
+      ],
+      "port": 8790
+    },
+    {
+      "name": "client-alt",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "CLIENT_PORT=5180",
+        "SERVER_URL=http://localhost:8790",
+        "pnpm",
+        "--filter",
+        "@ocean-home/client",
+        "exec",
+        "vite",
+        "--strictPort"
+      ],
+      "port": 5180
     }
   ]
 }

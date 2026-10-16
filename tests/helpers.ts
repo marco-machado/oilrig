@@ -66,3 +66,30 @@ export function mulberry(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/** A real World (in-memory store) for tests that need agents, doors or the helicopter. */
+export async function makeWorld(opts: { weatherSeed?: number } = {}) {
+  const [{ World }, { Store }, { makeClock }] = await Promise.all([
+    import('../apps/server/src/world/world.ts'),
+    import('../apps/server/src/db.ts'),
+    import('@ocean-home/shared'),
+  ]);
+  return World.create({
+    clock: makeClock({ realTime: false, dayLengthMinutes: 120 }),
+    weatherSeed: opts.weatherSeed ?? 3,
+    joinPassword: null,
+    store: new Store(':memory:'),
+  });
+}
+
+export const TEST_SERVER_CONFIG = {
+  port: 0,
+  host: '127.0.0.1',
+  joinPassword: null,
+  dayLengthMinutes: 120,
+  realTime: false,
+  timeOffsetHours: 0,
+  weatherSeed: 5,
+  dbPath: ':memory:',
+  staticDir: null,
+};

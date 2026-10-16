@@ -7,6 +7,12 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, makeClock } from '@ocean-home/shared';
+import { AgentManager } from './agents/manager.ts';
+import { EventLog } from './api/events.ts';
+import { RateLimiter } from './api/keys.ts';
+import { createMcpEndpoint } from './api/mcp.ts';
+import { type ApiEnv, apiAuth, createRestApi } from './api/rest.ts';
+import { ApiService } from './api/service.ts';
 import type { ServerConfig } from './config.ts';
 import { Store } from './db.ts';
 import { type Connection, type Player, World } from './world/world.ts';
@@ -17,18 +23,30 @@ export interface RunningServer {
   url: string;
   port: number;
   world: World;
+  agents: AgentManager;
+  store: Store;
   close(): Promise<void>;
 }
 
 export async function startServer(cfg: ServerConfig): Promise<RunningServer> {
   const store = new Store(cfg.dbPath);
   const clock = makeClock({ realTime: cfg.realTime, dayLengthMinutes: cfg.dayLengthMinutes, offsetHours: cfg.timeOffsetHours });
-  const world = await World.create({ clock, weatherSeed: cfg.weatherSeed, joinPassword: cfg.joinPassword, store });
+  const world = await World.create({ clock, weatherSeed: cfg.weatherSeed, joinPassword: cfg.joinPassword, store, helicopter: cfg.helicopter });
   world.start();
+  const agents = await AgentManager.create(world, cfg.agents);
+  agents.start();
   const started = Date.now();
 
-  const app = new Hono();
-  app.get('/healthz', (c) => c.json({ ok: true, players: world.playerCount, uptimeSeconds: Math.round((Date.now() - started) / 1000) }));
+  // External API: REST + SSE under /api/v1, MCP at /mcp. Both use bearer API keys.
+  const service = new ApiService(world, agents);
+  const events = new EventLog(world);
+  const auth = apiAuth(store, new RateLimiter());
+  const mcp = createMcpEndpoint(service);
+
+  const app = new Hono<ApiEnv>();
+  app.route('/api/v1', createRestApi(service, events, auth));
+  app.all('/mcp', auth, (c) => mcp.fetch(c.req.raw, c.get('apiKey').id, c.req.header('authorization')!.replace(/^Bearer\s+/i, '')));
+  app.get('/healthz', (c) => c.json({ ok: true, players: world.humanCount, agents: world.agentCount, uptimeSeconds: Math.round((Date.now() - started) / 1000) }));
   if (cfg.staticDir && existsSync(cfg.staticDir)) {
     const root = cfg.staticDir;
     app.use('/*', serveStatic({ root }));
@@ -97,7 +115,11 @@ export async function startServer(cfg: ServerConfig): Promise<RunningServer> {
     url: `http://localhost:${port}`,
     port,
     world,
+    agents,
+    store,
     async close() {
+      agents.stop();
+      await mcp.close();
       world.stop();
       for (const c of wss.clients) c.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));

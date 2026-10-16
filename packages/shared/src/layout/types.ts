@@ -18,10 +18,13 @@ export type MaterialId =
   | 'poolTile'
   | 'corten'
   | 'soil'
-  | 'lamp';
+  | 'lamp'
+  | 'fabric'
+  | 'oak'
+  | 'stone';
 
 /** Footstep / interaction class of a walkable surface. */
-export type Surface = 'metal' | 'grating' | 'wood' | 'stone' | 'tile' | 'hollow';
+export type Surface = 'metal' | 'grating' | 'wood' | 'stone' | 'tile' | 'hollow' | 'soft';
 
 interface ElementBase {
   id: string;
@@ -33,6 +36,8 @@ interface ElementBase {
   /** Whether the element is drawn. Hull colliders are usually invisible. */
   render: boolean;
   surface?: Surface;
+  /** Semantic object (e.g. a furniture id) this element belongs to, when it is part of one. */
+  object?: string;
 }
 
 export interface TubeElement extends ElementBase {
@@ -145,9 +150,54 @@ export interface PropDef {
   rotationY?: number;
 }
 
+export type FurnitureKind =
+  | 'sofa'
+  | 'coffee-table'
+  | 'rug'
+  | 'dining-table'
+  | 'dining-chair'
+  | 'kitchen-island'
+  | 'kitchen-counter'
+  | 'bar-stool'
+  | 'bed'
+  | 'nightstand'
+  | 'bathtub'
+  | 'outdoor-sofa'
+  | 'firepit'
+  | 'sun-lounger'
+  | 'hammock-net';
+
+/**
+ * A piece of furniture. `position` is the centre of the footprint at floor level; `size` is
+ * width (local x), height and depth (local z). The front faces local +z, turned by
+ * `rotationY` (counter-clockwise seen from above, like every yaw in the layout).
+ */
+export interface FurnitureDef {
+  id: string;
+  kind: FurnitureKind;
+  name: string;
+  position: Vec3;
+  size: Vec3;
+  rotationY: number;
+}
+
+/** Something that floats or flies and is drawn by the client (no static collider). */
+export interface VesselDef {
+  id: string;
+  kind: 'boat';
+  name: string;
+  /** Mooring position at sea level. */
+  position: Vec3;
+  /** Hull length, beam, freeboard. */
+  size: Vec3;
+  rotationY: number;
+}
+
 export interface Layout {
   elements: Element[];
   props: PropDef[];
+  furniture: FurnitureDef[];
+  vessels: VesselDef[];
   doors: DoorDef[];
   zones: ZoneDef[];
   lights: LightDef[];

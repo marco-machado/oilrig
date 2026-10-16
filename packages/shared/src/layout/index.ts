@@ -1,5 +1,6 @@
 import { LayoutBuilder } from './builder.ts';
 import { HELIPAD, LANDING, LOWER, NORTH_STAIR, PAVILION, POOL, SWIM, TERRACE, TOWER } from './dims.ts';
+import { buildFurniture } from './furniture.ts';
 import { buildHome } from './home.ts';
 import { buildRig } from './rig.ts';
 import type { Layout } from './types.ts';
@@ -16,6 +17,7 @@ export function getLayout(): Layout {
   const b = new LayoutBuilder();
   buildRig(b);
   buildHome(b);
+  buildFurniture(b);
 
   const floor = PAVILION.floor;
   b.place('terrace', 'Terrace', [-6, TERRACE.top, 7]);
@@ -34,12 +36,17 @@ export function getLayout(): Layout {
   b.place('tower-top', 'Stair tower, top', [TOWER.x0 + 0.6, LOWER.top, 17.2]);
   b.place('boat-landing', 'Boat landing', [-16, LANDING.top, 21.8]);
   b.place('swim-platform', 'Swim platform', [-5, SWIM.top, 21]);
+  b.place('firepit', 'Firepit lounge', [-9, TERRACE.top, 9.4]);
+  b.place('dining', 'Dining table', [-1.6, floor, -6.2]);
+  b.place('hammocks', 'Hammock nets', [-16.5, LOWER.top, -16.3]);
 
   b.zone('helipad', 'helipad', [HELIPAD.x0, HELIPAD.top - 0.5, HELIPAD.z0], [HELIPAD.x1, HELIPAD.top + 4, HELIPAD.z1]);
 
   cached = {
     elements: b.elements,
     props: b.props,
+    furniture: b.furniture,
+    vessels: b.vessels,
     doors: b.doors,
     zones: b.zones,
     lights: b.lights,

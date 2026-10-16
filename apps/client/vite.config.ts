@@ -1,11 +1,16 @@
 import { defineConfig } from 'vite';
 
+// CLIENT_PORT / SERVER_URL let a second copy run next to the default one.
+const server = process.env.SERVER_URL ?? 'http://localhost:8787';
+
 export default defineConfig({
   server: {
-    port: 5173,
+    port: Number(process.env.CLIENT_PORT ?? 5173),
     proxy: {
-      '/ws': { target: 'ws://localhost:8787', ws: true },
-      '/healthz': 'http://localhost:8787',
+      '/ws': { target: server.replace(/^http/, 'ws'), ws: true },
+      '/healthz': server,
+      '/api': server,
+      '/mcp': server,
     },
   },
   build: {

@@ -72,3 +72,19 @@ export const SWIM = {
 } as const;
 
 export const RAIL_HEIGHT = 1.1;
+
+/** Visiting helicopter (a light twin, roughly an AW109): pad centre and body size. */
+export const HELI = {
+  pad: [42, 20, 0] as const,
+  rotorRadius: 5.5,
+  blades: 4,
+  /** Main rotor revolutions per second at flight rpm. */
+  rotorHz: 6.4,
+  tailRotorHz: 32,
+  mastHeight: 3.3,
+  /** Nobody may stand this close to the pad centre while it lands. */
+  clearRadius: 7,
+} as const;
+
+/** The tender moored along the south edge of the boat landing. */
+export const TENDER = { x: -15.5, z: 25.0, length: 5.6, beam: 2.2, freeboard: 0.75 } as const;

@@ -15,10 +15,12 @@
     "test:render": "playwright test tests/e2e/render.spec.ts",
     "perf": "PERF=1 playwright test tests/e2e/perf.spec.ts",
     "screenshots": "SHOTS=1 playwright test tests/e2e/screenshots.spec.ts",
-    "bot": "node scripts/bot.ts"
+    "bot": "node scripts/bot.ts",
+    "keys": "node apps/server/src/cli/keys.ts"
   },
   "devDependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
+    "@modelcontextprotocol/client": "2.3.1",
     "@ocean-home/shared": "workspace:*",
     "@playwright/test": "1.64.1",
     "@types/node": "^26.6.5",

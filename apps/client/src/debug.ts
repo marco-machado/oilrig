@@ -1,4 +1,4 @@
-import type { Vec3, WeatherState } from '@ocean-home/shared';
+import { type HeliPhase, type HeliState, type Vec3, type WeatherState, heliFarPoint, heliHoverPoint, DIMS } from '@ocean-home/shared';
 import type { QualityName } from './render/quality.ts';
 
 const PRESET_WEATHER: Record<string, Partial<WeatherState>> = {
@@ -21,7 +21,26 @@ const CAMERAS: Record<string, { position: Vec3; target: Vec3 }> = {
   swim: { position: [-5, 2.85, 21.2], target: [-12, -6, 6] },
   interior: { position: [3, 21.8, -1], target: [-12, 21.2, -8] },
   walkway: { position: [-24.5, 17.65, 8], target: [-24.5, 17.2, -8] },
+  living: { position: [-5.2, 21.55, -11.3], target: [-9.4, 20.5, -7.6] },
+  kitchen: { position: [0.5, 21.7, -4.2], target: [5.5, 20.6, -9.6] },
+  bedroom: { position: [-16.6, 21.6, -4.6], target: [-12.6, 20.4, -10.8] },
+  lounge: { position: [-3.6, 22.2, 16.5], target: [-9, 20.3, 11.6] },
+  hammocks: { position: [-9.5, 17.7, -15.2], target: [-16.5, 16.4, -18] },
+  tender: { position: [-7.5, 6.5, 34], target: [-15.5, 0.6, 25] },
+  pad: { position: [27.5, 23.5, 17], target: [42, 21, 0] },
 };
+
+const HELI_PHASES: HeliPhase[] = ['approach', 'hold', 'descend', 'landed', 'depart'];
+
+/** A fixed helicopter phase for captures, e.g. ?heli=landed or ?heli=descend&heliT=20. */
+function fixedHeli(phase: HeliPhase) {
+  return (now: number): HeliState => {
+    const bearing = 95;
+    const yaw = Math.atan2(Math.sin((bearing * Math.PI) / 180), -Math.cos((bearing * Math.PI) / 180));
+    const from = phase === 'approach' ? heliFarPoint(bearing) : phase === 'depart' || phase === 'landed' ? ([...DIMS.HELI.pad] as Vec3) : heliHoverPoint(bearing);
+    return { phase, t0: now, until: now + 10 * 60_000, bearing, from, fromYaw: yaw, padYaw: yaw };
+  };
+}
 
 export interface DebugParams {
   quality?: QualityName;
@@ -33,6 +52,9 @@ export interface DebugParams {
   name?: string;
   /** UTC midnight of a fixed date (YYYY-MM-DD) for deterministic captures. */
   date?: number;
+  heli?: (now: number) => HeliState;
+  /** Seconds into the fixed helicopter phase. */
+  heliT?: number;
 }
 
 /** URL overrides for visual verification, e.g. ?hour=18&weather=storm&cam=ref. */
@@ -53,5 +75,9 @@ export function debugParams(): DebugParams {
   if (date && Number.isFinite(Date.parse(date))) out.date = Date.parse(`${date}T00:00:00Z`);
   const name = p.get('name');
   if (name) out.name = name;
+  const heli = p.get('heli') as HeliPhase | null;
+  if (heli && HELI_PHASES.includes(heli)) out.heli = fixedHeli(heli);
+  const heliT = Number(p.get('heliT'));
+  if (p.has('heliT') && Number.isFinite(heliT)) out.heliT = heliT;
   return out;
 }

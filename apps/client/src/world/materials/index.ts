@@ -7,6 +7,7 @@ import {
 } from 'three/webgpu';
 import {
   abs,
+  attribute,
   bumpMap,
   cameraPosition,
   color,
@@ -268,6 +269,43 @@ function simple(hex: number, roughness: number, metalness = 0) {
   return m;
 }
 
+/** Woven upholstery. Each piece sets its own colour through vertex colours. */
+function fabric() {
+  const m = new MeshStandardNodeMaterial();
+  m.vertexColors = true;
+  const p = positionWorld;
+  const weave = n01(mx_noise_float(p.mul(vec3(260, 90, 260)))).mul(0.5).add(n01(mx_noise_float(p.mul(vec3(90, 260, 90)))).mul(0.5));
+  const mottle = n01(mx_fractal_noise_float(p.mul(3), 3, 2, 0.5));
+  m.colorNode = attribute('color', 'vec3').mul(weave.mul(0.12).add(0.88)).mul(mottle.mul(0.08).add(0.94));
+  m.roughnessNode = float(0.92);
+  m.metalnessNode = float(0);
+  return m;
+}
+
+/** Pale oiled oak with long grain. */
+function oak() {
+  const m = new MeshStandardNodeMaterial();
+  const p = positionWorld;
+  const grain = n01(mx_fractal_noise_float(vec3(p.x.mul(0.6), p.y.mul(24), p.z.mul(24)), 3, 2.3, 0.5)).toVar();
+  const rings = smoothstep(0.35, 0.65, fract(grain.mul(7)));
+  m.colorNode = mix(color(0xa77b4f), color(0xc89d6c), grain).mul(rings.mul(0.12).add(0.9));
+  m.roughnessNode = grain.mul(0.15).add(0.45);
+  m.metalnessNode = float(0);
+  return m;
+}
+
+/** Honed pale stone (travertine) with faint veins. */
+function stone() {
+  const m = new MeshStandardNodeMaterial();
+  const p = positionWorld;
+  const base = n01(mx_fractal_noise_float(p.mul(1.4), 4, 2, 0.5));
+  const vein = smoothstep(0.03, 0.0, abs(mx_fractal_noise_float(p.mul(vec3(0.9, 2.5, 0.9)), 4, 2, 0.55)));
+  m.colorNode = mix(color(0xd9d2c4), color(0xeee9df), base).mul(float(1).sub(vein.mul(0.18)));
+  m.roughnessNode = base.mul(0.1).add(0.22);
+  m.metalnessNode = float(0);
+  return m;
+}
+
 function lamp() {
   const m = new MeshStandardNodeMaterial({ color: new Color(0x2a2a2a), roughness: 0.5, metalness: 0.3 });
   m.emissiveNode = color(0xffd7a3).mul(U.nightLights.mul(18));
@@ -295,5 +333,8 @@ export function createMaterials(): MaterialSet {
     corten: corten(),
     soil: simple(0x2a1c12, 1),
     lamp: lamp(),
+    fabric: fabric(),
+    oak: oak(),
+    stone: stone(),
   };
 }

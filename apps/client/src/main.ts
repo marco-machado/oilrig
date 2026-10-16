@@ -7,6 +7,8 @@ import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import {
   type ClockConfig,
   DEFAULT_EPOCH,
+  HeliScheduler,
+  type HeliState,
   PLAYER,
   WORLD,
   WeatherModel,
@@ -15,6 +17,7 @@ import {
   celestialAt,
   gameTime,
   getLayout,
+  heliPose,
   makeClock,
 } from '@ocean-home/shared';
 import { Atmosphere } from './env/atmosphere.ts';
@@ -30,6 +33,9 @@ import { QUALITY, loadQualityName, saveQualityName } from './render/quality.ts';
 import { U } from './state.ts';
 import { UI, loadSettings } from './ui/ui.ts';
 import { Doors } from './world/doors.ts';
+import { buildFurniture } from './world/furniture.ts';
+import { Helicopter } from './world/helicopter.ts';
+import { Tender } from './world/tender.ts';
 import { InteriorLight } from './world/interiorLight.ts';
 import { buildLights } from './world/lights.ts';
 import { createMaterials } from './world/materials/index.ts';
@@ -86,6 +92,8 @@ async function boot() {
   scene.add(lights.group);
   const doors = new Doors(layout, materials, sw);
   scene.add(doors.group);
+  const furniture = buildFurniture(layout, materials);
+  scene.add(furniture.group);
   const poolWater = createPoolWater();
   scene.add(poolWater);
   const atmosphere = new Atmosphere(renderer, scene, { shadowMapSize: q.shadowMapSize, shadowDistance: q.shadowDistance });
@@ -95,6 +103,10 @@ async function boot() {
   scene.add(rain.mesh);
   const avatars = new Avatars();
   scene.add(avatars.group);
+  const heli = new Helicopter();
+  scene.add(heli.group, heli.spray.mesh);
+  const tender = new Tender(renderer, ocean, layout.vessels[0], materials);
+  scene.add(tender.group, tender.lines);
   // Hidden while probes bake: anything transmissive or refractive (it would need its own
   // framebuffer copies at probe resolution) plus dynamic clutter.
   const transmissive = structure.children.filter((o) => /glass/i.test(o.name));
@@ -105,9 +117,16 @@ async function boot() {
     props.group,
     poolWater,
     doors.group,
+    heli.group,
+    heli.spray.mesh,
+    tender.group,
+    tender.lines,
+    ...furniture.dynamic,
     ...transmissive,
   ]);
   const sunDir = new Vector3();
+  const listenerFwd = new Vector3();
+  const listenerUp = new Vector3();
   const sound = new SoundEngine();
   sound.setVolume(settings.volume);
   atmosphere.onLightning = (d) => sound.thunder(d);
@@ -127,7 +146,22 @@ async function boot() {
   let lastPose = 0;
   let poseSeq = 0;
   let respawnTimer = 0;
-  const playerList = new Map<string, { id: string; name: string; color: string }>();
+  const playerList = new Map<string, { id: string; name: string; color: string; kind?: 'human' | 'agent' }>();
+  // The helicopter: the server's schedule when online, a local one offline (or a fixed
+  // phase from the URL for captures).
+  const localHeli = new HeliScheduler({ intervalMs: 8 * 60_000, stayMs: 2 * 60_000, firstArrivalMs: 20_000, seed: 3 }, Date.now());
+  let heliState: HeliState = dbg.heli ? dbg.heli(Date.now()) : localHeli.state;
+  let parkedYaw: number | null = null;
+  const heliNews: Record<string, string> = {
+    approach: 'A helicopter is approaching.',
+    hold: 'The helicopter is holding off: please clear the helipad.',
+    landed: 'The helicopter has landed on the helipad.',
+    depart: 'The helicopter is lifting off.',
+  };
+  const setHeli = (next: HeliState, announce: boolean) => {
+    if (announce && next.phase !== heliState.phase && heliNews[next.phase]) ui.addChat({ system: heliNews[next.phase] });
+    heliState = next;
+  };
 
   const ui = new UI(
     {
@@ -200,6 +234,7 @@ async function boot() {
         avatars.add(p);
       }
       for (const [id, open] of Object.entries(w.doors)) doors.setOpen(id, open);
+      if (w.heli && !dbg.heli) setHeli(w.heli as HeliState, false);
       if (!joined) {
         player.teleport(w.pose.p, w.pose.yaw);
         for (const c of w.chat) ui.addChat(c);
@@ -238,6 +273,9 @@ async function boot() {
           break;
         case 'door':
           doors.setOpen(m.id, m.open);
+          break;
+        case 'heli':
+          if (!dbg.heli) setHeli(m.state as HeliState, true);
           break;
         case 'correct':
           player.teleport(m.p);
@@ -290,7 +328,7 @@ async function boot() {
   let simTime = 0;
   let introAngle = 0.6;
   const stats = { frames: 0, gpuReady: false };
-  (window as unknown as Record<string, unknown>).__oceanHome = { stats, camera, player, renderer, doors, layout, avatars, U };
+  (window as unknown as Record<string, unknown>).__oceanHome = { stats, camera, player, renderer, doors, layout, avatars, U, heli, tender, furniture, sw, heliState: () => heliState };
   ui.showJoin();
   if (dbg.camera) ui.hideOverlay();
 
@@ -345,9 +383,28 @@ async function boot() {
       }
     }
 
+    // Helicopter: pose from the shared schedule, solid on the pad for local prediction too.
+    if (!online && !dbg.heli) {
+      localHeli.update(realNow);
+      setHeli(localHeli.state, joined);
+    }
+    const hp = heliPose(heliState, dbg.heli ? heliState.t0 + (dbg.heliT ?? 0) * 1000 + simTime * 1000 : realNow);
+    const parked = heliState.phase === 'landed' ? heliState.padYaw : null;
+    if (parked !== parkedYaw) {
+      parkedYaw = parked;
+      sw.setHelicopter(parked);
+    }
+    heli.update(hp, dt);
+    sound.helicopter(hp);
+    camera.getWorldDirection(listenerFwd);
+    listenerUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    sound.setListener(camera.position, listenerFwd, listenerUp);
+
     atmosphere.update(dt, camera.position, celestial, weather);
     interior.update(sunDir.set(...celestial.sunDirection), weather.cloudCover);
     ocean.update(simTime, dt, camera.position, weather.windSpeed, weather.windDirection);
+    tender.update(dt);
+    furniture.update(simTime);
     props.update(dt);
     lights.update(simTime);
     doors.update(dt);

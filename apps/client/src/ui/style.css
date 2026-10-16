@@ -302,6 +302,17 @@ button:disabled {
   opacity: 1;
 }
 
+.label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.bubble[hidden] {
+  display: none;
+}
+
 .tag {
   font-size: 12.5px;
   font-weight: 600;
@@ -311,6 +322,19 @@ button:disabled {
   padding: 2px 9px;
   white-space: nowrap;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.tag .badge,
+.players .badge {
+  margin-left: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #0b1a26;
+  background: #8fd3f0;
+  border-radius: 4px;
+  padding: 0 4px;
+  vertical-align: 1px;
 }
 
 .bubble {

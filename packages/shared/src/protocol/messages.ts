@@ -50,6 +50,8 @@ export const PlayerInfo = z.object({
   id: z.string(),
   name: z.string(),
   color: z.string(),
+  /** AI agents driven through the API are flagged so people can tell them apart. */
+  kind: z.enum(['human', 'agent']).optional(),
 });
 export type PlayerInfo = z.infer<typeof PlayerInfo>;
 
@@ -77,6 +79,16 @@ export const WeatherStateSchema = z.object({
 
 export const ClockSchema = z.object({ anchorRealMs: finite, anchorGameMs: finite, rate: finite });
 
+export const HeliStateSchema = z.object({
+  phase: z.enum(['away', 'approach', 'hold', 'descend', 'landed', 'depart']),
+  t0: finite,
+  until: finite,
+  bearing: finite,
+  from: vec3,
+  fromYaw: finite,
+  padYaw: finite,
+});
+
 export const ChatEntry = z.object({ id: z.string(), from: z.string(), name: z.string(), text: z.string(), t: finite });
 export type ChatEntry = z.infer<typeof ChatEntry>;
 
@@ -91,6 +103,7 @@ export const WelcomeMsg = z.object({
   players: z.array(PlayerInfo),
   doors: z.record(z.string(), z.boolean()),
   chat: z.array(ChatEntry),
+  heli: HeliStateSchema.optional(),
 });
 
 export const SnapshotMsg = z.object({ type: z.literal('snapshot'), t: finite, players: z.array(PlayerPose) });
@@ -100,6 +113,7 @@ export const EnvMsg = z.object({ type: z.literal('env'), t: finite, weather: Wea
 export const ChatOutMsg = z.object({ type: z.literal('chat'), entry: ChatEntry });
 export const DoorOutMsg = z.object({ type: z.literal('door'), id: z.string(), open: z.boolean(), by: z.string() });
 export const CorrectMsg = z.object({ type: z.literal('correct'), seq: z.number().int(), p: vec3, reason: z.string() });
+export const HeliMsg = z.object({ type: z.literal('heli'), state: HeliStateSchema });
 export const PongMsg = z.object({ type: z.literal('pong'), t: finite, serverTime: finite });
 export const ErrorMsg = z.object({ type: z.literal('error'), code: z.string(), message: z.string() });
 
@@ -112,6 +126,7 @@ export const ServerMessage = z.discriminatedUnion('type', [
   ChatOutMsg,
   DoorOutMsg,
   CorrectMsg,
+  HeliMsg,
   PongMsg,
   ErrorMsg,
 ]);

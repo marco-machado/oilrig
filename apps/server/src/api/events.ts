@@ -1,0 +1,51 @@
+import type { World } from '../world/world.ts';
+
+// Numbered log of world events for the SSE stream. Clients that reconnect with
+// Last-Event-ID get what they missed from a short ring buffer.
+
+export type WorldEventType = 'join' | 'leave' | 'chat' | 'door' | 'weather' | 'helicopter';
+
+export interface LoggedEvent {
+  id: number;
+  type: WorldEventType;
+  t: number;
+  data: unknown;
+}
+
+const KEEP = 500;
+
+export class EventLog {
+  private seq = 0;
+  private readonly ring: LoggedEvent[] = [];
+  private readonly subs = new Set<(e: LoggedEvent) => void>();
+
+  constructor(world: World) {
+    world.on('join', (p) => this.push('join', p));
+    world.on('leave', (p) => this.push('leave', p));
+    world.on('chat', (e) => this.push('chat', e));
+    world.on('door', (d) => this.push('door', d));
+    world.on('weather', (w) => this.push('weather', w));
+    world.on('helicopter', (s) => this.push('helicopter', { phase: s.phase, since: s.t0, until: s.until, bearing: Math.round(s.bearing) }));
+  }
+
+  private push(type: WorldEventType, data: unknown) {
+    const e: LoggedEvent = { id: ++this.seq, type, t: Date.now(), data };
+    this.ring.push(e);
+    if (this.ring.length > KEEP) this.ring.shift();
+    for (const s of this.subs) s(e);
+  }
+
+  /** Events after `lastId` still in the buffer. */
+  since(lastId: number): LoggedEvent[] {
+    return this.ring.filter((e) => e.id > lastId);
+  }
+
+  subscribe(fn: (e: LoggedEvent) => void) {
+    this.subs.add(fn);
+    return () => this.subs.delete(fn);
+  }
+
+  get subscribers() {
+    return this.subs.size;
+  }
+}

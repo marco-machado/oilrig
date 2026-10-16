@@ -17,8 +17,8 @@ interface Avatar {
   arms: [Group, Group];
   buffer: InterpolationBuffer;
   phase: number;
-  tag: CSS2DObject;
-  bubble: CSS2DObject;
+  label: CSS2DObject;
+  bubble: HTMLElement;
   bubbleUntil: number;
 }
 
@@ -66,15 +66,26 @@ export class Avatars {
     const tagEl = document.createElement('div');
     tagEl.className = 'tag';
     tagEl.textContent = info.name;
-    const tag = new CSS2DObject(tagEl);
-    tag.position.set(0, 1.95, 0);
-    root.add(tag);
-    const bubbleEl = document.createElement('div');
-    bubbleEl.className = 'bubble';
-    const bubble = new CSS2DObject(bubbleEl);
-    bubble.position.set(0, 2.25, 0);
-    bubble.visible = false;
-    root.add(bubble);
+    if (info.kind === 'agent') {
+      // AI agents look like everyone else, with a small badge on the name tag.
+      tagEl.classList.add('agent');
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = 'AI';
+      tagEl.append(badge);
+    }
+    // Name tag and speech bubble share one label anchored at its bottom edge, so the
+    // bubble stacks above the tag at any distance instead of overlapping it.
+    const labelEl = document.createElement('div');
+    labelEl.className = 'label';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.hidden = true;
+    labelEl.append(bubble, tagEl);
+    const label = new CSS2DObject(labelEl);
+    label.center.set(0.5, 1);
+    label.position.set(0, 1.98, 0);
+    root.add(label);
 
     root.visible = false;
     this.group.add(root);
@@ -86,7 +97,7 @@ export class Avatars {
       arms: [armL, armR],
       buffer: new InterpolationBuffer(),
       phase: 0,
-      tag,
+      label,
       bubble,
       bubbleUntil: 0,
     });
@@ -95,8 +106,7 @@ export class Avatars {
   remove(id: string) {
     const a = this.avatars.get(id);
     if (!a) return;
-    a.tag.element.remove();
-    a.bubble.element.remove();
+    a.label.element.remove();
     this.group.remove(a.root);
     this.avatars.delete(id);
   }
@@ -116,8 +126,8 @@ export class Avatars {
   say(id: string, text: string) {
     const a = this.avatars.get(id);
     if (!a) return;
-    a.bubble.element.textContent = text;
-    a.bubble.visible = true;
+    a.bubble.textContent = text;
+    a.bubble.hidden = false;
     a.bubbleUntil = performance.now() + 7000;
   }
 
@@ -137,7 +147,7 @@ export class Avatars {
       a.legs[1].rotation.x = -swing;
       a.arms[0].rotation.x = -swing * 0.8;
       a.arms[1].rotation.x = swing * 0.8;
-      if (a.bubble.visible && now > a.bubbleUntil) a.bubble.visible = false;
+      if (!a.bubble.hidden && now > a.bubbleUntil) a.bubble.hidden = true;
     }
   }
 

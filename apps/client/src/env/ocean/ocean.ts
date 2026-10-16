@@ -33,6 +33,7 @@ import {
   saturate,
   screenUV,
   select,
+  sin,
   smoothstep,
   sqrt,
   texture,
@@ -146,6 +147,9 @@ export class Ocean {
     const origin = this.origin;
     const worldXZ = vec2(positionGeometry.x, positionGeometry.y).add(origin);
 
+    // Rotor downwash flattens the sea under a low helicopter.
+    const washD = length(worldXZ.sub(U.washCenter));
+    const flatten = float(1).sub(U.washSea.mul(0.55).mul(exp(washD.div(16).pow(2).negate())));
     mat.positionNode = Fn(() => {
       const disp = vec3(0).toVar();
       const camD = length(worldXZ.sub(cameraPosition.xz));
@@ -155,6 +159,7 @@ export class Ocean {
         const fade = i === 2 ? smoothstep(float(400), float(120), camD) : float(1);
         disp.addAssign(d.mul(fade));
       });
+      disp.mulAssign(flatten);
       return vec3(positionGeometry.x.add(disp.x), disp.y, positionGeometry.y.add(disp.z));
     })();
 
@@ -185,7 +190,14 @@ export class Ocean {
     const slopeZ = d.y.div(float(1).add(dz.y));
     // Rain roughens the surface with fine ripples.
     const ripple = mx_noise_float(vec3(wxz.mul(6), U.time.mul(4))).mul(U.rain).mul(0.08).mul(smoothstep(60, 5, viewDist));
-    const Nw = normalize(vec3(slopeX.negate().add(ripple), float(1), slopeZ.negate().sub(ripple))).toVar();
+    // Rotor wash: rings of ripples racing outward from under the helicopter.
+    const wv = wxz.sub(U.washCenter);
+    const wd = length(wv).max(0.5);
+    const wEnv = U.washSea.mul(exp(wd.div(24).pow(2).negate()));
+    const wPhase = wd.mul(1.7).sub(U.time.mul(9));
+    const wRip = sin(wPhase).mul(wEnv).mul(0.35).mul(mx_noise_float(vec3(wxz.mul(0.8), U.time.mul(0.7))).mul(0.5).add(0.75));
+    const wDir = wv.div(wd);
+    const Nw = normalize(vec3(slopeX.negate().add(ripple).add(wDir.x.mul(wRip)), float(1), slopeZ.negate().sub(ripple).add(wDir.y.mul(wRip)))).toVar();
     mat.normalNode = transformNormalToView(Nw);
 
     // Foam: whitecaps from the accumulator plus wash around the legs.
@@ -200,7 +212,13 @@ export class Ocean {
     const waveEnergy = saturate(U.windSpeed.div(12));
     const bubbles = smoothstep(-0.2, 0.5, mx_noise_float(vec3(wxz.mul(3.1), U.time.mul(0.3))));
     const streaks = mx_noise_float(vec3(wxz.mul(vec2(0.6, 0.6)), U.time.mul(0.05))).mul(0.5).add(0.5);
-    const foam = saturate(max(foamBase, ringFoam.mul(waveEnergy.mul(0.8).add(0.25)).mul(streaks.add(0.3))).mul(bubbles.mul(0.6).add(0.4))).toVar();
+    // Broken, ragged rings rather than clean circles: the ring phase is jittered by noise.
+    const wNoise = mx_noise_float(vec3(wxz.mul(0.45), U.time.mul(0.9))).mul(0.5).add(0.5);
+    const wRing = smoothstep(0.62, 0.95, sin(wd.mul(0.9).add(wNoise.mul(4)).sub(U.time.mul(6))).mul(0.5).add(0.5));
+    const washFoam = wEnv
+      .mul(wRing.mul(0.35).add(smoothstep(9, 2, wd).mul(0.3)))
+      .mul(smoothstep(0.35, 0.8, mx_noise_float(vec3(wxz.mul(1.3), U.time.mul(1.5))).mul(0.5).add(0.5)));
+    const foam = saturate(max(max(foamBase, washFoam), ringFoam.mul(waveEnergy.mul(0.8).add(0.25)).mul(streaks.add(0.3))).mul(bubbles.mul(0.6).add(0.4))).toVar();
 
     const NoV = saturate(dot(Nw, V)).max(1e-3);
     const F = float(0.02).add(float(0.98).mul(pow(float(1).sub(NoV), 5))).toVar();

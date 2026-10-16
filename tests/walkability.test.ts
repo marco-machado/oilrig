@@ -82,6 +82,34 @@ describe('walkability', () => {
     expectArrive(place('boat-landing'), [[-11, 21], [-7, 21], [-5, 21]], 'swim-platform', { minY: 1.1 });
   });
 
+  it('furniture is solid: walking straight at the kitchen island stops at its edge', () => {
+    // From the window side, heading south across the island towards the kitchen.
+    const m = motor(sw, [3.5, 20.12, -11.3]);
+    const r = walk(m, [[3.5, -6]]);
+    expect(r.reached).toBe(false);
+    // The island's north face is at z = -9.65; the body (radius 0.3) stops just short of it.
+    expect(r.final[2]).toBeLessThan(-9.65 - 0.25);
+    expect(r.final[2]).toBeGreaterThan(-10.1);
+  });
+
+  it('around the living-room sofa to the coffee table, and on to the dining table', () => {
+    expectArrive(place('living-room'), [[-6.4, -7.9], [-6.6, -9.7], [-7.3, -10.6], [-6, -10.6], [-4, -7], [-1.6, -6.2]], 'dining', { minY: 19.9 });
+  });
+
+  it('terrace → between the outdoor sofas → firepit lounge', () => {
+    expectArrive(place('terrace'), [[-7.5, 8.8], [-9, 9.4]], 'firepit', { minY: 19.9 });
+  });
+
+  it('lower walkway → hammock nets, and up onto one with a jump', () => {
+    expectArrive(place('walkway-west'), [[-24.5, -16.3], [-16.5, -16.3]], 'hammocks', { minY: 15.8 });
+    const m = motor(sw, place('hammocks'));
+    // Face the net (north) and jump on.
+    for (let i = 0; i < 40; i++) m.step({ forward: 1, right: 0, run: false, jump: i === 5, yaw: 0 }, 1 / 60);
+    for (let i = 0; i < 60; i++) m.step({ forward: 0.4, right: 0, run: false, jump: false, yaw: 0 }, 1 / 60);
+    expect(m.state.position[1]).toBeGreaterThan(16.3);
+    expect(m.state.position[2]).toBeLessThan(-17.3);
+  });
+
   it('closed doors block the way', async () => {
     const closed = await world({});
     const m = motor(closed, place('terrace'));

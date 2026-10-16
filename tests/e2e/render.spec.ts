@@ -27,3 +27,48 @@ for (const q of PRESETS) {
     expect(errors).toEqual([]);
   });
 }
+
+test('the tender rides the wave heights read back from the GPU', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  await page.goto('/?offline&cam=tender&hour=11&weather=rain&q=medium');
+  await page.waitForFunction(() => (window as any).__oceanHome?.tender.state.readbacks > 30, undefined, { timeout: 60_000 });
+  const samples: Array<{ heave: number; heights: number[]; readbacks: number }> = [];
+  for (let i = 0; i < 24; i++) {
+    samples.push(await page.evaluate(() => (window as any).__oceanHome.tender.state));
+    await page.waitForTimeout(250);
+  }
+  // Fresh heights keep arriving.
+  expect(samples.at(-1)!.readbacks - samples[0].readbacks).toBeGreaterThan(10);
+  // The water under the hull moves, and the boat moves with it (heave follows the mean height).
+  const heaves = samples.map((s) => s.heave);
+  const means = samples.map((s) => s.heights.reduce((a, b) => a + b, 0) / s.heights.length);
+  expect(Math.max(...means) - Math.min(...means)).toBeGreaterThan(0.05);
+  expect(Math.max(...heaves) - Math.min(...heaves)).toBeGreaterThan(0.05);
+  const lag = heaves.map((h, i) => Math.abs(h - means[i]));
+  expect(lag.reduce((a, b) => a + b, 0) / lag.length).toBeLessThan(0.6);
+  // Heights stay physical for the sea state.
+  for (const s of samples) for (const h of s.heights) expect(Math.abs(h)).toBeLessThan(6);
+  expect(errors).toEqual([]);
+});
+
+test('a landing helicopter spins its rotor and kicks up spray and sea wash', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  await page.goto('/?offline&cam=pad&hour=16&weather=fair&q=medium&heli=descend&heliT=18');
+  await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 20, undefined, { timeout: 60_000 });
+  const s = await page.evaluate(() => {
+    const o = (window as any).__oceanHome;
+    return { visible: o.heli.group.visible, rotor: o.heli.pose.rotor, spray: o.heli.spray.strength.value, wash: o.U.washSea.value, alt: o.heli.pose.altitude };
+  });
+  expect(s.visible).toBe(true);
+  expect(s.rotor).toBeGreaterThan(0.9);
+  expect(s.alt).toBeLessThan(10);
+  expect(s.spray).toBeGreaterThan(0.2);
+  expect(s.wash).toBeGreaterThan(0.2);
+  expect(errors).toEqual([]);
+});

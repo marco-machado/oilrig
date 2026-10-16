@@ -1,4 +1,20 @@
-import type { Surface } from '@ocean-home/shared';
+import { DIMS, type HeliPose, type Surface } from '@ocean-home/shared';
+
+interface RotorVoice {
+  bus: GainNode;
+  air: BiquadFilterNode;
+  panner: PannerNode;
+  slap: OscillatorNode;
+  slapLevel: GainNode;
+  chop: OscillatorNode;
+  noise: AudioBufferSourceNode;
+  whine: OscillatorNode[];
+  whineLevel: GainNode;
+  tail: OscillatorNode;
+  tailLevel: GainNode;
+}
+
+const SPEED_OF_SOUND = 343;
 
 /** Fully synthesized ambience and foley (WebAudio): no sample files. */
 export class SoundEngine {
@@ -17,6 +33,8 @@ export class SoundEngine {
   private volume = 0.8;
   private windWander = 0;
   private washPhase = 0;
+  private rotor: RotorVoice | null = null;
+  private readonly listenerPos = [0, 0, 0];
 
   /** Must be called from a user gesture. */
   start() {
@@ -130,6 +148,150 @@ export class SoundEngine {
     this.ambience.frequency.setTargetAtTime(o.indoors ? 700 : 18000, t, 0.25);
   }
 
+  /** Places the listener at the camera. */
+  setListener(p: { x: number; y: number; z: number }, forward: { x: number; y: number; z: number }, up: { x: number; y: number; z: number }) {
+    const ctx = this.ctx;
+    this.listenerPos[0] = p.x;
+    this.listenerPos[1] = p.y;
+    this.listenerPos[2] = p.z;
+    if (!ctx) return;
+    const l = ctx.listener;
+    const t = ctx.currentTime;
+    if (l.positionX) {
+      l.positionX.setTargetAtTime(p.x, t, 0.02);
+      l.positionY.setTargetAtTime(p.y, t, 0.02);
+      l.positionZ.setTargetAtTime(p.z, t, 0.02);
+      l.forwardX.setTargetAtTime(forward.x, t, 0.02);
+      l.forwardY.setTargetAtTime(forward.y, t, 0.02);
+      l.forwardZ.setTargetAtTime(forward.z, t, 0.02);
+      l.upX.setTargetAtTime(up.x, t, 0.02);
+      l.upY.setTargetAtTime(up.y, t, 0.02);
+      l.upZ.setTargetAtTime(up.z, t, 0.02);
+    } else {
+      l.setPosition(p.x, p.y, p.z);
+      l.setOrientation(forward.x, forward.y, forward.z, up.x, up.y, up.z);
+    }
+  }
+
+  /** Narrow pulses: one blade passing per period. */
+  private pulseWave(ctx: AudioContext, sharpness: number) {
+    const n = 32;
+    const real = new Float32Array(n);
+    const imag = new Float32Array(n);
+    for (let k = 1; k < n; k++) real[k] = Math.exp(-((k / sharpness) ** 2));
+    return ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+  }
+
+  private buildRotor(ctx: AudioContext): RotorVoice {
+    const bus = ctx.createGain();
+    bus.gain.value = 0;
+    const air = ctx.createBiquadFilter();
+    air.type = 'lowpass';
+    air.frequency.value = 12000;
+    const panner = ctx.createPanner();
+    panner.panningModel = 'HRTF';
+    panner.distanceModel = 'inverse';
+    panner.refDistance = 18;
+    panner.rolloffFactor = 1.1;
+    panner.maxDistance = 20000;
+    bus.connect(air).connect(panner).connect(this.ambience);
+
+    // Blade slap: a pulse train at the blade-passing frequency, low-passed into a "whop".
+    const pulses = this.pulseWave(ctx, 9);
+    const slap = ctx.createOscillator();
+    slap.setPeriodicWave(pulses);
+    const slapTone = ctx.createBiquadFilter();
+    slapTone.type = 'lowpass';
+    slapTone.frequency.value = 900;
+    const slapLevel = ctx.createGain();
+    slapLevel.gain.value = 0;
+    slap.connect(slapTone).connect(slapLevel).connect(bus);
+    // Air chop: band-passed noise amplitude-modulated by the same pulses.
+    const noise = this.loop(this.white);
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 650;
+    band.Q.value = 0.7;
+    const chopGain = ctx.createGain();
+    chopGain.gain.value = 0;
+    const chop = ctx.createOscillator();
+    chop.setPeriodicWave(this.pulseWave(ctx, 6));
+    const depth = ctx.createGain();
+    depth.gain.value = 0.5;
+    chop.connect(depth).connect(chopGain.gain);
+    noise.connect(band).connect(chopGain).connect(slapLevel);
+    // Turbine whine.
+    const whineLevel = ctx.createGain();
+    whineLevel.gain.value = 0;
+    const whine = [2850, 5700, 8100].map((f, i) => {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.value = [0.5, 0.2, 0.08][i];
+      o.connect(g).connect(whineLevel);
+      o.start();
+      return o;
+    });
+    whineLevel.connect(bus);
+    // Tail rotor buzz.
+    const tail = ctx.createOscillator();
+    tail.type = 'sawtooth';
+    const tailBand = ctx.createBiquadFilter();
+    tailBand.type = 'bandpass';
+    tailBand.frequency.value = 220;
+    tailBand.Q.value = 1.2;
+    const tailLevel = ctx.createGain();
+    tailLevel.gain.value = 0;
+    tail.connect(tailBand).connect(tailLevel).connect(bus);
+    slap.start();
+    chop.start();
+    tail.start();
+    return { bus, air, panner, slap, slapLevel, chop, noise, whine, whineLevel, tail, tailLevel };
+  }
+
+  /** Synthesized helicopter: blade slap, turbine and tail rotor, placed in 3D with Doppler. */
+  helicopter(pose: HeliPose | null) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    if (!pose || !pose.visible) {
+      if (this.rotor) this.rotor.bus.gain.setTargetAtTime(0, t, 0.3);
+      return;
+    }
+    this.rotor ??= this.buildRotor(ctx);
+    const r = this.rotor;
+    const [x, y, z] = pose.position;
+    const lx = x - this.listenerPos[0];
+    const ly = y + 2 - this.listenerPos[1];
+    const lz = z - this.listenerPos[2];
+    const dist = Math.max(1, Math.hypot(lx, ly, lz));
+    // Doppler from the speed along the line of sight (positive = receding).
+    const vr = (pose.velocity[0] * lx + pose.velocity[1] * ly + pose.velocity[2] * lz) / dist;
+    const doppler = SPEED_OF_SOUND / (SPEED_OF_SOUND + Math.max(-150, Math.min(150, vr)));
+    const rpm = pose.rotor;
+    const bpf = DIMS.HELI.blades * DIMS.HELI.rotorHz * Math.max(rpm, 0.02) * doppler;
+    r.slap.frequency.setTargetAtTime(bpf, t, 0.05);
+    r.chop.frequency.setTargetAtTime(bpf, t, 0.05);
+    r.noise.playbackRate.setTargetAtTime(doppler, t, 0.05);
+    r.tail.frequency.setTargetAtTime(DIMS.HELI.tailRotorHz * 2 * Math.max(rpm, 0.02) * doppler, t, 0.05);
+    r.whine.forEach((o, i) => o.frequency.setTargetAtTime([2850, 5700, 8100][i] * (0.55 + 0.45 * rpm) * doppler, t, 0.1));
+    const running = rpm > 0.01 ? 1 : 0;
+    r.slapLevel.gain.setTargetAtTime(0.9 * rpm * rpm, t, 0.1);
+    r.tailLevel.gain.setTargetAtTime(0.12 * rpm, t, 0.1);
+    r.whineLevel.gain.setTargetAtTime(0.035 * running * (0.4 + 0.6 * rpm), t, 0.3);
+    r.bus.gain.setTargetAtTime(running ? 1 : 0, t, 0.5);
+    // Air absorbs the highs over distance.
+    r.air.frequency.setTargetAtTime(Math.max(350, 14000 * Math.exp(-dist / 450)), t, 0.1);
+    if (r.panner.positionX) {
+      r.panner.positionX.setTargetAtTime(x, t, 0.03);
+      r.panner.positionY.setTargetAtTime(y + 2, t, 0.03);
+      r.panner.positionZ.setTargetAtTime(z, t, 0.03);
+    } else {
+      r.panner.setPosition(x, y + 2, z);
+    }
+  }
+
   thunder(delaySeconds: number) {
     const ctx = this.ctx;
     if (!ctx) return;
@@ -186,6 +348,11 @@ export class SoundEngine {
         f.frequency.value = 600;
         f.Q.value = 4;
         ring = { freq: 220 + Math.random() * 40, decay: 0.2, level: 0.35 };
+        break;
+      case 'soft':
+        f.type = 'lowpass';
+        f.frequency.value = 320;
+        dur = 0.14;
         break;
       case 'tile':
         f.type = 'highpass';

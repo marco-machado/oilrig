@@ -57,6 +57,10 @@ export class ElevatorView {
     this.light.position.set(0, 2.2, 0);
     this.car.add(this.light);
     this.car.position.set(cx, E.stops[1], cz);
+    // Without this the car floor stays sunlit in the shade under the deck.
+    this.car.traverse((o) => {
+      if ((o as Mesh).isMesh) (o as Mesh).receiveShadow = true;
+    });
     this.group.add(this.car);
 
     // Landing doors: two glass leaves opening from the middle, at each stop.

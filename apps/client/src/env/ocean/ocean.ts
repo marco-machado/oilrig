@@ -280,8 +280,11 @@ export class Ocean {
     const sceneLin = linearDepth(viewportDepthTexture(uvFinal));
     const thickness = max(sceneLin.sub(fragLin).mul(range), 0).toVar();
     const sceneCol = viewportSharedTexture(uvFinal).rgb;
-    const sigma = vec3(0.42, 0.085, 0.07);
-    const T = exp(sigma.negate().mul(thickness.mul(1.3)));
+    const sigma = vec3(0.45, 0.11, 0.09);
+    // The scene behind the surface was lit by full sunlight, so add the depth the light
+    // travelled down to reach it: deep members fade out instead of glowing green.
+    const depthBelow = thickness.mul(saturate(V.y));
+    const T = exp(sigma.negate().mul(thickness.add(depthBelow).mul(1.3)));
     const ambient = vec3(U.fogColor).mul(0.55).add(vec3(U.sunColor).mul(U.sunIntensity.mul(saturate(U.sunDir.y)).mul(0.0028)));
     const deep: any = color(0x02303d);
     const inscatter = deep.mul(ambient).mul(float(1).sub(T));

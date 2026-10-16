@@ -165,9 +165,11 @@ function concrete() {
   const m = new MeshStandardNodeMaterial();
   const p = positionWorld;
   const mottle = n01(mx_fractal_noise_float(p.mul(0.6), 4, 2, 0.55));
+  const fine = n01(mx_fractal_noise_float(p.mul(5), 3, 2, 0.5));
   const speck = smoothstep(0.08, 0.0, mx_worley_noise_float(p.mul(38)));
-  m.colorNode = mix(color(0x9e9a93), color(0xbdb8b0), mottle).mul(float(1).sub(speck.mul(0.18)));
-  m.roughnessNode = mottle.mul(0.14).add(0.18);
+  m.colorNode = mix(color(0x9e9a93), color(0xbdb8b0), mottle.mul(0.6).add(fine.mul(0.4))).mul(float(1).sub(speck.mul(0.18)));
+  // Honed rather than mirror-polished: indoors the reflected sky read as blue clouds on the floor.
+  m.roughnessNode = mottle.mul(0.12).add(fine.mul(0.06)).add(0.4);
   m.metalnessNode = float(0);
   return m;
 }
@@ -196,11 +198,13 @@ function glass(frosted: boolean) {
 /** Clear glass as a plain transparent surface: cheaper than transmission. */
 function thinGlass() {
   return new MeshPhysicalNodeMaterial({
-    color: new Color(0xdfeeee),
+    // Dark body colour: clear glass reflects and tints but has no diffuse of its own; a pale
+    // one lit up like a lampshade under the landing light and read milky by day.
+    color: new Color(0x1a2423),
     metalness: 0,
     roughness: 0.03,
     transparent: true,
-    opacity: 0.16,
+    opacity: 0.2,
     depthWrite: false,
     side: DoubleSide,
   });
@@ -313,8 +317,8 @@ function stone() {
   const p = positionWorld;
   const base = n01(mx_fractal_noise_float(p.mul(1.4), 4, 2, 0.5));
   const vein = smoothstep(0.03, 0.0, abs(mx_fractal_noise_float(p.mul(vec3(0.9, 2.5, 0.9)), 4, 2, 0.55)));
-  m.colorNode = mix(color(0xd9d2c4), color(0xeee9df), base).mul(float(1).sub(vein.mul(0.18)));
-  m.roughnessNode = base.mul(0.1).add(0.22);
+  m.colorNode = mix(color(0xc4bcad), color(0xd9d2c4), base).mul(float(1).sub(vein.mul(0.18)));
+  m.roughnessNode = base.mul(0.1).add(0.45);
   m.metalnessNode = float(0);
   return m;
 }

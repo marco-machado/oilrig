@@ -16,7 +16,7 @@ const CAMERAS: Record<string, { position: Vec3; target: Vec3 }> = {
   // Same framing from the north, so the midday sun (north, in the southern hemisphere) is behind the camera.
   refn: { position: [6, 9, -118], target: [6, 8, 0] },
   aerial: { position: [95, 70, 95], target: [5, 10, 0] },
-  deck: { position: [-6, 21.7, 12], target: [-6, 21, -5] },
+  deck: { position: [4, 21.7, 12], target: [4, 21, -5] },
   helipad: { position: [55, 26, 22], target: [40, 20, 0] },
   swim: { position: [-5, 2.85, 21.2], target: [-12, -6, 6] },
   interior: { position: [3, 21.8, -1], target: [-12, 21.2, -8] },

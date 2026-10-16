@@ -613,6 +613,8 @@ async function boot() {
     crew: () => crew,
     flight: () => flight,
     liftState: () => liftState,
+    localLift,
+    dbg,
     interact,
     clock: () => clock,
     controls,

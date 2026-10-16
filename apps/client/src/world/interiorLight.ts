@@ -1,5 +1,6 @@
 import { type Object3D, type Scene, Vector3, type WebGPURenderer } from 'three/webgpu';
 import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js';
+import { LightProbeGridNode } from 'three/addons/tsl/lighting/LightProbeGridNode.js';
 import { DIMS } from '@ocean-home/shared';
 
 const PER_FRAME = 15;
@@ -25,6 +26,11 @@ export class InteriorLight {
     this.renderer = renderer;
     this.scene = scene;
     this.hidden = hiddenDuringBake;
+    // bake() registers the grid's light node, but shaders are pre-compiled before the
+    // first bake; without this they are built with no bounce light at all.
+    if (renderer.library.getLightNodeClass(LightProbeGrid) === null) {
+      renderer.library.addLight(LightProbeGridNode, LightProbeGrid);
+    }
     const P = DIMS.PAVILION;
     const w = P.x1 - P.x0 - 1;
     const h = P.height - 0.8;

@@ -47,8 +47,11 @@ test('the tender rides the wave heights read back from the GPU', async ({ page }
   const means = samples.map((s) => s.heights.reduce((a, b) => a + b, 0) / s.heights.length);
   expect(Math.max(...means) - Math.min(...means)).toBeGreaterThan(0.05);
   expect(Math.max(...heaves) - Math.min(...heaves)).toBeGreaterThan(0.05);
+  // Tracking error is judged against how much the water moved, not in fixed metres: the
+  // hull has inertia, so in a big sea it trails by more in absolute terms.
+  const swing = Math.max(...means) - Math.min(...means);
   const lag = heaves.map((h, i) => Math.abs(h - means[i]));
-  expect(lag.reduce((a, b) => a + b, 0) / lag.length).toBeLessThan(0.6);
+  expect(lag.reduce((a, b) => a + b, 0) / lag.length).toBeLessThan(0.2 * swing);
   // Heights stay physical for the sea state.
   for (const s of samples) for (const h of s.heights) expect(Math.abs(h)).toBeLessThan(6);
   expect(errors).toEqual([]);

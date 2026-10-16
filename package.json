@@ -1,0 +1,30 @@
+{
+  "name": "ocean-home",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "build": "pnpm --filter @ocean-home/client build",
+    "start": "pnpm --filter @ocean-home/server start",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:render": "playwright test tests/e2e/render.spec.ts",
+    "perf": "PERF=1 playwright test tests/e2e/perf.spec.ts",
+    "screenshots": "SHOTS=1 playwright test tests/e2e/screenshots.spec.ts",
+    "bot": "node scripts/bot.ts"
+  },
+  "devDependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0",
+    "@ocean-home/shared": "workspace:*",
+    "@playwright/test": "1.64.1",
+    "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5",
+    "ws": "8.22.0"
+  }
+}

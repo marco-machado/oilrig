@@ -1,0 +1,20 @@
+{
+  "name": "@ocean-home/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --watch-path=src --watch-path=../../packages/shared/src src/index.ts",
+    "start": "node src/index.ts"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0",
+    "@hono/node-server": "2.1.5",
+    "@ocean-home/shared": "workspace:*",
+    "hono": "4.13.13",
+    "ws": "8.22.0",
+    "zod": "4.6.7"
+  }
+}

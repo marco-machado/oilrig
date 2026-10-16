@@ -1,0 +1,20 @@
+{
+  "name": "@ocean-home/client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/three": "0.186.0",
+    "vite": "8.3.4"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0",
+    "@ocean-home/shared": "workspace:*",
+    "three": "0.186.1",
+    "zod": "4.6.7"
+  }
+}

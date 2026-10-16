@@ -1,0 +1,36 @@
+# Usage: DOMAIN=home.example.com JOIN_PASSWORD=... docker compose -f docker/compose.yaml up -d --build
+# WebGPU needs a secure context, so a public deployment goes through Caddy (automatic HTTPS).
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      JOIN_PASSWORD: ${JOIN_PASSWORD:-}
+      DAY_LENGTH_MINUTES: ${DAY_LENGTH_MINUTES:-120}
+      REAL_TIME: ${REAL_TIME:-false}
+      WEATHER_SEED: ${WEATHER_SEED:-1337}
+    volumes:
+      - ocean-home-data:/data
+    expose:
+      - "8787"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  ocean-home-data:
+  caddy-data:
+  caddy-config:

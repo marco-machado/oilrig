@@ -1,0 +1,29 @@
+import { expect, test } from '@playwright/test';
+
+// Loads the world offline from a fixed camera at each quality preset and checks that it
+// actually renders: WebGPU initialises, frames advance, nothing errors, and frame time
+// stays within a (deliberately generous, headless) budget.
+
+const PRESETS = ['low', 'medium', 'high', 'ultra'] as const;
+
+for (const q of PRESETS) {
+  test(`renders cleanly at ${q} quality`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error') errors.push(m.text());
+    });
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(`/?offline&cam=aerial&hour=11&weather=fair&q=${q}`);
+    await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 20, undefined, { timeout: 60_000 });
+    expect(await page.locator('.fatal').count()).toBe(0);
+    const f0 = await page.evaluate(() => (window as any).__oceanHome.stats.frames);
+    const t0 = Date.now();
+    await page.waitForTimeout(4000);
+    const f1 = await page.evaluate(() => (window as any).__oceanHome.stats.frames);
+    const msPerFrame = (Date.now() - t0) / Math.max(1, f1 - f0);
+    console.log(`${q}: ${(f1 - f0)} frames in 4 s → ${msPerFrame.toFixed(1)} ms/frame`);
+    expect(f1 - f0).toBeGreaterThan(8);
+    expect(msPerFrame).toBeLessThan(250);
+    expect(errors).toEqual([]);
+  });
+}

@@ -6,8 +6,33 @@
     <title>Ocean Home</title>
     <meta name="color-scheme" content="dark" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1a26'/%3E%3Cpath d='M5 21h22' stroke='%233a8fb7' stroke-width='2'/%3E%3Cpath d='M6 11h20M9 11v12M23 11v12M9 15l14 6M23 15L9 21' stroke='%23f0b20a' stroke-width='2.2' fill='none'/%3E%3C/svg%3E" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #05080b; }
+      #loader {
+        position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+        background: radial-gradient(ellipse at 50% 65%, #0d2233 0%, #05080b 70%);
+        color: #f4f1ea; font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+        transition: opacity 0.6s;
+      }
+      #loader.done { opacity: 0; pointer-events: none; }
+      #loader .box { width: min(360px, calc(100vw - 32px)); text-align: center; }
+      #loader h1 { margin: 0 0 6px; font-size: 26px; font-weight: 650; letter-spacing: -0.02em; }
+      #loader .step { color: rgba(244, 241, 234, 0.68); min-height: 22px; }
+      #loader .bar { margin-top: 14px; height: 4px; border-radius: 2px; background: rgba(244, 241, 234, 0.12); overflow: hidden; }
+      #loader .fill { height: 100%; width: 3%; background: #f0b20a; border-radius: 2px; transition: width 0.4s ease; }
+      #loader .hint { margin-top: 18px; font-size: 12.5px; color: rgba(244, 241, 234, 0.45); }
+      @media (prefers-reduced-motion: reduce) { #loader, #loader .fill { transition: none; } }
+    </style>
   </head>
   <body>
+    <div id="loader" role="status" aria-live="polite">
+      <div class="box">
+        <h1>Ocean Home</h1>
+        <div class="step">Loading…</div>
+        <div class="bar"><div class="fill"></div></div>
+        <div class="hint">The first visit compiles the ocean and lighting shaders; it takes a little longer.</div>
+      </div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -42,12 +42,14 @@ import { createMaterials } from './world/materials/index.ts';
 import { buildProps } from './world/props.ts';
 import { buildStructure } from './world/structure.ts';
 import { debugParams } from './debug.ts';
+import { hideLoading, setLoading } from './loading.ts';
 
 const DEFAULT_SEED = 1337;
 
 async function boot() {
   const app = document.getElementById('app')!;
   if (!('gpu' in navigator)) {
+    hideLoading();
     app.innerHTML = `<div class="fatal">Ocean Home needs WebGPU.<br/>Use a current Chrome or Edge, or Safari 26+.</div>`;
     return;
   }
@@ -55,13 +57,17 @@ async function boot() {
   const settings = loadSettings(dbg.quality ?? loadQualityName());
   const q = QUALITY[dbg.quality ?? settings.quality];
 
+  await setLoading('Starting physics…', 0.12);
   await RAPIER.init();
+  await setLoading('Building the platform…', 0.25);
   const layout = getLayout();
   const sw = buildStaticWorld(RAPIER, layout);
 
+  await setLoading('Starting WebGPU…', 0.35);
   const renderer = new WebGPURenderer({ antialias: false, powerPreference: 'high-performance' });
   await renderer.init();
   if (!(renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend) {
+    hideLoading();
     app.innerHTML = `<div class="fatal">WebGPU could not be initialised on this device.</div>`;
     return;
   }
@@ -82,6 +88,7 @@ async function boot() {
   const camera = new PerspectiveCamera(settings.fov, window.innerWidth / window.innerHeight, 0.1, 30000);
   scene.add(camera);
 
+  await setLoading('Generating the world…', 0.45);
   // World.
   const materials = createMaterials();
   const structure = buildStructure(layout, materials);
@@ -323,6 +330,9 @@ async function boot() {
   });
 
   const pipeline = createPipeline(renderer, scene, camera, q);
+  await setLoading('Compiling shaders…', 0.65);
+  await renderer.compileAsync(scene, camera);
+  await setLoading('Warming up the ocean and lighting…', 0.9);
   const timer = new Timer();
   timer.connect(document);
   let simTime = 0;
@@ -423,11 +433,13 @@ async function boot() {
     pipeline.render();
     labels.render(scene, camera);
     stats.frames++;
+    if (stats.frames === 3) hideLoading();
   });
 }
 
 boot().catch((err) => {
   console.error(err);
+  hideLoading();
   const app = document.getElementById('app');
   if (app) app.innerHTML = `<div class="fatal">Failed to start: ${String(err?.message ?? err)}</div>`;
 });

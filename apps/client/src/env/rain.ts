@@ -92,6 +92,8 @@ export function createRain(count: number) {
     const sheltered = inRect(P.x0 - P.overhang, P.x1 + P.overhang, P.z0 - P.overhang, P.z1 + P.overhang, P.floor + P.height)
       .or(inRect(DIMS.DECK.x0, DIMS.DECK.x1, DIMS.DECK.z0, DIMS.DECK.z1, DIMS.DECK.top - 0.1))
       .or(inRect(DIMS.HELIPAD.x0, DIMS.HELIPAD.x1, DIMS.HELIPAD.z0, DIMS.HELIPAD.z1, DIMS.HELIPAD.top - 0.25))
+      .or(inRect(DIMS.ELEVATOR.x0, DIMS.ELEVATOR.x1, DIMS.ELEVATOR.z0, DIMS.ELEVATOR.z1, DIMS.ELEVATOR.head))
+      .or(p.sub(U.droneCabin.xyz).length().lessThan(U.droneCabin.w))
       .or(p.y.lessThan(0.0));
     const visible = select(sheltered, float(0), active.mul(smoothstep(sd.w, sd.w.add(0.05), U.rain)));
     const dir = normalize(vel);

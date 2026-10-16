@@ -1,22 +1,25 @@
-import { DIMS, type HeliPose, type Surface } from '@ocean-home/shared';
+import type { DronePose, Surface, Vec3 } from '@ocean-home/shared';
 
-interface RotorVoice {
-  bus: GainNode;
-  air: BiquadFilterNode;
+/** Where a looping sample plays from: its source, level, filter and 3D panner. */
+interface LoopVoice {
+  src: AudioBufferSourceNode;
+  gain: GainNode;
+  filter: BiquadFilterNode;
   panner: PannerNode;
-  slap: OscillatorNode;
-  slapLevel: GainNode;
-  chop: OscillatorNode;
-  noise: AudioBufferSourceNode;
-  whine: OscillatorNode[];
-  whineLevel: GainNode;
-  tail: OscillatorNode;
-  tailLevel: GainNode;
 }
 
 const SPEED_OF_SOUND = 343;
+const SFX = '/sfx/';
 
-/** Fully synthesized ambience and foley (WebAudio): no sample files. */
+/** Footstep sets per surface; water is the pool. */
+type StepSurface = Surface | 'water';
+
+/**
+ * Ambience (sea, wind, rain, thunder) is synthesized with WebAudio. Footsteps, the drone,
+ * the elevator and the doors are sound effects generated with ElevenLabs (scripts/sfx.ts):
+ * footsteps come as one sprite per surface and gait, cut into single steps that are played
+ * in a shuffled order with small pitch and level changes so no two in a row sound alike.
+ */
 export class SoundEngine {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
@@ -33,8 +36,15 @@ export class SoundEngine {
   private volume = 0.8;
   private windWander = 0;
   private washPhase = 0;
-  private rotor: RotorVoice | null = null;
   private readonly listenerPos = [0, 0, 0];
+  private readonly buffers = new Map<string, AudioBuffer>();
+  private steps: Record<string, Array<[number, number]>> = {};
+  private readonly lastStep = new Map<string, number>();
+  private drone: LoopVoice | null = null;
+  private lift: LoopVoice | null = null;
+  /** Inside the drone cabin: its own hum is close and muffled, the outside is quieter. */
+  private seated = false;
+  private loaded: Promise<void> | null = null;
 
   /** Must be called from a user gesture. */
   start() {
@@ -89,6 +99,37 @@ export class SoundEngine {
     this.rainGain = ctx.createGain();
     this.rainGain.gain.value = 0;
     this.loop(this.white).connect(this.rainFilter).connect(this.rainGain).connect(this.master);
+    this.loaded = this.loadSamples();
+  }
+
+  private async fetchBuffer(name: string) {
+    const res = await fetch(SFX + name);
+    if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
+    const buf = await this.ctx!.decodeAudioData(await res.arrayBuffer());
+    this.buffers.set(name, buf);
+    return buf;
+  }
+
+  private async loadSamples() {
+    try {
+      const res = await fetch(`${SFX}footsteps.json`);
+      this.steps = await res.json();
+      // The loops and the surfaces underfoot most often first; the rest follow.
+      const first = ['drone-loop.wav', 'elevator-loop.wav', 'steps-wood-walk.wav', 'steps-wood-run.wav', 'steps-grating-walk.wav', 'steps-grating-run.wav', 'steps-stone-walk.wav', 'steps-stone-run.wav'];
+      await Promise.all(first.map((n) => this.fetchBuffer(n)));
+      const rest = Object.keys(this.steps)
+        .map((k) => `steps-${k}.wav`)
+        .filter((n) => !first.includes(n))
+        .concat(['elevator-chime.mp3', 'elevator-doors.mp3', 'door-slide.mp3']);
+      await Promise.all(rest.map((n) => this.fetchBuffer(n)));
+    } catch (e) {
+      console.warn('Sound effects did not load:', e);
+    }
+  }
+
+  /** Resolves once the sample files are decoded (or failed to load). */
+  ready() {
+    return this.loaded ?? Promise.resolve();
   }
 
   setVolume(v: number) {
@@ -173,123 +214,103 @@ export class SoundEngine {
     }
   }
 
-  /** Narrow pulses: one blade passing per period. */
-  private pulseWave(ctx: AudioContext, sharpness: number) {
-    const n = 32;
-    const real = new Float32Array(n);
-    const imag = new Float32Array(n);
-    for (let k = 1; k < n; k++) real[k] = Math.exp(-((k / sharpness) ** 2));
-    return ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+  private panner(refDistance: number, rolloff = 1) {
+    const p = this.ctx!.createPanner();
+    p.panningModel = 'HRTF';
+    p.distanceModel = 'inverse';
+    p.refDistance = refDistance;
+    p.rolloffFactor = rolloff;
+    p.maxDistance = 20000;
+    return p;
   }
 
-  private buildRotor(ctx: AudioContext): RotorVoice {
-    const bus = ctx.createGain();
-    bus.gain.value = 0;
-    const air = ctx.createBiquadFilter();
-    air.type = 'lowpass';
-    air.frequency.value = 12000;
-    const panner = ctx.createPanner();
-    panner.panningModel = 'HRTF';
-    panner.distanceModel = 'inverse';
-    panner.refDistance = 18;
-    panner.rolloffFactor = 1.1;
-    panner.maxDistance = 20000;
-    bus.connect(air).connect(panner).connect(this.ambience);
-
-    // Blade slap: a pulse train at the blade-passing frequency, low-passed into a "whop".
-    const pulses = this.pulseWave(ctx, 9);
-    const slap = ctx.createOscillator();
-    slap.setPeriodicWave(pulses);
-    const slapTone = ctx.createBiquadFilter();
-    slapTone.type = 'lowpass';
-    slapTone.frequency.value = 900;
-    const slapLevel = ctx.createGain();
-    slapLevel.gain.value = 0;
-    slap.connect(slapTone).connect(slapLevel).connect(bus);
-    // Air chop: band-passed noise amplitude-modulated by the same pulses.
-    const noise = this.loop(this.white);
-    const band = ctx.createBiquadFilter();
-    band.type = 'bandpass';
-    band.frequency.value = 650;
-    band.Q.value = 0.7;
-    const chopGain = ctx.createGain();
-    chopGain.gain.value = 0;
-    const chop = ctx.createOscillator();
-    chop.setPeriodicWave(this.pulseWave(ctx, 6));
-    const depth = ctx.createGain();
-    depth.gain.value = 0.5;
-    chop.connect(depth).connect(chopGain.gain);
-    noise.connect(band).connect(chopGain).connect(slapLevel);
-    // Turbine whine.
-    const whineLevel = ctx.createGain();
-    whineLevel.gain.value = 0;
-    const whine = [2850, 5700, 8100].map((f, i) => {
-      const o = ctx.createOscillator();
-      o.type = 'sine';
-      o.frequency.value = f;
-      const g = ctx.createGain();
-      g.gain.value = [0.5, 0.2, 0.08][i];
-      o.connect(g).connect(whineLevel);
-      o.start();
-      return o;
-    });
-    whineLevel.connect(bus);
-    // Tail rotor buzz.
-    const tail = ctx.createOscillator();
-    tail.type = 'sawtooth';
-    const tailBand = ctx.createBiquadFilter();
-    tailBand.type = 'bandpass';
-    tailBand.frequency.value = 220;
-    tailBand.Q.value = 1.2;
-    const tailLevel = ctx.createGain();
-    tailLevel.gain.value = 0;
-    tail.connect(tailBand).connect(tailLevel).connect(bus);
-    slap.start();
-    chop.start();
-    tail.start();
-    return { bus, air, panner, slap, slapLevel, chop, noise, whine, whineLevel, tail, tailLevel };
+  private place(p: PannerNode, x: number, y: number, z: number, smooth = 0.03) {
+    const t = this.ctx!.currentTime;
+    if (p.positionX) {
+      p.positionX.setTargetAtTime(x, t, smooth);
+      p.positionY.setTargetAtTime(y, t, smooth);
+      p.positionZ.setTargetAtTime(z, t, smooth);
+    } else {
+      p.setPosition(x, y, z);
+    }
   }
 
-  /** Synthesized helicopter: blade slap, turbine and tail rotor, placed in 3D with Doppler. */
-  helicopter(pose: HeliPose | null) {
+  private loopVoice(name: string, refDistance: number, bus: AudioNode): LoopVoice | null {
+    const buf = this.buffers.get(name);
+    if (!buf) return null;
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 16000;
+    const panner = this.panner(refDistance);
+    src.connect(filter).connect(gain).connect(panner).connect(bus);
+    src.start(0, Math.random() * buf.duration);
+    return { src, gain, filter, panner };
+  }
+
+  /** The listener sits in the drone (changes how loud and muffled things sound). */
+  setSeated(seated: boolean) {
+    this.seated = seated;
+  }
+
+  /** The drone: four ducted rotors, pitched by rotor speed, placed in 3D with Doppler. */
+  setDrone(pose: DronePose | null) {
     const ctx = this.ctx;
     if (!ctx) return;
     const t = ctx.currentTime;
-    if (!pose || !pose.visible) {
-      if (this.rotor) this.rotor.bus.gain.setTargetAtTime(0, t, 0.3);
+    if (!pose || !pose.visible || pose.rotor < 0.01) {
+      this.drone?.gain.gain.setTargetAtTime(0, t, 0.4);
       return;
     }
-    this.rotor ??= this.buildRotor(ctx);
-    const r = this.rotor;
+    this.drone ??= this.loopVoice('drone-loop.wav', 14, this.master);
+    const v = this.drone;
+    if (!v) return;
     const [x, y, z] = pose.position;
     const lx = x - this.listenerPos[0];
-    const ly = y + 2 - this.listenerPos[1];
+    const ly = y + 1.5 - this.listenerPos[1];
     const lz = z - this.listenerPos[2];
     const dist = Math.max(1, Math.hypot(lx, ly, lz));
     // Doppler from the speed along the line of sight (positive = receding).
-    const vr = (pose.velocity[0] * lx + pose.velocity[1] * ly + pose.velocity[2] * lz) / dist;
+    const vr = this.seated ? 0 : (pose.velocity[0] * lx + pose.velocity[1] * ly + pose.velocity[2] * lz) / dist;
     const doppler = SPEED_OF_SOUND / (SPEED_OF_SOUND + Math.max(-150, Math.min(150, vr)));
-    const rpm = pose.rotor;
-    const bpf = DIMS.HELI.blades * DIMS.HELI.rotorHz * Math.max(rpm, 0.02) * doppler;
-    r.slap.frequency.setTargetAtTime(bpf, t, 0.05);
-    r.chop.frequency.setTargetAtTime(bpf, t, 0.05);
-    r.noise.playbackRate.setTargetAtTime(doppler, t, 0.05);
-    r.tail.frequency.setTargetAtTime(DIMS.HELI.tailRotorHz * 2 * Math.max(rpm, 0.02) * doppler, t, 0.05);
-    r.whine.forEach((o, i) => o.frequency.setTargetAtTime([2850, 5700, 8100][i] * (0.55 + 0.45 * rpm) * doppler, t, 0.1));
-    const running = rpm > 0.01 ? 1 : 0;
-    r.slapLevel.gain.setTargetAtTime(0.9 * rpm * rpm, t, 0.1);
-    r.tailLevel.gain.setTargetAtTime(0.12 * rpm, t, 0.1);
-    r.whineLevel.gain.setTargetAtTime(0.035 * running * (0.4 + 0.6 * rpm), t, 0.3);
-    r.bus.gain.setTargetAtTime(running ? 1 : 0, t, 0.5);
-    // Air absorbs the highs over distance.
-    r.air.frequency.setTargetAtTime(Math.max(350, 14000 * Math.exp(-dist / 450)), t, 0.1);
-    if (r.panner.positionX) {
-      r.panner.positionX.setTargetAtTime(x, t, 0.03);
-      r.panner.positionY.setTargetAtTime(y + 2, t, 0.03);
-      r.panner.positionZ.setTargetAtTime(z, t, 0.03);
-    } else {
-      r.panner.setPosition(x, y + 2, z);
-    }
+    const rpm = Math.max(0, pose.rotor);
+    v.src.playbackRate.setTargetAtTime(Math.max(0.3, (0.55 + 0.5 * rpm) * doppler), t, 0.08);
+    v.gain.gain.setTargetAtTime(Math.min(1.2, rpm * rpm * 1.1) * (this.seated ? 0.55 : 1), t, 0.15);
+    // Air absorbs the highs over distance; the cabin muffles them for whoever sits inside.
+    v.filter.frequency.setTargetAtTime(this.seated ? 1800 : Math.max(500, 15000 * Math.exp(-dist / 380)), t, 0.1);
+    this.place(v.panner, x, y + 1.5, z);
+  }
+
+  /** The elevator car: motor hum while it travels. */
+  setElevator(carCenter: Vec3, moving: boolean) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    this.lift ??= this.loopVoice('elevator-loop.wav', 3, this.master);
+    const v = this.lift;
+    if (!v) return;
+    v.gain.gain.setTargetAtTime(moving ? 0.55 : 0, ctx.currentTime, moving ? 0.4 : 0.25);
+    this.place(v.panner, carCenter[0], carCenter[1], carCenter[2]);
+  }
+
+  /** A one-shot sample at a point in the world. */
+  playAt(name: 'elevator-chime.mp3' | 'elevator-doors.mp3' | 'door-slide.mp3', at: Vec3, level = 1, refDistance = 4) {
+    const ctx = this.ctx;
+    const buf = this.buffers.get(name);
+    if (!ctx || !buf) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.96 + Math.random() * 0.08;
+    const g = ctx.createGain();
+    g.gain.value = level;
+    const p = this.panner(refDistance, 1.2);
+    this.place(p, at[0], at[1], at[2], 0.001);
+    src.connect(g).connect(p).connect(this.master);
+    src.start();
   }
 
   thunder(delaySeconds: number) {
@@ -313,73 +334,25 @@ export class SoundEngine {
     src.stop(t0 + 5.2);
   }
 
-  footstep(surface: Surface | undefined, run: boolean, strength = 1) {
+  /** One footstep of the local player: a random step from the surface's set, never the same one twice running. */
+  footstep(surface: StepSurface | undefined, run: boolean, strength = 1) {
     const ctx = this.ctx;
     if (!ctx) return;
-    const t = ctx.currentTime;
-    const v = (run ? 0.55 : 0.4) * strength * (0.85 + Math.random() * 0.3);
+    const key = `${surface ?? 'stone'}-${run ? 'run' : 'walk'}`;
+    const slices = this.steps[key];
+    const buf = this.buffers.get(`steps-${key}.wav`);
+    if (!slices?.length || !buf) return;
+    let i = Math.floor(Math.random() * slices.length);
+    if (slices.length > 1 && i === this.lastStep.get(key)) i = (i + 1 + Math.floor(Math.random() * (slices.length - 1))) % slices.length;
+    this.lastStep.set(key, i);
+    const [offset, duration] = slices[i];
     const src = ctx.createBufferSource();
-    src.buffer = this.white;
-    const f = ctx.createBiquadFilter();
+    src.buffer = buf;
+    src.playbackRate.value = 0.94 + Math.random() * 0.12;
     const g = ctx.createGain();
-    let dur = 0.09;
-    let ring: { freq: number; decay: number; level: number } | null = null;
-    switch (surface) {
-      case 'wood':
-        f.type = 'lowpass';
-        f.frequency.value = 700;
-        dur = 0.12;
-        ring = { freq: 140 + Math.random() * 30, decay: 0.08, level: 0.5 };
-        break;
-      case 'grating':
-        f.type = 'bandpass';
-        f.frequency.value = 2600;
-        f.Q.value = 2;
-        ring = { freq: 1400 + Math.random() * 600, decay: 0.12, level: 0.12 };
-        break;
-      case 'metal':
-        f.type = 'bandpass';
-        f.frequency.value = 1800;
-        f.Q.value = 3;
-        ring = { freq: 900 + Math.random() * 300, decay: 0.15, level: 0.15 };
-        break;
-      case 'hollow':
-        f.type = 'bandpass';
-        f.frequency.value = 600;
-        f.Q.value = 4;
-        ring = { freq: 220 + Math.random() * 40, decay: 0.2, level: 0.35 };
-        break;
-      case 'soft':
-        f.type = 'lowpass';
-        f.frequency.value = 320;
-        dur = 0.14;
-        break;
-      case 'tile':
-        f.type = 'highpass';
-        f.frequency.value = 900;
-        dur = 0.07;
-        break;
-      default:
-        f.type = 'bandpass';
-        f.frequency.value = 1500;
-        f.Q.value = 0.8;
-        dur = 0.06;
-    }
-    g.gain.setValueAtTime(v, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(f).connect(g).connect(this.master);
-    src.start(t, Math.random() * 3);
-    src.stop(t + dur + 0.02);
-    if (ring) {
-      const o = ctx.createOscillator();
-      o.type = 'sine';
-      o.frequency.value = ring.freq;
-      const rg = ctx.createGain();
-      rg.gain.setValueAtTime(v * ring.level, t);
-      rg.gain.exponentialRampToValueAtTime(0.0005, t + ring.decay);
-      o.connect(rg).connect(this.master);
-      o.start(t);
-      o.stop(t + ring.decay + 0.02);
-    }
+    const level = (run ? 0.62 : 0.5) * strength * (0.82 + Math.random() * 0.3);
+    g.gain.value = Math.min(1.4, level);
+    src.connect(g).connect(this.master);
+    src.start(ctx.currentTime, offset, duration);
   }
 }

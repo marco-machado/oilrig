@@ -6,10 +6,15 @@ import {
   type ClientMessage,
   type ClockConfig,
   DEFAULT_EPOCH,
-  HeliScheduler,
-  type HeliScheduleOptions,
-  type HeliState,
   DIMS,
+  DroneCrew,
+  type DronePose,
+  type DronePoseMsg,
+  type DroneScheduleOptions,
+  DroneScheduler,
+  type DroneState,
+  ElevatorController,
+  type ElevatorState,
   type Layout,
   NET,
   type PlayerInfo,
@@ -17,13 +22,24 @@ import {
   type ServerMessage,
   type StaticWorld,
   type Vec3,
+  WeatherControl,
+  type WeatherMode,
   WeatherModel,
   type WeatherState,
+  adjustClock,
+  altitudeOf,
   buildStaticWorld,
+  droneClearPath,
+  dronePose,
+  elevatorPanels,
+  elevatorPose,
   gameTime,
+  gateOpen,
   getLayout,
-  heliPose,
+  inCar,
+  inDoorway,
   padOccupied,
+  seatPosition,
 } from '@ocean-home/shared';
 import type { Store } from '../db.ts';
 import { type AcceptedPose, MovementValidator } from './validation.ts';
@@ -52,7 +68,8 @@ export interface WorldEvents {
   chat: [ChatEntry];
   door: [{ id: string; open: boolean; by: string }];
   weather: [WeatherState];
-  helicopter: [HeliState];
+  drone: [DroneState];
+  elevator: [ElevatorState];
   displaced: [Player];
 }
 
@@ -64,10 +81,12 @@ export interface WorldOptions {
   weatherSeed: number;
   joinPassword: string | null;
   store: Store;
-  helicopter?: Partial<HeliScheduleOptions>;
+  drone?: Partial<DroneScheduleOptions>;
 }
 
-const HELI_DEFAULTS: HeliScheduleOptions = { intervalMs: 15 * 60_000, stayMs: 4 * 60_000, firstArrivalMs: 60_000, seed: 7 };
+// The drone lives here: it starts parked on the pad, stays a good while, and flies off on
+// a short trip now and then.
+const DRONE_DEFAULTS: DroneScheduleOptions = { intervalMs: 3 * 60_000, stayMs: 12 * 60_000, firstArrivalMs: 60_000, seed: 7, startLanded: true };
 
 function colorFor(name: string) {
   let h = 2166136261;
@@ -89,8 +108,8 @@ const sanitize = (text: string) => text.replace(/[\u0000-\u001f\u007f]/g, ' ').t
 export class World extends EventEmitter<WorldEvents> {
   readonly layout: Layout;
   readonly sw: StaticWorld;
-  readonly clock: ClockConfig;
-  private readonly weather: WeatherModel;
+  clock: ClockConfig;
+  private readonly weather: WeatherControl;
   private readonly validator: MovementValidator;
   private readonly players = new Map<string, Player>();
   private readonly sessions = new Map<string, Player>();
@@ -99,7 +118,11 @@ export class World extends EventEmitter<WorldEvents> {
   private readonly opts: WorldOptions;
   private timers: NodeJS.Timeout[] = [];
   private lastWeather: WeatherState;
-  readonly heli: HeliScheduler;
+  readonly drone: DroneScheduler;
+  readonly crew = new DroneCrew();
+  /** The pilot's latest drone pose (server receive time), while someone flies it. */
+  private droneLive: (DronePoseMsg & { t: number }) | null = null;
+  readonly elevator: ElevatorController;
 
   private constructor(sw: StaticWorld, opts: WorldOptions) {
     super();
@@ -107,16 +130,27 @@ export class World extends EventEmitter<WorldEvents> {
     this.layout = getLayout();
     this.sw = sw;
     this.clock = opts.clock;
-    this.weather = new WeatherModel(opts.weatherSeed, DEFAULT_EPOCH);
+    this.weather = new WeatherControl(new WeatherModel(opts.weatherSeed, DEFAULT_EPOCH));
     this.validator = new MovementValidator(sw);
     for (const d of this.layout.doors) this.doors.set(d.id, false);
     this.chat = opts.store.recentChat(NET.chatHistory);
     this.lastWeather = this.currentWeather();
-    this.heli = new HeliScheduler({ ...HELI_DEFAULTS, ...opts.helicopter }, Date.now(), {
-      padOccupied: () => padOccupied(this.online().map((p) => p.pose.p)),
+    this.drone = new DroneScheduler({ ...DRONE_DEFAULTS, ...opts.drone }, Date.now(), {
+      padOccupied: () => padOccupied(this.online().filter((p) => this.crew.seatOf(p.info.id) === null).map((p) => p.pose.p)),
       windDirection: () => this.lastWeather.windDirection,
-      onChange: (next, prev) => this.onHeliChange(next, prev),
+      aboard: () => this.crew.count > 0,
+      clearPath: (a, b) => droneClearPath(this.sw, a, b),
+      onChange: (next, prev) => this.onDroneChange(next, prev),
     });
+    if (this.drone.state.phase === 'landed') this.sw.setDrone({ position: this.drone.state.from, yaw: this.drone.state.padYaw });
+    this.elevator = new ElevatorController(Date.now(), {
+      doorwayOccupied: (stop) => this.online().some((p) => inDoorway(stop, p.pose.p)),
+      onChange: (s) => {
+        this.broadcast({ type: 'elevator', state: s });
+        this.emit('elevator', s);
+      },
+    });
+    this.syncElevator(Date.now());
   }
 
   static async create(opts: WorldOptions) {
@@ -125,7 +159,11 @@ export class World extends EventEmitter<WorldEvents> {
   }
 
   currentWeather(now = Date.now()): WeatherState {
-    return this.weather.sample(gameTime(this.clock, now));
+    return this.weather.sample(gameTime(this.clock, now), now);
+  }
+
+  get weatherMode(): WeatherMode {
+    return this.weather.mode;
   }
 
   start() {
@@ -139,7 +177,14 @@ export class World extends EventEmitter<WorldEvents> {
       }, 1000 / NET.envHz),
     );
     this.timers.push(setInterval(() => this.expireSessions(), 30_000));
-    this.timers.push(setInterval(() => this.heli.update(Date.now()), 100));
+    this.timers.push(
+      setInterval(() => {
+        const now = Date.now();
+        this.drone.update(now);
+        this.elevator.update(now);
+        this.syncElevator(now);
+      }, 100),
+    );
   }
 
   stop() {
@@ -184,7 +229,9 @@ export class World extends EventEmitter<WorldEvents> {
       speed: p.pose.speed,
       grounded: p.pose.grounded,
     }));
-    this.broadcast({ type: 'snapshot', t: Date.now(), players });
+    const live = this.drone.state.phase === 'piloted' ? this.droneLive : null;
+    const drone = live ? { p: live.p, v: live.v, yaw: live.yaw, pitch: live.pitch, roll: live.roll, rotor: live.rotor, grounded: live.grounded } : undefined;
+    this.broadcast({ type: 'snapshot', t: Date.now(), players, ...(drone ? { drone } : {}) });
   }
 
   private expireSessions() {
@@ -225,7 +272,22 @@ export class World extends EventEmitter<WorldEvents> {
         this.onDoor(current, m.id, m.open);
         return current;
       case 'respawn':
-        this.respawn(current, 'respawn');
+        if (this.crew.seatOf(current.info.id) === null) this.respawn(current, 'respawn');
+        return current;
+      case 'board':
+        this.board(current, now);
+        return current;
+      case 'unboard':
+        this.unboard(current, m.p as Vec3, now);
+        return current;
+      case 'drone':
+        this.onDronePose(current, m, now);
+        return current;
+      case 'elevator':
+        this.callElevator(current, m.stop, now);
+        return current;
+      case 'setenv':
+        this.setEnv(current, m, now);
         return current;
     }
   }
@@ -272,7 +334,10 @@ export class World extends EventEmitter<WorldEvents> {
       players: this.online().map((p) => p.info),
       doors: Object.fromEntries(this.doors),
       chat: this.chat,
-      heli: this.heli.state,
+      drone: this.drone.state,
+      crew: [...this.crew.seats],
+      elevator: this.elevator.state,
+      weatherMode: this.weather.mode,
     });
     this.broadcast({ type: 'join', player: player.info }, player);
     this.emit('join', player.info);
@@ -281,6 +346,11 @@ export class World extends EventEmitter<WorldEvents> {
 
   disconnect(player: Player) {
     if (!player.conn) return;
+    if (this.crew.seatOf(player.info.id) !== null) {
+      // Whoever drops out of the drone comes back on the terrace.
+      this.leaveDrone(player, Date.now());
+      player.pose = { ...player.pose, p: this.layout.spawn.position, t: Date.now() };
+    }
     player.conn = null;
     player.lastSeen = Date.now();
     this.broadcast({ type: 'leave', id: player.info.id });
@@ -292,6 +362,13 @@ export class World extends EventEmitter<WorldEvents> {
     p.poseTimes = p.poseTimes.filter((t) => now - t < 1000);
     if (p.poseTimes.length >= NET.poseHz * 2) return;
     p.poseTimes.push(now);
+    const seat = this.crew.seatOf(p.info.id);
+    if (seat !== null) {
+      // Seated: the body goes where the drone goes; the server places it in its seat.
+      const at = seatPosition(this.dronePose(now), seat);
+      p.pose = { p: [at[0], at[1] - 0.45, at[2]], t: now, yaw: m.yaw, pitch: Math.max(-1.6, Math.min(1.6, m.pitch)), speed: 0, grounded: true };
+      return;
+    }
     const verdict = this.validator.check(p.pose, m.p, now);
     if (!verdict.ok) {
       p.pose.t = now;
@@ -398,36 +475,147 @@ export class World extends EventEmitter<WorldEvents> {
     p.pose = { p: pos, t: Date.now(), yaw, pitch, speed, grounded };
   }
 
-  // ---------- helicopter ----------
+  // ---------- drone ----------
 
-  private onHeliChange(next: HeliState, prev: HeliState) {
-    if (next.phase === 'landed') {
-      this.clearPadFootprint();
-      this.sw.setHelicopter(next.padYaw);
-    } else if (prev.phase === 'landed') {
-      this.sw.setHelicopter(null);
-    }
-    this.broadcast({ type: 'heli', state: next });
-    this.emit('helicopter', next);
+  private droneMessage(): ServerMessage {
+    return { type: 'drone', state: this.drone.state, crew: [...this.crew.seats] };
   }
 
-  /** At touchdown, anyone who walked under the descending helicopter is moved clear. */
+  private onDroneChange(next: DroneState, prev: DroneState) {
+    if (next.phase === 'landed') {
+      const atPad = Math.hypot(next.from[0] - DIMS.DRONE.pad[0], next.from[2] - DIMS.DRONE.pad[2]) < 1 && Math.abs(next.from[1] - DIMS.DRONE.pad[1]) < 0.5;
+      if (prev.phase === 'descend' && atPad) this.clearPadFootprint();
+      this.sw.setDrone({ position: next.from, yaw: next.padYaw });
+    } else if (prev.phase === 'landed') {
+      this.sw.setDrone(null);
+    }
+    if (next.phase !== 'piloted') this.droneLive = null;
+    this.broadcast(this.droneMessage());
+    this.emit('drone', next);
+  }
+
+  /** The drone as everyone should see it now: the pilot's stream while flown, else the schedule. */
+  dronePose(now = Date.now()): DronePose {
+    const live = this.drone.state.phase === 'piloted' ? this.droneLive : null;
+    if (live) return { visible: true, position: live.p as Vec3, velocity: live.v as Vec3, yaw: live.yaw, pitch: live.pitch, roll: live.roll, rotor: live.rotor, altitude: altitudeOf(live.p as Vec3) };
+    return dronePose(this.drone.state, now);
+  }
+
+  get droneGrounded() {
+    const s = this.drone.state;
+    if (s.phase === 'landed') return true;
+    return s.phase === 'piloted' && (this.droneLive?.grounded ?? true);
+  }
+
+  private board(p: Player, now: number) {
+    const s = this.drone.state;
+    const fail = (message: string) => p.conn?.send({ type: 'error', code: 'cannot-board', message });
+    if (s.phase !== 'landed' && s.phase !== 'piloted') return fail('The drone is not here.');
+    if (!this.droneGrounded) return fail('The drone is in the air.');
+    const d = this.dronePose(now);
+    const [x, y, z] = p.pose.p;
+    if (Math.hypot(x - d.position[0], z - d.position[2]) > 6 || Math.abs(y - d.position[1]) > 2.5) return fail('Too far from the drone.');
+    const seat = this.crew.board(p.info.id);
+    if (seat === null) return fail('The drone is full.');
+    if (seat === 0 && s.phase === 'landed') {
+      this.drone.takeControl(now);
+      this.droneLive = { p: s.from, v: [0, 0, 0], yaw: s.padYaw, pitch: 0, roll: 0, rotor: 0.4, grounded: true, t: now };
+    }
+    this.broadcast(this.droneMessage());
+  }
+
+  private unboard(p: Player, at: Vec3, now: number) {
+    if (this.crew.seatOf(p.info.id) === null) return;
+    const fail = (message: string) => p.conn?.send({ type: 'error', code: 'cannot-unboard', message });
+    if (!this.droneGrounded) return fail('Land first.');
+    const d = this.dronePose(now);
+    const near = Math.hypot(at[0] - d.position[0], at[2] - d.position[2]) < 8 && Math.abs(at[1] - d.position[1]) < 3;
+    const spot = near && this.validator.check({ p: at, t: now - 1000 }, at, now).ok ? at : null;
+    this.leaveDrone(p, now);
+    const out = spot ?? this.layout.spawn.position;
+    p.pose = { ...p.pose, p: out, t: now, speed: 0, grounded: true };
+    if (!spot) p.conn?.send({ type: 'correct', seq: -1, p: out, reason: 'unboard' });
+  }
+
+  /** Frees the seat; a pilot leaving parks the drone where it stands, or sends it home if airborne. */
+  private leaveDrone(p: Player, now: number) {
+    const seat = this.crew.leave(p.info.id);
+    if (seat === null) return;
+    if (seat === 0 && this.drone.state.phase === 'piloted') {
+      const live = this.droneLive;
+      const pose = this.dronePose(now);
+      // Airborne, it flies itself back to the pad with any passengers still aboard.
+      this.drone.release(now, pose.position, pose.yaw, live?.grounded ?? true);
+    }
+    this.broadcast(this.droneMessage());
+  }
+
+  private onDronePose(p: Player, m: Extract<ClientMessage, { type: 'drone' }>, now: number) {
+    if (this.crew.pilot !== p.info.id || this.drone.state.phase !== 'piloted') return;
+    const prev = this.droneLive;
+    if (prev) {
+      // A pilot cannot outfly the drone: an implausible jump is ignored.
+      const dt = Math.min(Math.max((now - prev.t) / 1000, 0.016), 1);
+      const d = Math.hypot(m.p[0] - prev.p[0], m.p[1] - prev.p[1], m.p[2] - prev.p[2]);
+      if (d > DIMS.DRONE.maxSpeed * 1.6 * dt + 2) return;
+    }
+    if (m.p[1] < -1 || m.p[1] > DIMS.DRONE.maxAltitude + 20) return;
+    this.droneLive = { ...m, t: now };
+    this.drone.track(m.p as Vec3, m.yaw);
+  }
+
+  /** At touchdown, anyone who walked under the descending drone is moved clear. */
   private clearPadFootprint() {
-    const [px, py, pz] = DIMS.HELI.pad;
+    const [px, py, pz] = DIMS.DRONE.pad;
+    const r = DIMS.DRONE.clearRadius;
     for (const p of this.online()) {
+      if (this.crew.seatOf(p.info.id) !== null) continue;
       const [x, y, z] = p.pose.p;
       const d = Math.hypot(x - px, z - pz);
-      if (d >= DIMS.HELI.clearRadius || y < py - 0.6 || y > py + 4) continue;
+      if (d >= r || y < py - 0.6 || y > py + 4) continue;
       const k = d > 0.1 ? 1 / d : 1;
-      const out: Vec3 = [px + (d > 0.1 ? (x - px) * k : -1) * (DIMS.HELI.clearRadius + 0.5), py, pz + (d > 0.1 ? (z - pz) * k : 0) * (DIMS.HELI.clearRadius + 0.5)];
+      const out: Vec3 = [px + (d > 0.1 ? (x - px) * k : -1) * (r + 0.5), py, pz + (d > 0.1 ? (z - pz) * k : 0) * (r + 0.5)];
       p.pose = { ...p.pose, p: out, t: Date.now() };
-      p.conn?.send({ type: 'correct', seq: -1, p: out, reason: 'helicopter' });
+      p.conn?.send({ type: 'correct', seq: -1, p: out, reason: 'drone' });
       this.emit('displaced', p);
     }
   }
 
-  helicopterPose(now = Date.now()) {
-    return heliPose(this.heli.state, now);
+  // ---------- elevator ----------
+
+  /** Server colliders follow the car; gates count as open a moment either side of the client's view. */
+  private syncElevator(now: number) {
+    const s = this.elevator.state;
+    const pose = elevatorPose(s, now);
+    const open = DIMS.ELEVATOR.stops.map((_, i) => [now - 300, now, now + 300].some((t) => gateOpen(elevatorPose(s, t), i)));
+    this.sw.setElevator(pose.y, open);
+  }
+
+  private callElevator(p: Player, stop: number, now: number) {
+    const pose = elevatorPose(this.elevator.state, now);
+    const reach = inCar(pose.y, p.pose.p) || elevatorPanels().some((q) => Math.hypot(q.position[0] - p.pose.p[0], q.position[1] - (p.pose.p[1] + 1.2), q.position[2] - p.pose.p[2]) < 4);
+    if (!reach) {
+      p.conn?.send({ type: 'error', code: 'too-far', message: 'Too far from the elevator buttons.' });
+      return;
+    }
+    this.elevator.call(stop, now);
+  }
+
+  // ---------- environment ----------
+
+  /** Someone changed the time of day, the speed of the day or the weather, for everyone. */
+  private setEnv(p: Player, m: Extract<ClientMessage, { type: 'setenv' }>, now: number) {
+    if (p.agent) return;
+    if (m.hour !== undefined || m.rate !== undefined) this.clock = adjustClock(this.clock, now, { hour: m.hour, rate: m.rate });
+    if (m.weather) this.weather.set(m.weather as WeatherMode, gameTime(this.clock, now), now);
+    this.broadcast({ type: 'envctl', clock: this.clock, weatherMode: this.weather.mode, by: p.info.name });
+  }
+
+  /** Same as a player's controls, for tests and tools. */
+  setEnvironment(o: { hour?: number; rate?: number; weather?: WeatherMode }, now = Date.now()) {
+    if (o.hour !== undefined || o.rate !== undefined) this.clock = adjustClock(this.clock, now, o);
+    if (o.weather) this.weather.set(o.weather, gameTime(this.clock, now), now);
+    this.broadcast({ type: 'envctl', clock: this.clock, weatherMode: this.weather.mode });
   }
 
   doorState(id: string) {

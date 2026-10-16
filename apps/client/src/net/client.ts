@@ -11,7 +11,8 @@ type Msg = ServerMessage;
 export interface NetHandlers {
   onWelcome(w: WelcomeMessage): void;
   onMessage(m: Msg): void;
-  onClose(reason: string, willRetry: boolean): void;
+  /** `unreachable`: the socket never opened, i.e. the server is down or not there. */
+  onClose(reason: string, willRetry: boolean, unreachable: boolean): void;
 }
 
 const SESSION_KEY = 'ocean-home.session';
@@ -26,6 +27,7 @@ export class NetClient {
   private offsetSamples = 0;
   private pingTimer = 0;
   private retry = 0;
+  private retryTimer = 0;
   private closedByUser = false;
   private welcomed = false;
   connected = false;
@@ -50,6 +52,14 @@ export class NetClient {
     this.password = password;
     this.closedByUser = false;
     this.open();
+  }
+
+  /** Stops connecting (and reconnecting) until the next connect(). */
+  disconnect() {
+    this.closedByUser = true;
+    window.clearTimeout(this.retryTimer);
+    this.ws?.close();
+    this.ws = null;
   }
 
   private open() {
@@ -101,7 +111,7 @@ export class NetClient {
       }
       if (m.type === 'error' && !this.welcomed) {
         this.closedByUser = true;
-        this.handlers.onClose(m.message, false);
+        this.handlers.onClose(m.message, false, false);
         ws.close();
         return;
       }
@@ -113,10 +123,10 @@ export class NetClient {
       window.clearInterval(this.pingTimer);
       if (this.closedByUser) return;
       const willRetry = wasConnected || this.retry < 3;
-      this.handlers.onClose(wasConnected ? 'Connection lost. Reconnecting…' : 'Could not reach the server.', willRetry);
+      this.handlers.onClose(wasConnected ? 'Connection lost. Reconnecting…' : 'Could not reach the server.', willRetry, !wasConnected);
       if (willRetry) {
         this.retry += 1;
-        window.setTimeout(() => this.open(), Math.min(8000, 500 * 2 ** this.retry));
+        this.retryTimer = window.setTimeout(() => this.open(), Math.min(8000, 500 * 2 ** this.retry));
       }
     });
   }
@@ -134,5 +144,22 @@ export class NetClient {
 
   get poseIntervalMs() {
     return 1000 / NET.poseHz;
+  }
+}
+
+export interface ServerHealth {
+  online: boolean;
+  players?: number;
+}
+
+/** Asks the server's /healthz whether it is up, and how many people are aboard. */
+export async function probeServer(timeoutMs = 3000): Promise<ServerHealth> {
+  try {
+    const res = await fetch('/healthz', { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) return { online: false };
+    const body = (await res.json()) as { players?: number };
+    return { online: true, players: body.players };
+  } catch {
+    return { online: false };
   }
 }

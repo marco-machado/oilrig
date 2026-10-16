@@ -2,6 +2,7 @@ import { LayoutBuilder, rectsOverlap, subtractRects } from './builder.ts';
 import {
   BRIDGE,
   DECK,
+  ELEVATOR,
   GIRDER,
   HELIPAD,
   JACKET_LEVELS,
@@ -180,11 +181,17 @@ function mainDeck(b: LayoutBuilder) {
       b.beam('deck-beam', [x, ey, seg.z0], [x, ey, seg.z1], 0.6, 0.25);
     }
   }
-  // Perimeter rail with an opening on the east edge for the helipad bridge.
+  // Perimeter rail with openings on the east edge for the helipad bridge and on the south
+  // edge for the elevator.
   const y = DECK.top;
+  const door = ELEVATOR.door;
   b.rail('deck-rail', [
     [DECK.x1, y, BRIDGE.z1],
     [DECK.x1, y, DECK.z1],
+    [door.x1, y, DECK.z1],
+  ]);
+  b.rail('deck-rail', [
+    [door.x0, y, DECK.z1],
     [DECK.x0, y, DECK.z1],
     [DECK.x0, y, DECK.z0],
     [DECK.x1, y, DECK.z0],
@@ -344,6 +351,49 @@ function waterline(b: LayoutBuilder) {
   b.light('flood', [S.x1 - 0.3, S.top + 2.6, S.z0 + 0.3], 0xfff4e0, 25, 12);
 }
 
+/** Glass elevator shaft standing on the boat landing, reaching up past the main deck edge. */
+function elevator(b: LayoutBuilder) {
+  const E = ELEVATOR;
+  const [low, high] = E.stops;
+  const top = E.head - 0.35;
+  const t = 0.03;
+  const glass = (min: Vec3, max: Vec3) => b.boxMinMax('elevator-shaft', min, max, 'glassThin', { surface: 'metal' });
+  glass([E.x0 - t, low, E.z0], [E.x0 + t, top, E.z1]);
+  glass([E.x1 - t, low, E.z0], [E.x1 + t, top, E.z1]);
+  glass([E.x0, low, E.z1 - t], [E.x1, top, E.z1 + t]);
+  // North face: door openings at both stops.
+  glass([E.x0, low, E.z0 - t], [E.door.x0, top, E.z0 + t]);
+  glass([E.door.x1, low, E.z0 - t], [E.x1, top, E.z0 + t]);
+  glass([E.door.x0, low + E.door.height, E.z0 - t], [E.door.x1, high, E.z0 + t]);
+  glass([E.door.x0, high + E.door.height, E.z0 - t], [E.door.x1, top, E.z0 + t]);
+  // Head with the machinery, corner posts and frame rings.
+  b.boxMinMax('elevator-head', [E.x0 - 0.12, top, E.z0 - 0.12], [E.x1 + 0.12, E.head, E.z1 + 0.12], 'mullion', { surface: 'metal' });
+  for (const x of [E.x0, E.x1]) for (const z of [E.z0, E.z1]) b.tube('elevator-post', [x, low - 0.15, z], [x, top, z], 0.075, 'mullion', { collide: true });
+  const ring = (yy: number, h = 0.08) => {
+    b.boxMinMax('elevator-frame', [E.x0 - 0.06, yy, E.z0 - 0.06], [E.x1 + 0.06, yy + h, E.z0 + 0.06], 'mullion', { collide: false });
+    b.boxMinMax('elevator-frame', [E.x0 - 0.06, yy, E.z1 - 0.06], [E.x1 + 0.06, yy + h, E.z1 + 0.06], 'mullion', { collide: false });
+    b.boxMinMax('elevator-frame', [E.x0 - 0.06, yy, E.z0], [E.x0 + 0.06, yy + h, E.z1], 'mullion', { collide: false });
+    b.boxMinMax('elevator-frame', [E.x1 - 0.06, yy, E.z0], [E.x1 + 0.06, yy + h, E.z1], 'mullion', { collide: false });
+  };
+  for (let yy = low + E.door.height; yy < top - 0.5; yy += 2.9) ring(yy);
+  ring(high + E.door.height);
+  // Door surrounds at both stops.
+  for (const sy of E.stops) {
+    b.boxMinMax('elevator-frame', [E.door.x0 - 0.1, sy, E.z0 - 0.09], [E.door.x0, sy + E.door.height + 0.1, E.z0 + 0.05], 'mullion', { collide: false });
+    b.boxMinMax('elevator-frame', [E.door.x1, sy, E.z0 - 0.09], [E.door.x1 + 0.1, sy + E.door.height + 0.1, E.z0 + 0.05], 'mullion', { collide: false });
+    b.boxMinMax('elevator-frame', [E.door.x0 - 0.1, sy + E.door.height, E.z0 - 0.09], [E.door.x1 + 0.1, sy + E.door.height + 0.12, E.z0 + 0.05], 'mullion', { collide: false });
+  }
+  // Bridge from the deck edge to the top door, with guards at its sides.
+  b.boxMinMax('elevator-bridge', [E.door.x0, high - 0.1, DECK.z1 - 0.15], [E.door.x1, high, E.z0], 'grating', { surface: 'grating' });
+  for (const x of [E.door.x0, E.door.x1]) {
+    b.wall('elevator-guard', [x, DECK.z1], [x, E.z0], high, high + 1.25);
+    b.rail('elevator-rail', [[x, high, DECK.z1], [x, high, E.z0 - 0.05]], { collide: false });
+  }
+  // Brackets tying the shaft back to the deck edge beam.
+  for (const x of [E.x0 + 0.1, E.x1 - 0.1]) b.beam('elevator-bracket', [x, high - 0.45, DECK.z1 - 0.2], [x, high - 0.45, E.z0], 0.3, 0.2, 'steelDark');
+  b.light('bulkhead', [(E.door.x0 + E.door.x1) / 2, low + 2.6, E.z0 - 0.25], 0xffedd0, 8, 6);
+}
+
 /** Helideck on the east cantilever: deck, framing, nets, lights and windsock. */
 function helipad(b: LayoutBuilder) {
   const H = HELIPAD;
@@ -429,6 +479,7 @@ export function buildRig(b: LayoutBuilder) {
   northStair(b);
   stairTower(b);
   waterline(b);
+  elevator(b);
   helipad(b);
   void RAIL_HEIGHT;
 }

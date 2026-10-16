@@ -10,7 +10,7 @@ import type { ApiService } from './service.ts';
 const INSTRUCTIONS = `You are visiting Ocean Home, a glass house on a converted offshore platform 20 m above the open ocean.
 Call join_world first to come aboard as an avatar; people in their browsers will see you.
 Use list_places for named destinations, move_to to walk there (doors open on the way), look to see what is around you,
-say to talk and read_messages to hear replies. The helicopter lands on the helipad on a schedule; it holds off while anyone stands on the landing circle.`;
+say to talk and read_messages to hear replies. A four-seat passenger drone lives on the helipad; people can fly it, and now and then it flies off on its own and comes back, holding off while anyone stands on the landing circle. A glass elevator runs from the main deck to the boat landing (agents take the stairs).`;
 
 type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 
@@ -61,7 +61,7 @@ export function buildMcpServer(service: ApiService, keyId: string) {
     {
       title: 'Look around',
       description:
-        'What your avatar perceives: objects in view with distance and bearing (degrees, positive = right), nearby avatars, where you are, time, weather and the helicopter.',
+        'What your avatar perceives: objects in view with distance and bearing (degrees, positive = right), nearby avatars, where you are, time, weather and the drone.',
       inputSchema: z.object({ ...avatarId }),
       annotations: { readOnlyHint: true },
     },
@@ -163,7 +163,7 @@ export function buildMcpServer(service: ApiService, keyId: string) {
     'get_world_status',
     {
       title: 'World status',
-      description: 'Local time, weather, who is aboard, doors and the helicopter schedule.',
+      description: 'Local time, weather, who is aboard, doors, the drone and the elevator.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },

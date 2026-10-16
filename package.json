@@ -14,9 +14,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:render": "playwright test tests/e2e/render.spec.ts",
     "perf": "PERF=1 playwright test tests/e2e/perf.spec.ts",
+    "trace": "TRACE=1 playwright test tests/e2e/trace.spec.ts",
+    "trace:report": "node scripts/trace-report.ts",
     "screenshots": "SHOTS=1 playwright test tests/e2e/screenshots.spec.ts",
     "bot": "node scripts/bot.ts",
-    "keys": "node apps/server/src/cli/keys.ts"
+    "keys": "node apps/server/src/cli/keys.ts",
+    "sfx": "node scripts/sfx.ts"
   },
   "devDependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { Vec3 } from '@ocean-home/shared';
+import { DIMS, type Vec3 } from '@ocean-home/shared';
 import { type PerceptionContext, Sight, perceivables, perceive } from '../apps/server/src/agents/perception.ts';
 import type { World } from '../apps/server/src/world/world.ts';
 import { makeWorld } from './helpers.ts';
@@ -28,21 +28,23 @@ function look(position: Vec3, yaw: number) {
 const ids = (p: ReturnType<typeof look>) => p.visible.map((o) => o.id);
 
 describe('perception', () => {
-  it('sees the sofa and the closed sliding door through the clear glass from the terrace', () => {
-    const p = look([-8.5, 20.05, 4.5], NORTH);
-    expect(ids(p)).toContain('living-sofa');
+  it('sees right through the empty glass pavilion: the closed south door, and the north door beyond it', () => {
+    const p = look([-6.5, 20.05, 4.5], NORTH);
     const door = p.visible.find((o) => o.id === 'door-south-1');
     expect(door?.state).toBe('closed');
+    expect(ids(p)).toContain('door-north');
   });
 
-  it('does not see the bed through the bedroom divider wall, but does from the bedroom doorway', () => {
-    expect(ids(look([-9, 20.12, -10], WEST))).not.toContain('bed');
-    expect(ids(look([-15, 20.12, -4.5], NORTH))).toContain('bed');
-  });
-
-  it('frosted glass hides the bathtub; from inside the bath it is in plain view', () => {
-    expect(ids(look([-16, 20.12, -10], WEST))).not.toContain('bathtub');
-    expect(ids(look([-19.5, 20.12, -8], WEST))).toContain('bathtub');
+  it('frosted glass hides someone in the bath; from inside the bath they are in plain view', () => {
+    const bather = world.addAgent('Bather', [-21, 20.12, -10], 0);
+    try {
+      const outside = look([-16, 20.12, -10], WEST).avatars.find((a) => a.name === 'Bather')!;
+      expect(outside.visible).toBe(false);
+      const inside = look([-19.5, 20.12, -8], WEST).avatars.find((a) => a.name === 'Bather')!;
+      expect(inside.visible).toBe(true);
+    } finally {
+      world.removeAgent(bather);
+    }
   });
 
   it('reports only what is within the field of view; turning around reveals what was behind', () => {
@@ -50,13 +52,14 @@ describe('perception', () => {
     const facingNorth = ids(look(at, NORTH));
     const facingSouth = ids(look(at, SOUTH));
     expect(facingNorth).not.toContain('firepit');
+    expect(facingNorth).toContain('door-south-1');
     expect(facingSouth).toContain('firepit');
-    expect(facingSouth).not.toContain('living-sofa');
+    expect(facingSouth).not.toContain('door-south-1');
   });
 
   it('gives distance, bearing and direction of other avatars, and whether they can be seen', () => {
     const east = world.addAgent('East', [5, 20.05, 8], 0);
-    const behindWall = world.addAgent('Hidden', [-15, 20.12, -10], 0); // in the bedroom
+    const behindWall = world.addAgent('Hidden', [-21, 20.12, -10], 0); // in the bath, behind frosted glass
     try {
       const p = look([0, 20.05, 8], NORTH);
       const e = p.avatars.find((a) => a.name === 'East')!;
@@ -68,7 +71,7 @@ describe('perception', () => {
       expect(turned.bearing).toBe(0);
       expect(turned.direction).toBe('ahead');
       expect(turned.visible).toBe(true);
-      const fromLiving = look([-9, 20.12, -10], WEST).avatars.find((a) => a.name === 'Hidden')!;
+      const fromLiving = look([-15, 20.12, -10], WEST).avatars.find((a) => a.name === 'Hidden')!;
       expect(fromLiving.visible).toBe(false);
     } finally {
       world.removeAgent(east);
@@ -91,18 +94,21 @@ describe('perception', () => {
     expect(out.weather.windFromDeg).toBeLessThan(360);
   });
 
-  it('sees the parked helicopter from the bridge, but not from inside the pavilion looking away', () => {
-    world.heli.state = { ...world.heli.state, phase: 'landed', t0: Date.now(), until: Date.now() + 60_000, padYaw: 0 };
-    world.sw.setHelicopter(0);
+  it('sees the parked drone from the bridge, but not from inside the pavilion looking away', () => {
+    const pad: Vec3 = [...DIMS.DRONE.pad];
+    const away = world.drone.state;
+    world.drone.state = { ...away, phase: 'landed', t0: Date.now(), until: Date.now() + 60_000, from: pad, padYaw: 0 };
+    world.sw.setDrone({ position: pad, yaw: 0 });
     try {
       const fromBridge = look([30.5, 20, 0], EAST);
-      expect(ids(fromBridge)).toContain('helicopter');
-      expect(fromBridge.helicopter?.phase).toBe('landed');
+      expect(ids(fromBridge)).toContain('drone');
+      expect(fromBridge.drone?.phase).toBe('landed');
+      expect(fromBridge.drone?.pilot).toBeNull();
       const inside = look([-6, 20.12, -5], WEST);
-      expect(inside.helicopter?.visible).toBe(false);
+      expect(inside.drone?.visible).toBe(false);
     } finally {
-      world.sw.setHelicopter(null);
-      world.heli.state = { ...world.heli.state, phase: 'away' };
+      world.sw.setDrone(null);
+      world.drone.state = away;
     }
   });
 });

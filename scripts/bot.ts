@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 const ws = new WebSocket('ws://localhost:8787/ws');
 let seq = 0;
-ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', version: 1, name: 'Bot Ana' })));
+ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', version: 2, name: 'Bot Ana' })));
 ws.on('message', (d) => {
   const m = JSON.parse(d.toString());
   if (m.type === 'welcome') {

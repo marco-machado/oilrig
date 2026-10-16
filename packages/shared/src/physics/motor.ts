@@ -35,6 +35,8 @@ export class CharacterMotor {
   private readonly pos = { x: 0, y: 0, z: 0 };
   private readonly vel = { x: 0, y: 0, z: 0 };
   private onGround = false;
+  /** Seconds left in which a fresh jump ignores the controller's "grounded" result. */
+  private takeoff = 0;
   private readonly sw: StaticWorld;
   private readonly zones: ZoneDef[];
 
@@ -68,6 +70,12 @@ export class CharacterMotor {
     this.pos.y = p[1];
     this.pos.z = p[2];
     this.vel.x = this.vel.y = this.vel.z = 0;
+    this.syncCollider();
+  }
+
+  /** Moves the character with a platform it stands in (the elevator car), before the next step. */
+  ride(dy: number) {
+    this.pos.y += dy;
     this.syncCollider();
   }
 
@@ -111,6 +119,7 @@ export class CharacterMotor {
     if (this.onGround && input.jump) {
       this.vel.y = PLAYER.jumpSpeed;
       this.onGround = false;
+      this.takeoff = 0.12;
     } else if (this.onGround) {
       this.vel.y = -1;
     } else {
@@ -125,7 +134,11 @@ export class CharacterMotor {
     this.pos.y += moved.y;
     this.pos.z += moved.z;
     const wasRising = this.vel.y > 0;
-    this.onGround = this.controller.computedGrounded();
+    // Right after take-off the feet are still within the controller's contact offset, so it
+    // keeps reporting "grounded"; with small steps (the client runs at 120 Hz) that would
+    // snap the character straight back down. A rising jump is airborne until it peaks.
+    this.takeoff = Math.max(0, this.takeoff - dt);
+    this.onGround = this.controller.computedGrounded() && !(this.takeoff > 0 && this.vel.y > 0);
     if (this.onGround && this.vel.y < 0) this.vel.y = 0;
     if (wasRising && moved.y < desired.y - 1e-4) this.vel.y = 0; // head hit
     // Horizontal velocity is deliberately not replaced by the achieved movement: on a

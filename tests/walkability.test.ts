@@ -29,9 +29,29 @@ describe('walkability', () => {
     expectArrive(place('terrace'), [[-6.8, 4], [-6.8, 0], [-6, -5]], 'living-room', { minY: 19.9 });
   });
 
-  it('living room → bedroom (around the divider) → bath', () => {
-    expectArrive(place('living-room'), [[-10, -3.5], [-15, -3.5], [-15, -9]], 'bedroom', { minY: 19.9 });
+  it('living room → straight across the open floor to the bedroom end → bath', () => {
+    expectArrive(place('living-room'), [[-15, -9]], 'bedroom', { minY: 19.9 });
     expectArrive(place('bedroom'), [[-16.5, -7.8], [-20, -7.8], [-21, -9.5]], 'bath', { minY: 19.9 });
+  });
+
+  it('every side of the pavilion has a door: in through each one and out through the one opposite', () => {
+    const inside: [number, number] = [-6, -5];
+    const doors: Array<{ outside: [number, number]; sill: [number, number] }> = [
+      { outside: [-6.8, 4], sill: [-6.8, 2] }, // south (living room)
+      { outside: [3.2, 4], sill: [3.2, 2] }, // south (kitchen)
+      { outside: [-6, -13.5], sill: [-6, -12] }, // north
+      { outside: [10, -4.8], sill: [8, -4.8] }, // east (pool)
+      { outside: [-25.6, -4], sill: [-24, -4] }, // west
+    ];
+    for (const d of doors) {
+      const m = motor(sw, [d.outside[0], 20.05, d.outside[1]]);
+      const r = walk(m, [d.sill, inside]);
+      expect(r.reached, `in through the door at ${d.sill}`).toBe(true);
+      expect(r.minY).toBeGreaterThan(19.9);
+    }
+    // Straight through the house: north door to the south door, west door to the east door.
+    expect(walk(motor(sw, [-6, 20.05, -13.5]), [[-6, -12], [-6.8, 0], [-6.8, 2], [-6.8, 4]]).reached).toBe(true);
+    expect(walk(motor(sw, [-25.6, 20.05, -4]), [[-24, -4], [-6, -4], [8, -4.8], [10, -4.8]]).reached).toBe(true);
   });
 
   it('terrace → kitchen → pool deck through the east door', () => {
@@ -78,22 +98,22 @@ describe('walkability', () => {
       else tower.push([-19.4, 20.0], [-19.4, 18.7]);
     }
     tower.pop(); // the last flight ends on the landing deck, no lane change
-    expectArrive(place('walkway-south'), [[-19.4, 16.5], ...tower, [-12.5, 21.5], [-16, 21.8]], 'boat-landing', { minY: 2.8 });
-    expectArrive(place('boat-landing'), [[-11, 21], [-7, 21], [-5, 21]], 'swim-platform', { minY: 1.1 });
+    expectArrive(place('walkway-south'), [[-19.4, 16.5], ...tower, [-12.5, 19.3], [-16, 21.8]], 'boat-landing', { minY: 2.8 });
+    // Around the north side of the elevator shaft to the swim stair.
+    expectArrive(place('boat-landing'), [[-14, 19.4], [-10.5, 19.6], [-10.5, 21], [-7, 21], [-5, 21]], 'swim-platform', { minY: 1.1 });
   });
 
-  it('furniture is solid: walking straight at the kitchen island stops at its edge', () => {
-    // From the window side, heading south across the island towards the kitchen.
-    const m = motor(sw, [3.5, 20.12, -11.3]);
-    const r = walk(m, [[3.5, -6]]);
+  it('furniture is solid: walking straight at a lounge sofa stops at its edge', () => {
+    // From the terrace, heading west across the east lounge sofa (its back is at x ≈ -5.8).
+    const m = motor(sw, [-3.5, 20.05, 11.6]);
+    const r = walk(m, [[-9, 11.6]]);
     expect(r.reached).toBe(false);
-    // The island's north face is at z = -9.65; the body (radius 0.3) stops just short of it.
-    expect(r.final[2]).toBeLessThan(-9.65 - 0.25);
-    expect(r.final[2]).toBeGreaterThan(-10.1);
+    expect(r.final[0]).toBeGreaterThan(-6.3);
+    expect(r.final[0]).toBeLessThan(-5.4);
   });
 
-  it('around the living-room sofa to the coffee table, and on to the dining table', () => {
-    expectArrive(place('living-room'), [[-6.4, -7.9], [-6.6, -9.7], [-7.3, -10.6], [-6, -10.6], [-4, -7], [-1.6, -6.2]], 'dining', { minY: 19.9 });
+  it('terrace → the elevator door at the deck edge', () => {
+    expectArrive(place('terrace'), [[-12.3, 15.5], [-12.3, 19.1]], 'elevator-deck', { minY: 19.9 });
   });
 
   it('terrace → between the outdoor sofas → firepit lounge', () => {
@@ -108,6 +128,22 @@ describe('walkability', () => {
     for (let i = 0; i < 60; i++) m.step({ forward: 0.4, right: 0, run: false, jump: false, yaw: 0 }, 1 / 60);
     expect(m.state.position[1]).toBeGreaterThan(16.3);
     expect(m.state.position[2]).toBeLessThan(-17.3);
+  });
+
+  it('jumps just as high at the browser’s 120 Hz physics step as at 60 Hz', () => {
+    for (const dt of [1 / 60, 1 / 120]) {
+      const m = motor(sw, place('terrace'));
+      const y0 = m.state.position[1];
+      let peak = y0;
+      for (let t = 0; t < 1.5; t += dt) {
+        m.step({ forward: 0, right: 0, run: false, jump: t === 0, yaw: 0 }, dt);
+        peak = Math.max(peak, m.state.position[1]);
+      }
+      // v²/2g with the motor's jump speed and gravity: ~0.76 m.
+      expect(peak - y0, `dt ${dt}`).toBeGreaterThan(0.65);
+      expect(m.state.grounded).toBe(true);
+      expect(Math.abs(m.state.position[1] - y0)).toBeLessThan(0.02);
+    }
   });
 
   it('closed doors block the way', async () => {

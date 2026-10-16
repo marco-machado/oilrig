@@ -27,9 +27,8 @@
       "runtimeArgs": [
         "PORT=8790",
         "DB_PATH=apps/server/data/alt.db",
-        "HELI_FIRST_ARRIVAL_MINUTES=0.5",
-        "HELI_STAY_MINUTES=2",
-        "HELI_INTERVAL_MINUTES=6",
+        "DRONE_STAY_MINUTES=4",
+        "DRONE_AWAY_MINUTES=1",
         "node",
         "apps/server/src/index.ts"
       ],

@@ -96,7 +96,7 @@ export function createRestApi(service: ApiService, events: EventLog, auth: Middl
   const key = (c: Context<ApiEnv>) => c.get('apiKey').id;
 
   app.openapi(
-    createRoute({ method: 'get', path: '/world', summary: 'World status', description: 'Time, weather, who is aboard, doors and the helicopter.', responses: { 200: json(WorldStatus, 'Current status'), ...COMMON_ERRORS } }),
+    createRoute({ method: 'get', path: '/world', summary: 'World status', description: 'Time, weather, who is aboard, doors, the drone and the elevator.', responses: { 200: json(WorldStatus, 'Current status'), ...COMMON_ERRORS } }),
     (c) => c.json(service.worldStatus(), 200),
   );
 
@@ -214,7 +214,7 @@ export function createRestApi(service: ApiService, events: EventLog, auth: Middl
       path: '/events',
       summary: 'Live event stream',
       description:
-        'Server-Sent Events: join, leave, chat, door, weather and helicopter, each with an id. Reconnect with Last-Event-ID to replay what you missed.',
+        'Server-Sent Events: join, leave, chat, door, weather, drone and elevator, each with an id. Reconnect with Last-Event-ID to replay what you missed.',
       responses: { 200: { content: { 'text/event-stream': { schema: z.string() } }, description: 'Event stream' }, ...COMMON_ERRORS },
     }),
     (c) => {

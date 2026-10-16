@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import type { ServerMessage } from '@ocean-home/shared';
+import { PROTOCOL_VERSION, type ServerMessage } from '@ocean-home/shared';
 
 /** A minimal browser-like player: a WebSocket with a typed inbox and waiters. */
 export class WsClient {
@@ -54,7 +54,7 @@ export class WsClient {
 
   async join(name: string, session?: string) {
     await this.opened();
-    this.send({ type: 'hello', version: 1, name, session });
+    this.send({ type: 'hello', version: PROTOCOL_VERSION, name, session });
     return this.next('welcome');
   }
 

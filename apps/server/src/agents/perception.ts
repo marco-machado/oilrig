@@ -84,7 +84,7 @@ export interface Perception {
   };
   visible: SeenObject[];
   avatars: SeenAvatar[];
-  helicopter: { phase: string; visible: boolean; distance: number; bearing: number; direction: string } | null;
+  drone: { phase: string; visible: boolean; distance: number; bearing: number; direction: string; pilot: string | null; passengers: number } | null;
 }
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -304,22 +304,25 @@ export function perceive(ctx: PerceptionContext, viewer: Viewer, extra: { name: 
     visible.push(report(o.id, o.kind, o.name, o.points[0], state));
   }
 
-  // The helicopter, wherever it is in the sky or on the pad.
-  let helicopter: Perception['helicopter'] = null;
-  const hs = world.heli.state;
-  if (hs.phase !== 'away') {
-    const hp = world.helicopterPose(now);
-    const c: Vec3 = [hp.position[0], hp.position[1] + 1.4, hp.position[2]];
-    const seen = inView(viewer, c, 4000) && sight.clear(eye, c, (i) => i.object === 'helicopter');
+  // The drone, wherever it is in the sky or parked.
+  let drone: Perception['drone'] = null;
+  const ds = world.drone.state;
+  if (ds.phase !== 'away') {
+    const dp = world.dronePose(now);
+    const c: Vec3 = [dp.position[0], dp.position[1] + 1.3, dp.position[2]];
+    const seen = inView(viewer, c, 4000) && sight.clear(eye, c, (i) => i.object === 'drone');
     const bearing = relativeBearing(pos, viewer.yaw, c);
-    helicopter = {
-      phase: hs.phase,
+    const pilotId = world.crew.pilot;
+    drone = {
+      phase: ds.phase,
       visible: seen,
       distance: round(Math.hypot(c[0] - pos[0], c[1] - pos[1], c[2] - pos[2])),
       bearing: Math.round(bearing),
       direction: directionWord(bearing),
+      pilot: pilotId ? (world.player(pilotId)?.info.name ?? null) : null,
+      passengers: world.crew.seats.slice(1).filter(Boolean).length,
     };
-    if (seen) visible.push(report('helicopter', 'helicopter', 'Helicopter', c, hs.phase));
+    if (seen) visible.push(report('drone', 'drone', 'Passenger drone', c, ds.phase));
   }
   visible.sort((a, b) => a.distance - b.distance);
   visible.splice(MAX_OBJECTS);
@@ -366,6 +369,6 @@ export function perceive(ctx: PerceptionContext, viewer: Viewer, extra: { name: 
     weather: weatherReport(world, now),
     visible,
     avatars,
-    helicopter,
+    drone,
   };
 }

@@ -24,6 +24,19 @@ export function gameTime(c: ClockConfig, realMs: number): number {
   return c.anchorGameMs + (realMs - c.anchorRealMs) * c.rate;
 }
 
+/** Speed presets offered to players: game seconds per real second. */
+export const CLOCK_RATES = [0, 1, 12, 60, 240] as const;
+
+/**
+ * A clock re-anchored at `realNow`: optionally jumped to a local hour on the same day and
+ * running at a new rate. Everyone sharing the result sees the same sky.
+ */
+export function adjustClock(c: ClockConfig, realNow: number, o: { hour?: number; rate?: number }): ClockConfig {
+  let g = gameTime(c, realNow);
+  if (o.hour !== undefined) g += (o.hour - celestialAt(g).localHour) * 3600_000;
+  return { anchorRealMs: realNow, anchorGameMs: g, rate: o.rate ?? c.rate };
+}
+
 export interface Celestial {
   sunDirection: [number, number, number];
   sunElevation: number;

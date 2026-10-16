@@ -35,3 +35,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 - **Moon position and illumination:** the low-precision formulas from J. Meeus, *Astronomical Algorithms*, as arranged in suncalc (© Volodymyr Agafonkin, BSD-2-Clause).
 
 Both are reimplemented in `packages/shared/src/sim/astronomy.ts`.
+
+## Sound effects: ElevenLabs
+
+The files in `apps/client/public/sfx` (footsteps on each surface, the drone's rotors, the elevator's motor, chime and doors, the sliding doors) were generated for this project with the ElevenLabs sound-effects API (`eleven_text_to_sound_v2`) by `scripts/sfx.ts`, which also cuts the footstep takes into single steps. Their use is governed by the ElevenLabs terms of service for the account that generated them.

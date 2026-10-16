@@ -7,7 +7,7 @@ import {
   SphereGeometry,
 } from 'three/webgpu';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { InterpolationBuffer, NET, type PlayerInfo, type PlayerPose } from '@ocean-home/shared';
+import { InterpolationBuffer, NET, type PlayerInfo, type PlayerPose, type Vec3 } from '@ocean-home/shared';
 
 interface Avatar {
   info: PlayerInfo;
@@ -131,10 +131,22 @@ export class Avatars {
     a.bubbleUntil = performance.now() + 7000;
   }
 
-  update(serverNow: number, dt: number) {
+  /** `seated`: people in the drone, placed on their seat cushions (feet frame) facing its heading. */
+  update(serverNow: number, dt: number, seated?: Map<string, { position: Vec3; yaw: number }>) {
     const renderT = serverNow - NET.interpolationDelayMs;
     const now = performance.now();
-    for (const a of this.avatars.values()) {
+    for (const [id, a] of this.avatars) {
+      const seat = seated?.get(id);
+      if (seat) {
+        // Hips on the cushion, thighs forward, arms resting.
+        a.root.visible = true;
+        a.root.position.set(seat.position[0], seat.position[1] - 0.84, seat.position[2]);
+        a.root.rotation.y = seat.yaw;
+        a.legs[0].rotation.x = a.legs[1].rotation.x = 1.25;
+        a.arms[0].rotation.x = a.arms[1].rotation.x = 0.5;
+        if (!a.bubble.hidden && now > a.bubbleUntil) a.bubble.hidden = true;
+        continue;
+      }
       const s = a.buffer.sample(renderT);
       if (!s) continue;
       a.root.visible = true;

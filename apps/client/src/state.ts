@@ -1,4 +1,4 @@
-import { Color, Vector2, Vector3 } from 'three/webgpu';
+import { Color, Vector2, Vector3, Vector4 } from 'three/webgpu';
 import { uniform } from 'three/tsl';
 
 /** Global shader uniforms shared by materials, sky, ocean and weather. */
@@ -24,7 +24,9 @@ export const U = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fogColor: uniform(new Color(0.5, 0.6, 0.7)) as any,
   fogDensity: uniform(0.0002),
-  /** Helicopter rotor wash on the sea: centre (world xz) and strength 0..1. */
+  /** Drone rotor wash on the sea: centre (world xz) and strength 0..1. */
   washCenter: uniform(new Vector2(42, 0)),
   washSea: uniform(0),
+  /** The drone's cabin (centre xyz, radius w; w = 0 when not around): rain stays out of it. */
+  droneCabin: uniform(new Vector4(0, -100, 0, 0)),
 };

@@ -1,7 +1,8 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat';
 import type RAPIER_DEFAULT from '@dimforge/rapier3d-compat';
+import { ELEVATOR } from '../layout/dims.ts';
 import type { DoorDef, Element, Layout, Surface, Vec3 } from '../layout/types.ts';
-import { heliBodyBoxes } from '../sim/helicopter.ts';
+import { droneBodyBoxes } from '../sim/drone.ts';
 
 export type Rapier = typeof RAPIER_DEFAULT;
 
@@ -10,7 +11,7 @@ export interface ColliderInfo {
   kind: string;
   surface?: Surface;
   doorId?: string;
-  /** Semantic object (furniture id, door id, "helicopter") the collider belongs to. */
+  /** Semantic object (furniture id, door id, "drone", "elevator") the collider belongs to. */
   object?: string;
   /** Clear glass: blocks movement but not sight. */
   transparent?: boolean;
@@ -23,9 +24,12 @@ export interface StaticWorld {
   doors: Map<string, RAPIER.Collider>;
   setDoorOpen(id: string, open: boolean): void;
   isDoorOpen(id: string): boolean;
-  /** Parks the helicopter on the pad with the given heading, or removes it (null). */
-  setHelicopter(padYaw: number | null): void;
-  readonly helicopterParked: boolean;
+  /** Makes the drone solid where it stands (feet position and heading), or removes it (null). */
+  setDrone(stand: { position: Vec3; yaw: number } | null): void;
+  readonly droneParked: boolean;
+  /** Moves the elevator car floor and opens (true) or closes each stop's landing gate. */
+  setElevator(carY: number, gatesOpen: readonly boolean[]): void;
+  readonly elevatorCarY: number;
 }
 
 const TRANSPARENT_KINDS = new Set(['glass-wall']);
@@ -127,12 +131,27 @@ export function buildStaticWorld(R: Rapier, layout: Layout, openDoors: Record<st
     info.set(c.handle, { elementId: d.id, kind: 'door', surface: 'stone', doorId: d.id, object: d.id, transparent: true });
     doors.set(d.id, c);
   }
-  const heli: RAPIER.Collider[] = heliBodyBoxes(0).map((box) => {
+  const drone: RAPIER.Collider[] = droneBodyBoxes([0, 0, 0], 0).map((box) => {
     const c = world.createCollider(R.ColliderDesc.cuboid(...box.half));
     c.setEnabled(false);
-    info.set(c.handle, { elementId: 'helicopter', kind: 'helicopter', surface: 'metal', object: 'helicopter' });
+    info.set(c.handle, { elementId: 'drone', kind: 'drone', surface: 'metal', object: 'drone' });
     return c;
   });
+  // Elevator: the car floor moves; each stop's landing gate closes the shaft when the car is elsewhere.
+  const E = ELEVATOR;
+  const car = world.createCollider(
+    R.ColliderDesc.cuboid((E.x1 - E.x0) / 2 - 0.06, 0.06, (E.z1 - E.z0) / 2 - 0.06).setTranslation((E.x0 + E.x1) / 2, E.stops[1] - 0.06, (E.z0 + E.z1) / 2),
+  );
+  info.set(car.handle, { elementId: 'elevator-car', kind: 'elevator-car', surface: 'metal', object: 'elevator' });
+  let carY: number = E.stops[1];
+  const gates = E.stops.map((y, i) => {
+    const c = world.createCollider(
+      R.ColliderDesc.cuboid((E.door.x1 - E.door.x0) / 2, E.door.height / 2, 0.04).setTranslation((E.door.x0 + E.door.x1) / 2, y + E.door.height / 2, E.z0),
+    );
+    info.set(c.handle, { elementId: `elevator-gate-${i}`, kind: 'elevator-gate', surface: 'metal', object: 'elevator', transparent: true });
+    return c;
+  });
+  gates[1].setEnabled(false);
   let parked = false;
   world.step();
   return {
@@ -150,19 +169,37 @@ export function buildStaticWorld(R: Rapier, layout: Layout, openDoors: Record<st
       const c = doors.get(id);
       return c ? !c.isEnabled() : false;
     },
-    setHelicopter(padYaw) {
-      parked = padYaw !== null;
-      if (padYaw !== null) {
-        heliBodyBoxes(padYaw).forEach((box, i) => {
-          heli[i].setTranslation({ x: box.center[0], y: box.center[1], z: box.center[2] });
-          heli[i].setRotation(quatFromYaw(box.yaw));
+    setDrone(stand) {
+      parked = stand !== null;
+      if (stand !== null) {
+        droneBodyBoxes(stand.position, stand.yaw).forEach((box, i) => {
+          drone[i].setTranslation({ x: box.center[0], y: box.center[1], z: box.center[2] });
+          drone[i].setRotation(quatFromYaw(box.yaw));
         });
       }
-      for (const c of heli) c.setEnabled(parked);
+      for (const c of drone) c.setEnabled(parked);
       world.step();
     },
-    get helicopterParked() {
+    get droneParked() {
       return parked;
+    },
+    setElevator(y, open) {
+      let changed = false;
+      if (Math.abs(y - carY) > 1e-5) {
+        carY = y;
+        car.setTranslation({ x: (E.x0 + E.x1) / 2, y: y - 0.06, z: (E.z0 + E.z1) / 2 });
+        changed = true;
+      }
+      gates.forEach((g, i) => {
+        if (g.isEnabled() === !!open[i]) {
+          g.setEnabled(!open[i]);
+          changed = true;
+        }
+      });
+      if (changed) world.step();
+    },
+    get elevatorCarY() {
+      return carY;
     },
   };
 }

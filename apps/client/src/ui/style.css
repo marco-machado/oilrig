@@ -138,6 +138,51 @@ button:disabled {
   cursor: default;
 }
 
+.server-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -8px 0 18px;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.server-state[hidden] {
+  display: none;
+}
+
+.server-state::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-dim);
+}
+
+.server-state[data-state='checking']::before {
+  animation: server-pulse 1.2s ease-in-out infinite;
+}
+
+.server-state[data-state='online']::before {
+  background: #4cc38a;
+  box-shadow: 0 0 0 3px rgba(76, 195, 138, 0.2);
+}
+
+.server-state[data-state='offline']::before {
+  background: #e5604d;
+  box-shadow: 0 0 0 3px rgba(229, 96, 77, 0.2);
+}
+
+@keyframes server-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.field[hidden] {
+  display: none;
+}
+
 .status {
   margin-top: 12px;
   min-height: 18px;
@@ -389,5 +434,250 @@ button:disabled {
   .status-bar {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* ---------- cursor free: toolbar and panels (the world keeps running) ---------- */
+
+.hud.cursor-free .crosshair {
+  display: none;
+}
+
+.toolbar {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: calc(100vw - 32px);
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+
+.toolbar[hidden] {
+  display: none;
+}
+
+.toolbar button {
+  font-size: 13.5px;
+  padding: 8px 12px;
+}
+
+.toolbar .hint {
+  font-size: 12px;
+  color: var(--ink-dim);
+  padding: 0 4px;
+}
+
+.panels {
+  position: absolute;
+  top: 110px;
+  right: 16px;
+  bottom: 16px;
+  width: min(340px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  pointer-events: none;
+}
+
+.panel {
+  pointer-events: auto;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px 14px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.panel .note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+button.icon {
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+button.small {
+  font-size: 12.5px;
+  padding: 6px 10px;
+}
+
+.row.spread {
+  justify-content: space-between;
+}
+
+.field .value {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+}
+
+.segmented {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.segmented.wrap {
+  flex-wrap: wrap;
+}
+
+.segmented button {
+  flex: 1 1 auto;
+  font-size: 12.5px;
+  font-weight: 550;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.segmented button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Performance overlay: readable while flying too, so it never needs the cursor to be useful. */
+.panel.perf canvas {
+  display: block;
+  width: 100%;
+  height: 70px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.panel.perf .stats,
+.panel.perf .sections {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 12px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.panel.perf .stats span,
+.panel.perf .sections span {
+  color: var(--ink-dim);
+}
+
+.panel.perf b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.panel.perf .sections b {
+  background: linear-gradient(90deg, rgba(240, 178, 10, 0.35) var(--w, 0%), transparent var(--w, 0%));
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.panel.perf .th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ---------- drone instruments ---------- */
+
+.flight {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 32px);
+}
+
+.flight[hidden] {
+  display: none;
+}
+
+.flight .gauges {
+  display: flex;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid rgba(70, 216, 255, 0.35);
+  border-radius: 10px;
+  padding: 6px 8px;
+  backdrop-filter: blur(8px);
+}
+
+.flight .gauges div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+}
+
+.flight .gauges span {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #8fe6ff;
+}
+
+.flight .gauges b {
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.flight .hint {
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  background: var(--panel);
+  border-radius: 999px;
+  padding: 3px 10px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .flight .gauges div {
+    min-width: 48px;
+  }
+  .panels {
+    top: 150px;
   }
 }

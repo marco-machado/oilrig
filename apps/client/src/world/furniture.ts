@@ -31,7 +31,7 @@ import { tubeGeometry } from './structure.ts';
 // boxes, rounded boxes and tubes, then placed by its layout definition. The colliders come
 // from the shared layout, so what you see is what you bump into.
 
-type Bin = 'fabric' | 'oak' | 'stone' | 'teak' | 'frame' | 'steel' | 'ceramic' | 'net' | 'rope' | 'ember' | 'shade';
+type Bin = 'fabric' | 'stone' | 'teak' | 'frame' | 'steel' | 'net' | 'rope' | 'ember';
 
 class Pieces {
   readonly geos = new Map<Bin, BufferGeometry[]>();
@@ -88,146 +88,7 @@ class Pieces {
   }
 }
 
-const SAND = 0xcbbfa6;
-const LINEN = 0xece7dd;
 const OUTDOOR = 0xe2ddd2;
-const SLATE = 0x56616b;
-const DUVET = 0x8d9ba6;
-const CHARCOAL = 0x34363a;
-
-function sofa(p: Pieces, f: FurnitureDef) {
-  const [w, , d] = f.size;
-  const hw = w / 2;
-  const hd = d / 2;
-  const arm = 0.18;
-  p.box('oak', [-hw + 0.05, 0, -hd + 0.06], [hw - 0.05, 0.1, hd - 0.06]);
-  p.soft('fabric', [-hw, 0.1, -hd], [hw, 0.36, hd], 0.04, SAND);
-  const n = 3;
-  const cw = (w - 2 * arm) / n;
-  for (let i = 0; i < n; i++) {
-    const x0 = -hw + arm + i * cw;
-    p.soft('fabric', [x0 + 0.01, 0.36, -hd + 0.24], [x0 + cw - 0.01, 0.5, hd - 0.02], 0.05, SAND);
-    p.soft('fabric', [x0 + 0.02, 0.4, -hd + 0.02], [x0 + cw - 0.02, 0.84, -hd + 0.26], 0.07, SAND, -0.12);
-  }
-  for (const s of [-1, 1]) {
-    const x0 = s < 0 ? -hw : hw - arm;
-    p.soft('fabric', [x0, 0.1, -hd], [x0 + arm, 0.62, hd], 0.06, SAND);
-  }
-  // A couple of throw cushions.
-  p.soft('fabric', [-hw + arm + 0.05, 0.48, -hd + 0.22], [-hw + arm + 0.5, 0.88, -hd + 0.38], 0.08, SLATE, -0.25);
-  p.soft('fabric', [hw - arm - 0.5, 0.48, -hd + 0.22], [hw - arm - 0.05, 0.88, -hd + 0.38], 0.08, 0xb78e62, -0.25);
-}
-
-function coffeeTable(p: Pieces, f: FurnitureDef) {
-  const [w, h, d] = f.size;
-  p.box('stone', [-w / 2, h - 0.05, -d / 2], [w / 2, h, d / 2]);
-  for (const s of [-1, 1]) p.box('oak', [s * (w / 2 - 0.12) - 0.04, 0, -d / 2 + 0.05], [s * (w / 2 - 0.12) + 0.04, h - 0.05, d / 2 - 0.05]);
-}
-
-function rug(p: Pieces, f: FurnitureDef) {
-  const [w, , d] = f.size;
-  p.box('fabric', [-w / 2, 0, -d / 2], [w / 2, 0.008, d / 2], 0x9c8f7c);
-  p.box('fabric', [-w / 2 + 0.18, 0.008, -d / 2 + 0.18], [w / 2 - 0.18, 0.011, d / 2 - 0.18], 0xbfb39f);
-}
-
-function diningTable(p: Pieces, f: FurnitureDef) {
-  const [w, h, d] = f.size;
-  p.box('oak', [-w / 2, h - 0.045, -d / 2], [w / 2, h, d / 2]);
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      const x = sx * (w / 2 - 0.12);
-      const z = sz * (d / 2 - 0.1);
-      p.box('frame', [x - 0.025, 0, z - 0.025], [x + 0.025, h - 0.045, z + 0.025]);
-    }
-    p.box('frame', [sx * (w / 2 - 0.12) - 0.02, h - 0.12, -d / 2 + 0.1], [sx * (w / 2 - 0.12) + 0.02, h - 0.045, d / 2 - 0.1]);
-  }
-}
-
-function diningChair(p: Pieces, f: FurnitureDef) {
-  const [w, h, d] = f.size;
-  const hw = w / 2;
-  const hd = d / 2;
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      const x = sx * (hw - 0.04);
-      const z = sz * (hd - 0.04);
-      p.box('oak', [x - 0.018, 0, z - 0.018], [x + 0.018, sz < 0 ? h : 0.44, z + 0.018]);
-    }
-  }
-  p.box('oak', [-hw, 0.42, -hd], [hw, 0.45, hd]);
-  p.soft('fabric', [-hw + 0.02, 0.45, -hd + 0.04], [hw - 0.02, 0.49, hd - 0.02], 0.015, SLATE);
-  p.box('oak', [-hw, h - 0.2, -hd + 0.02], [hw, h - 0.02, -hd + 0.05]);
-}
-
-function kitchenIsland(p: Pieces, f: FurnitureDef) {
-  const [w, h, d] = f.size;
-  const hw = w / 2;
-  const hd = d / 2;
-  p.box('oak', [-hw + 0.05, 0.08, -hd], [hw - 0.05, h - 0.04, hd - 0.3]);
-  p.box('frame', [-hw + 0.08, 0, -hd + 0.04], [hw - 0.08, 0.08, hd - 0.34]);
-  p.box('stone', [-hw, h - 0.04, -hd], [hw, h, hd]);
-  // Sink and tap.
-  p.box('steel', [-0.9, h - 0.005, -hd + 0.15], [-0.35, h + 0.002, -hd + 0.55]);
-  p.tube('steel', [-0.62, h, -hd + 0.1], [-0.62, h + 0.32, -hd + 0.1], 0.014);
-  p.tube('steel', [-0.62, h + 0.32, -hd + 0.1], [-0.62, h + 0.3, -hd + 0.3], 0.012);
-  // Cabinet door seams.
-  for (let x = -hw + 0.05 + 0.6; x < hw - 0.1; x += 0.6) p.box('frame', [x - 0.004, 0.1, -hd - 0.002], [x + 0.004, h - 0.06, -hd + 0.002]);
-}
-
-function kitchenCounter(p: Pieces, f: FurnitureDef) {
-  const [w, h, d] = f.size;
-  const hw = w / 2;
-  const hd = d / 2;
-  p.box('frame', [-hw, 0, -hd + 0.05], [hw, 0.08, hd - 0.08]);
-  p.box('oak', [-hw, 0.08, -hd], [hw, h - 0.04, hd]);
-  p.box('stone', [-hw, h - 0.04, -hd], [hw, h, hd + 0.02]);
-  p.box('frame', [-0.4, h, -0.2], [0.4, h + 0.006, 0.25]); // induction hob
-  for (let x = -hw + 0.6; x < hw - 0.1; x += 0.6) p.box('frame', [x - 0.004, 0.1, hd - 0.002], [x + 0.004, h - 0.06, hd + 0.002]);
-}
-
-function barStool(p: Pieces, f: FurnitureDef) {
-  const h = f.size[1];
-  p.cyl('frame', 0, 0, 0, 0.02, 0.2, 0.2, 24);
-  p.tube('frame', [0, 0.02, 0], [0, h - 0.04, 0], 0.025);
-  const ring = new TorusGeometry(0.15, 0.01, 6, 24);
-  ring.rotateX(Math.PI / 2);
-  ring.translate(0, 0.3, 0);
-  p.add('frame', ring);
-  p.cyl('fabric', 0, 0, h - 0.05, h, 0.18, 0.19, 24, 0x6b4a33);
-}
-
-function bed(p: Pieces, f: FurnitureDef) {
-  const [w, , d] = f.size;
-  const hw = w / 2;
-  const hd = d / 2;
-  p.box('frame', [-hw + 0.1, 0, -hd + 0.1], [hw - 0.1, 0.1, hd - 0.1]);
-  p.box('oak', [-hw, 0.1, -hd], [hw, 0.25, hd]);
-  p.soft('fabric', [-hw + 0.05, 0.25, -hd + 0.06], [hw - 0.05, 0.47, hd - 0.04], 0.05, LINEN);
-  p.soft('fabric', [-hw + 0.02, 0.4, -hd + 0.75], [hw - 0.02, 0.5, hd - 0.02], 0.04, DUVET);
-  p.soft('fabric', [-hw + 0.02, 0.44, hd - 0.42], [hw - 0.02, 0.52, hd - 0.02], 0.035, 0xd8d1c4);
-  for (const s of [-1, 1]) p.soft('fabric', [s > 0 ? 0.05 : -hw + 0.12, 0.47, -hd + 0.12], [s > 0 ? hw - 0.12 : -0.05, 0.62, -hd + 0.55], 0.07, LINEN, -0.3);
-  p.soft('fabric', [-hw, 0.25, -hd - 0.02], [hw, 1.05, -hd + 0.08], 0.03, SAND);
-}
-
-function nightstand(p: Pieces, f: FurnitureDef, lamps: Array<[number, number, number]>) {
-  const [w, h, d] = f.size;
-  p.box('oak', [-w / 2, 0.06, -d / 2], [w / 2, h, d / 2]);
-  p.box('frame', [-w / 2 + 0.03, 0, -d / 2 + 0.03], [w / 2 - 0.03, 0.06, d / 2 - 0.03]);
-  p.box('frame', [-w / 2 + 0.03, h - 0.15, d / 2 - 0.002], [w / 2 - 0.03, h - 0.142, d / 2 + 0.002]);
-  p.cyl('ceramic', 0.06, -0.05, h, h + 0.22, 0.06, 0.045, 16);
-  p.cyl('shade', 0.06, -0.05, h + 0.2, h + 0.38, 0.13, 0.1, 24);
-  const c = Math.cos(f.rotationY);
-  const s = Math.sin(f.rotationY);
-  lamps.push([f.position[0] + 0.06 * c - 0.05 * s, f.position[1] + h + 0.3, f.position[2] - 0.06 * s - 0.05 * c]);
-}
-
-function bathtub(p: Pieces, f: FurnitureDef) {
-  const [w, h, d] = f.size;
-  p.soft('ceramic', [-w / 2, 0, -d / 2], [w / 2, h, d / 2], 0.12);
-  p.soft('stone', [-w / 2 + 0.07, h - 0.08, -d / 2 + 0.07], [w / 2 - 0.07, h - 0.005, d / 2 - 0.07], 0.08);
-  p.tube('steel', [0, 0, -d / 2 - 0.12], [0, h + 0.25, -d / 2 - 0.12], 0.02);
-  p.tube('steel', [0, h + 0.25, -d / 2 - 0.12], [0, h + 0.2, -d / 2 + 0.08], 0.016);
-}
 
 function outdoorSofa(p: Pieces, f: FurnitureDef) {
   const [w, , d] = f.size;
@@ -364,44 +225,10 @@ export function buildFurniture(layout: Layout, materials: MaterialSet): Furnitur
   const group = new Group();
   group.name = 'furniture';
   const all = new Map<Bin, BufferGeometry[]>();
-  const lamps: Array<[number, number, number]> = [];
   const fires: Array<[number, number, number]> = [];
   for (const f of layout.furniture) {
     const p = new Pieces(f);
     switch (f.kind) {
-      case 'sofa':
-        sofa(p, f);
-        break;
-      case 'coffee-table':
-        coffeeTable(p, f);
-        break;
-      case 'rug':
-        rug(p, f);
-        break;
-      case 'dining-table':
-        diningTable(p, f);
-        break;
-      case 'dining-chair':
-        diningChair(p, f);
-        break;
-      case 'kitchen-island':
-        kitchenIsland(p, f);
-        break;
-      case 'kitchen-counter':
-        kitchenCounter(p, f);
-        break;
-      case 'bar-stool':
-        barStool(p, f);
-        break;
-      case 'bed':
-        bed(p, f);
-        break;
-      case 'nightstand':
-        nightstand(p, f, lamps);
-        break;
-      case 'bathtub':
-        bathtub(p, f);
-        break;
       case 'outdoor-sofa':
         outdoorSofa(p, f);
         break;
@@ -419,20 +246,15 @@ export function buildFurniture(layout: Layout, materials: MaterialSet): Furnitur
     for (const [bin, list] of p.geos) all.set(bin, [...(all.get(bin) ?? []), ...list]);
   }
 
-  const shade = new MeshStandardNodeMaterial({ color: 0xf3ead8, roughness: 0.9, side: DoubleSide });
-  shade.emissiveNode = color(0xffd29a).mul(U.nightLights.mul(2.5));
   const mats: Record<Bin, Material> = {
     fabric: materials.fabric,
-    oak: materials.oak,
     stone: materials.stone,
     teak: materials.teak,
     frame: materials.mullion,
     steel: materials.steelGrey,
-    ceramic: new MeshStandardNodeMaterial({ color: 0xf4f2ee, roughness: 0.18 }),
     net: netMaterial(),
     rope: materials.fabric,
     ember: emberMaterial(),
-    shade,
   };
   for (const [bin, list] of all) {
     const merged = mergeGeometries(list, false);
@@ -442,19 +264,12 @@ export function buildFurniture(layout: Layout, materials: MaterialSet): Furnitur
     }
     const mesh = new Mesh(merged, mats[bin]);
     mesh.name = `furniture-${bin}`;
-    mesh.castShadow = bin !== 'net' && bin !== 'shade';
+    mesh.castShadow = bin !== 'net';
     mesh.receiveShadow = true;
     group.add(mesh);
   }
 
-  // Bedside lamps and the fire light the place up at night.
-  const lights: PointLight[] = [];
-  for (const [x, y, z] of lamps) {
-    const l = new PointLight(0xffc98a, 0, 4.5, 2);
-    l.position.set(x, y, z);
-    group.add(l);
-    lights.push(l);
-  }
+  // The fire lights the lounge up at night.
   const fireLights: PointLight[] = [];
   const dynamic: Group[] = [];
   for (const [x, y, z] of fires) {
@@ -471,7 +286,6 @@ export function buildFurniture(layout: Layout, materials: MaterialSet): Furnitur
     dynamic,
     update(time) {
       const night = U.nightLights.value;
-      for (const l of lights) l.intensity = 3.5 * night;
       const flicker = 0.75 + 0.25 * Math.sin(time * 13.7) * Math.sin(time * 7.3 + 1) + 0.1 * Math.sin(time * 31);
       for (const l of fireLights) l.intensity = (2 + 18 * night) * flicker;
     },

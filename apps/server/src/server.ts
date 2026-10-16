@@ -31,7 +31,7 @@ export interface RunningServer {
 export async function startServer(cfg: ServerConfig): Promise<RunningServer> {
   const store = new Store(cfg.dbPath);
   const clock = makeClock({ realTime: cfg.realTime, dayLengthMinutes: cfg.dayLengthMinutes, offsetHours: cfg.timeOffsetHours });
-  const world = await World.create({ clock, weatherSeed: cfg.weatherSeed, joinPassword: cfg.joinPassword, store, helicopter: cfg.helicopter });
+  const world = await World.create({ clock, weatherSeed: cfg.weatherSeed, joinPassword: cfg.joinPassword, store, drone: cfg.drone });
   world.start();
   const agents = await AgentManager.create(world, cfg.agents);
   agents.start();

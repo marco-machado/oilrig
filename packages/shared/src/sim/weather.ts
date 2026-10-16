@@ -172,7 +172,7 @@ export class WeatherModel {
   }
 
   /** Smooth 1D value noise in [-1, 1] for gusts. */
-  private gust(t: number): number {
+  gust(t: number): number {
     const period = 4 * 60_000;
     const x = t / period;
     const i = Math.floor(x);
@@ -208,5 +208,72 @@ export class WeatherModel {
       waveHeight: significantWaveHeight(windMean),
       storminess: lerp(q.storminess, p.storminess),
     };
+  }
+}
+
+export type WeatherMode = 'auto' | WeatherKind;
+
+/** The settled state of one kind of weather, blowing toward `windDirection`. */
+export function weatherOf(kind: WeatherKind, windDirection: number): WeatherState {
+  const p = TARGETS[kind];
+  return { kind, ...p, windDirection, waveHeight: significantWaveHeight(p.windSpeed) };
+}
+
+function blendWeather(a: WeatherState, b: WeatherState, u: number): WeatherState {
+  const lerp = (x: number, y: number) => x + (y - x) * u;
+  let dd = b.windDirection - a.windDirection;
+  if (dd > 180) dd -= 360;
+  if (dd < -180) dd += 360;
+  return {
+    kind: u > 0.5 ? b.kind : a.kind,
+    cloudCover: lerp(a.cloudCover, b.cloudCover),
+    cloudDensity: lerp(a.cloudDensity, b.cloudDensity),
+    rain: lerp(a.rain, b.rain),
+    fog: lerp(a.fog, b.fog),
+    windSpeed: lerp(a.windSpeed, b.windSpeed),
+    windDirection: (a.windDirection + dd * u + 360) % 360,
+    waveHeight: lerp(a.waveHeight, b.waveHeight),
+    storminess: lerp(a.storminess, b.storminess),
+  };
+}
+
+/** Real milliseconds a change of weather takes to settle. */
+export const WEATHER_CHANGE_MS = 25_000;
+
+/**
+ * The weather everyone sees: the seeded model ("auto"), or a kind someone picked. Switching
+ * either way eases over WEATHER_CHANGE_MS of real time instead of snapping.
+ */
+export class WeatherControl {
+  mode: WeatherMode = 'auto';
+  private readonly model: WeatherModel;
+  private from: WeatherState | null = null;
+  private since = 0;
+
+  constructor(model: WeatherModel) {
+    this.model = model;
+  }
+
+  set(mode: WeatherMode, gameMs: number, realNow: number) {
+    if (mode === this.mode) return;
+    this.from = this.sample(gameMs, realNow);
+    this.since = realNow;
+    this.mode = mode;
+  }
+
+  sample(gameMs: number, realNow: number): WeatherState {
+    let target: WeatherState;
+    if (this.mode === 'auto') target = this.model.sample(gameMs);
+    else {
+      const base = weatherOf(this.mode, this.from?.windDirection ?? this.model.sample(gameMs).windDirection);
+      target = { ...base, windSpeed: Math.max(0.5, base.windSpeed * (1 + 0.12 * this.model.gust(gameMs))) };
+    }
+    if (!this.from) return target;
+    const u = smooth(Math.min(1, Math.max(0, (realNow - this.since) / WEATHER_CHANGE_MS)));
+    if (u >= 1) {
+      if (this.mode === 'auto') this.from = null;
+      return target;
+    }
+    return blendWeather(this.from, target, u);
   }
 }

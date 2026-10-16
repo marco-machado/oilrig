@@ -59,11 +59,18 @@ export const WorldStatus = z
       z.object({ id: z.string(), name: z.string(), kind: z.enum(['human', 'agent']), position: Vec3, area: z.string().nullable() }),
     ),
     doors: z.record(z.string(), z.enum(['open', 'closed'])),
-    helicopter: z.object({
-      phase: z.enum(['away', 'approach', 'hold', 'descend', 'landed', 'depart']),
+    drone: z.object({
+      phase: z.enum(['away', 'approach', 'hold', 'descend', 'landed', 'depart', 'return', 'piloted']),
       position: Vec3.nullable(),
       nextArrival: z.string().nullable().describe('ISO time of the next scheduled arrival, while away'),
-      departs: z.string().nullable().describe('ISO time of lift-off, while landed'),
+      departs: z.string().nullable().describe('ISO time it leaves on its own, while landed'),
+      pilot: z.string().nullable().describe('Name of the person flying it'),
+      passengers: z.number(),
+    }),
+    elevator: z.object({
+      at: z.string().nullable().describe('Stop where the car stands, null while it travels'),
+      moving: z.boolean(),
+      doors: z.enum(['open', 'closed']),
     }),
   })
   .openapi('WorldStatus');
@@ -107,8 +114,16 @@ export const Perception = z
         moving: z.boolean(),
       }),
     ),
-    helicopter: z
-      .object({ phase: z.string(), visible: z.boolean(), distance: z.number(), bearing: z.number(), direction: z.string() })
+    drone: z
+      .object({
+        phase: z.string(),
+        visible: z.boolean(),
+        distance: z.number(),
+        bearing: z.number(),
+        direction: z.string(),
+        pilot: z.string().nullable(),
+        passengers: z.number(),
+      })
       .nullable(),
   })
   .openapi('Perception');
@@ -116,7 +131,7 @@ export const Perception = z
 // ---------- actions ----------
 
 export const MoveToFields = {
-  place: z.string().optional().describe('A place id from /places (e.g. "helipad"), or an object id such as "living-sofa"'),
+  place: z.string().optional().describe('A place id from /places (e.g. "helipad"), or an object id such as "lounge-sofa-west"'),
   object: z.string().optional().describe('Walk up to an object seen in perception (furniture, door, landmark)'),
   avatar: z.string().optional().describe('Walk up to another avatar (id or name)'),
   position: Vec3.optional(),

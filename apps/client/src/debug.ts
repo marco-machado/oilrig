@@ -1,4 +1,4 @@
-import { type HeliPhase, type HeliState, type Vec3, type WeatherState, heliFarPoint, heliHoverPoint, DIMS } from '@ocean-home/shared';
+import { DIMS, type DronePhase, type DroneState, type Vec3, type WeatherState, droneFarPoint, droneHoverPoint, yawFacing } from '@ocean-home/shared';
 import type { QualityName } from './render/quality.ts';
 
 const PRESET_WEATHER: Record<string, Partial<WeatherState>> = {
@@ -28,17 +28,25 @@ const CAMERAS: Record<string, { position: Vec3; target: Vec3 }> = {
   hammocks: { position: [-9.5, 17.7, -15.2], target: [-16.5, 16.4, -18] },
   tender: { position: [-7.5, 6.5, 34], target: [-15.5, 0.6, 25] },
   pad: { position: [27.5, 23.5, 17], target: [42, 21, 0] },
+  drone: { position: [35.5, 21.9, 7.5], target: [42, 21.2, 0] },
+  drone3q: { position: [34.5, 24.5, -8.5], target: [42, 20.8, 0] },
+  elevator: { position: [-6, 21.8, 14], target: [-12.3, 18, 21.4] },
+  lift: { position: [-4, 6.5, 14], target: [-12.3, 9, 21.4] },
+  doors: { position: [-14, 21.7, 8], target: [-6, 21.2, 2] },
 };
 
-const HELI_PHASES: HeliPhase[] = ['approach', 'hold', 'descend', 'landed', 'depart'];
+const DRONE_PHASES: DronePhase[] = ['approach', 'hold', 'descend', 'landed', 'depart'];
 
-/** A fixed helicopter phase for captures, e.g. ?heli=landed or ?heli=descend&heliT=20. */
-function fixedHeli(phase: HeliPhase) {
-  return (now: number): HeliState => {
+/** A fixed drone phase for captures, e.g. ?drone=landed or ?drone=descend&droneT=20. */
+function fixedDrone(phase: DronePhase) {
+  return (now: number): DroneState => {
     const bearing = 95;
-    const yaw = Math.atan2(Math.sin((bearing * Math.PI) / 180), -Math.cos((bearing * Math.PI) / 180));
-    const from = phase === 'approach' ? heliFarPoint(bearing) : phase === 'depart' || phase === 'landed' ? ([...DIMS.HELI.pad] as Vec3) : heliHoverPoint(bearing);
-    return { phase, t0: now, until: now + 10 * 60_000, bearing, from, fromYaw: yaw, padYaw: yaw };
+    const r = (bearing * Math.PI) / 180;
+    const yaw = yawFacing(-Math.sin(r), Math.cos(r));
+    const pad = [...DIMS.DRONE.pad] as Vec3;
+    const from = phase === 'approach' ? droneFarPoint(bearing) : phase === 'depart' || phase === 'landed' ? pad : droneHoverPoint(bearing);
+    const route = phase === 'depart' ? [pad, [pad[0], 34, pad[2]] as Vec3, droneFarPoint(bearing)] : undefined;
+    return { phase, t0: now, until: now + 10 * 60_000, bearing, from, fromYaw: yaw, padYaw: yaw, ...(route ? { route } : {}) };
   };
 }
 
@@ -52,15 +60,24 @@ export interface DebugParams {
   name?: string;
   /** UTC midnight of a fixed date (YYYY-MM-DD) for deterministic captures. */
   date?: number;
-  heli?: (now: number) => HeliState;
-  /** Seconds into the fixed helicopter phase. */
-  heliT?: number;
+  drone?: (now: number) => DroneState;
+  /** Seconds into the fixed drone phase. */
+  droneT?: number;
+  /** Features switched off to measure what they cost, e.g. ?off=ao,bloom,shadows. */
+  off: Set<string>;
 }
+
+/** Features ?off= can switch off (for measuring their cost with the performance overlay). */
+export const FEATURES = ['ao', 'bloom', 'traa', 'ssr', 'shadows', 'ocean', 'grass', 'rain', 'labels', 'probes'] as const;
 
 /** URL overrides for visual verification, e.g. ?hour=18&weather=storm&cam=ref. */
 export function debugParams(): DebugParams {
   const p = new URLSearchParams(location.search);
-  const out: DebugParams = { timeScale: Number(p.get('ts') ?? 0), offline: p.has('offline') };
+  const out: DebugParams = {
+    timeScale: Number(p.get('ts') ?? 0),
+    offline: p.has('offline'),
+    off: new Set((p.get('off') ?? '').split(',').filter((f) => (FEATURES as readonly string[]).includes(f))),
+  };
   const q = p.get('q');
   if (q === 'low' || q === 'medium' || q === 'high' || q === 'ultra') out.quality = q;
   const h = p.get('hour');
@@ -75,9 +92,9 @@ export function debugParams(): DebugParams {
   if (date && Number.isFinite(Date.parse(date))) out.date = Date.parse(`${date}T00:00:00Z`);
   const name = p.get('name');
   if (name) out.name = name;
-  const heli = p.get('heli') as HeliPhase | null;
-  if (heli && HELI_PHASES.includes(heli)) out.heli = fixedHeli(heli);
-  const heliT = Number(p.get('heliT'));
-  if (p.has('heliT') && Number.isFinite(heliT)) out.heliT = heliT;
+  const drone = p.get('drone') as DronePhase | null;
+  if (drone && DRONE_PHASES.includes(drone)) out.drone = fixedDrone(drone);
+  const droneT = Number(p.get('droneT'));
+  if (p.has('droneT') && Number.isFinite(droneT)) out.droneT = droneT;
   return out;
 }

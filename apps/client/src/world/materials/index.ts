@@ -193,6 +193,19 @@ function glass(frosted: boolean) {
   return m;
 }
 
+/** Clear glass as a plain transparent surface: cheaper than transmission. */
+function thinGlass() {
+  return new MeshPhysicalNodeMaterial({
+    color: new Color(0xdfeeee),
+    metalness: 0,
+    roughness: 0.03,
+    transparent: true,
+    opacity: 0.16,
+    depthWrite: false,
+    side: DoubleSide,
+  });
+}
+
 function helideck() {
   const m = new MeshStandardNodeMaterial();
   const p = positionWorld;
@@ -326,6 +339,7 @@ export function createMaterials(): MaterialSet {
     plaster: plaster(),
     mullion: simple(0x17181a, 0.38, 0.6),
     glass: glass(false),
+    glassThin: thinGlass(),
     glassFrosted: glass(true),
     helideck: helideck(),
     rubber: simple(0x0f0f0f, 0.88),

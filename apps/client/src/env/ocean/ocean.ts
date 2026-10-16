@@ -11,6 +11,7 @@ import {
 } from 'three/webgpu';
 import {
   Fn,
+  If,
   cameraFar,
   cameraNear,
   cameraPosition,
@@ -131,6 +132,8 @@ export class Ocean {
     this.mesh = new Mesh(radialGrid(q.rings, q.sectors, 0.3, 36), this.material);
     this.mesh.frustumCulled = false;
     this.mesh.receiveShadow = true;
+    // Opaque, drawn last in the opaque pass: its own refraction copy then holds everything
+    // under the surface, and transmissive glass (which samples the opaque pass) sees the sea.
     this.mesh.renderOrder = 10;
     this.mesh.name = 'ocean';
   }
@@ -140,14 +143,12 @@ export class Ocean {
     const N = this.sim.N;
     const mat = new MeshPhysicalNodeMaterial();
     mat.side = DoubleSide;
-    mat.transparent = true;
-    mat.depthWrite = true;
     mat.ior = 1.333;
     mat.metalness = 0;
     const origin = this.origin;
     const worldXZ = vec2(positionGeometry.x, positionGeometry.y).add(origin);
 
-    // Rotor downwash flattens the sea under a low helicopter.
+    // Rotor downwash flattens the sea under the drone when it flies low.
     const washD = length(worldXZ.sub(U.washCenter));
     const flatten = float(1).sub(U.washSea.mul(0.55).mul(exp(washD.div(16).pow(2).negate())));
     mat.positionNode = Fn(() => {
@@ -188,14 +189,29 @@ export class Ocean {
     }
     const slopeX = d.x.div(float(1).add(dz.x));
     const slopeZ = d.y.div(float(1).add(dz.y));
+    // The optional terms below cost 3D noise per pixel, so each is evaluated only when it
+    // can show: uniform conditions branch the same way for the whole draw, which is free.
     // Rain roughens the surface with fine ripples.
-    const ripple = mx_noise_float(vec3(wxz.mul(6), U.time.mul(4))).mul(U.rain).mul(0.08).mul(smoothstep(60, 5, viewDist));
-    // Rotor wash: rings of ripples racing outward from under the helicopter.
+    const ripple = Fn(() => {
+      const r = float(0).toVar();
+      If(U.rain.greaterThan(0.001).and(viewDist.lessThan(60)), () => {
+        r.assign(mx_noise_float(vec3(wxz.mul(6), U.time.mul(4))).mul(U.rain).mul(0.08).mul(smoothstep(60, 5, viewDist)));
+      });
+      return r;
+    })();
+    // Rotor wash: rings of ripples racing outward from under the drone.
     const wv = wxz.sub(U.washCenter);
     const wd = length(wv).max(0.5);
-    const wEnv = U.washSea.mul(exp(wd.div(24).pow(2).negate()));
-    const wPhase = wd.mul(1.7).sub(U.time.mul(9));
-    const wRip = sin(wPhase).mul(wEnv).mul(0.35).mul(mx_noise_float(vec3(wxz.mul(0.8), U.time.mul(0.7))).mul(0.5).add(0.75));
+    const wEnv = U.washSea.mul(exp(wd.div(24).pow(2).negate())).toVar();
+    const washOn = wEnv.greaterThan(0.002);
+    const wRip = Fn(() => {
+      const r = float(0).toVar();
+      If(washOn, () => {
+        const wPhase = wd.mul(1.7).sub(U.time.mul(9));
+        r.assign(sin(wPhase).mul(wEnv).mul(0.35).mul(mx_noise_float(vec3(wxz.mul(0.8), U.time.mul(0.7))).mul(0.5).add(0.75)));
+      });
+      return r;
+    })();
     const wDir = wv.div(wd);
     const Nw = normalize(vec3(slopeX.negate().add(ripple).add(wDir.x.mul(wRip)), float(1), slopeZ.negate().sub(ripple).add(wDir.y.mul(wRip)))).toVar();
     mat.normalNode = transformNormalToView(Nw);
@@ -203,22 +219,52 @@ export class Ocean {
     // Foam: whitecaps from the accumulator plus wash around the legs.
     const foamBase = saturate(foamF.sub(0.58).mul(2.4));
     const pts = piercings();
-    let ringFoam: any = float(0);
     const pw = positionWorld.xz;
-    for (const [x, z, r] of pts) {
-      const dist = length(pw.sub(vec2(x, z))).sub(r);
-      ringFoam = max(ringFoam, exp(dist.mul(dist).mul(-1.6)).mul(0.9));
-    }
+    // Wash rings around the legs and piles: only near the platform's footprint.
+    const xs = pts.map((p) => p[0]);
+    const zs = pts.map((p) => p[1]);
+    const near = pw.x
+      .greaterThan(Math.min(...xs) - 6)
+      .and(pw.x.lessThan(Math.max(...xs) + 6))
+      .and(pw.y.greaterThan(Math.min(...zs) - 6))
+      .and(pw.y.lessThan(Math.max(...zs) + 6));
     const waveEnergy = saturate(U.windSpeed.div(12));
-    const bubbles = smoothstep(-0.2, 0.5, mx_noise_float(vec3(wxz.mul(3.1), U.time.mul(0.3))));
-    const streaks = mx_noise_float(vec3(wxz.mul(vec2(0.6, 0.6)), U.time.mul(0.05))).mul(0.5).add(0.5);
+    const legFoam = Fn(() => {
+      const f = float(0).toVar();
+      If(near, () => {
+        let ringFoam: any = float(0);
+        for (const [x, z, r] of pts) {
+          const dist = length(pw.sub(vec2(x, z))).sub(r);
+          ringFoam = max(ringFoam, exp(dist.mul(dist).mul(-1.6)).mul(0.9));
+        }
+        f.assign(ringFoam.mul(waveEnergy.mul(0.8).add(0.25)));
+        If(f.greaterThan(0.001), () => {
+          const streaks = mx_noise_float(vec3(wxz.mul(vec2(0.6, 0.6)), U.time.mul(0.05))).mul(0.5).add(0.5);
+          f.mulAssign(streaks.add(0.3));
+        });
+      });
+      return f;
+    })();
     // Broken, ragged rings rather than clean circles: the ring phase is jittered by noise.
-    const wNoise = mx_noise_float(vec3(wxz.mul(0.45), U.time.mul(0.9))).mul(0.5).add(0.5);
-    const wRing = smoothstep(0.62, 0.95, sin(wd.mul(0.9).add(wNoise.mul(4)).sub(U.time.mul(6))).mul(0.5).add(0.5));
-    const washFoam = wEnv
-      .mul(wRing.mul(0.35).add(smoothstep(9, 2, wd).mul(0.3)))
-      .mul(smoothstep(0.35, 0.8, mx_noise_float(vec3(wxz.mul(1.3), U.time.mul(1.5))).mul(0.5).add(0.5)));
-    const foam = saturate(max(max(foamBase, washFoam), ringFoam.mul(waveEnergy.mul(0.8).add(0.25)).mul(streaks.add(0.3))).mul(bubbles.mul(0.6).add(0.4))).toVar();
+    const washFoam = Fn(() => {
+      const f = float(0).toVar();
+      If(washOn, () => {
+        const wNoise = mx_noise_float(vec3(wxz.mul(0.45), U.time.mul(0.9))).mul(0.5).add(0.5);
+        const wRing = smoothstep(0.62, 0.95, sin(wd.mul(0.9).add(wNoise.mul(4)).sub(U.time.mul(6))).mul(0.5).add(0.5));
+        f.assign(
+          wEnv.mul(wRing.mul(0.35).add(smoothstep(9, 2, wd).mul(0.3))).mul(smoothstep(0.35, 0.8, mx_noise_float(vec3(wxz.mul(1.3), U.time.mul(1.5))).mul(0.5).add(0.5))),
+        );
+      });
+      return f;
+    })();
+    const foam = Fn(() => {
+      const f = saturate(max(max(foamBase, washFoam), legFoam)).toVar();
+      If(f.greaterThan(0.001), () => {
+        const bubbles = smoothstep(-0.2, 0.5, mx_noise_float(vec3(wxz.mul(3.1), U.time.mul(0.3))));
+        f.mulAssign(bubbles.mul(0.6).add(0.4));
+      });
+      return f;
+    })().toVar();
 
     const NoV = saturate(dot(Nw, V)).max(1e-3);
     const F = float(0.02).add(float(0.98).mul(pow(float(1).sub(NoV), 5))).toVar();

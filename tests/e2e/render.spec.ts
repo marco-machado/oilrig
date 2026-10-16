@@ -57,21 +57,37 @@ test('the tender rides the wave heights read back from the GPU', async ({ page }
   expect(errors).toEqual([]);
 });
 
-test('a landing helicopter spins its rotor and kicks up spray and sea wash', async ({ page }) => {
+test('a landing drone spins its rotors and kicks up spray on the deck', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
-  await page.goto('/?offline&cam=pad&hour=16&weather=fair&q=medium&heli=descend&heliT=18');
+  await page.goto('/?offline&cam=pad&hour=16&weather=fair&q=medium&drone=descend&droneT=18');
   await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 20, undefined, { timeout: 60_000 });
   const s = await page.evaluate(() => {
     const o = (window as any).__oceanHome;
-    return { visible: o.heli.group.visible, rotor: o.heli.pose.rotor, spray: o.heli.spray.strength.value, wash: o.U.washSea.value, alt: o.heli.pose.altitude };
+    return { visible: o.drone.group.visible, rotor: o.drone.pose.rotor, spray: o.drone.spray.strength.value, alt: o.drone.pose.altitude };
   });
   expect(s.visible).toBe(true);
   expect(s.rotor).toBeGreaterThan(0.9);
-  expect(s.alt).toBeLessThan(10);
+  expect(s.alt).toBeLessThan(8);
   expect(s.spray).toBeGreaterThan(0.2);
-  expect(s.wash).toBeGreaterThan(0.2);
   expect(errors).toEqual([]);
+});
+
+test('Esc frees the cursor without pausing: the world keeps running and the panels work', async ({ page }) => {
+  await page.goto('/?offline&q=low&hour=12&name=Tester');
+  await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 5, undefined, { timeout: 60_000 });
+  await page.click('button:has-text("Enter")');
+  await page.waitForTimeout(800);
+  await page.evaluate(() => document.exitPointerLock());
+  await expect(page.locator('.toolbar')).toBeVisible();
+  const f0 = await page.evaluate(() => (window as any).__oceanHome.stats.frames);
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate(() => (window as any).__oceanHome.stats.frames)).toBeGreaterThan(f0 + 10);
+  await page.click('.toolbar button:has-text("Time & weather")');
+  await page.click('.panel button:has-text("Fog")');
+  expect(await page.evaluate(() => (window as any).__oceanHome.weatherMode())).toBe('fog');
+  await page.keyboard.press('F3');
+  await expect(page.locator('.panel.perf')).toBeVisible();
 });

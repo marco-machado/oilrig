@@ -73,17 +73,60 @@ export const SWIM = {
 
 export const RAIL_HEIGHT = 1.1;
 
-/** Visiting helicopter (a light twin, roughly an AW109): pad centre and body size. */
-export const HELI = {
+/**
+ * The platform's passenger drone: a four-seat electric quadcopter with ducted rotors.
+ * Body frame: x right, y up from the skids, z towards the tail (nose at -z).
+ */
+export const DRONE = {
   pad: [42, 20, 0] as const,
-  rotorRadius: 5.5,
-  blades: 4,
-  /** Main rotor revolutions per second at flight rpm. */
-  rotorHz: 6.4,
-  tailRotorHz: 32,
-  mastHeight: 3.3,
+  /** Duct (rotor) centres in the body frame: (±armX, ductY, ±armZ). */
+  armX: 2.9,
+  armZ: 2.7,
+  ductY: 2.05,
+  ductRadius: 1.15,
+  blades: 3,
+  /** Propeller revolutions per second at hover rpm. */
+  rotorHz: 26,
   /** Nobody may stand this close to the pad centre while it lands. */
   clearRadius: 7,
+  /** Seats in the body frame (cushion top): pilot front left, then front right, rear left, rear right. */
+  seats: [
+    [-0.47, 0.95, -0.42],
+    [0.47, 0.95, -0.42],
+    [-0.47, 0.95, 0.62],
+    [0.47, 0.95, 0.62],
+  ] as ReadonlyArray<readonly [number, number, number]>,
+  /** Eye height above the seat cushion. */
+  seatedEye: 0.78,
+  /** Flight envelope (pilot input). */
+  maxSpeed: 24,
+  maxClimb: 6,
+  maxDescent: 4.5,
+  maxYawRate: 1.4,
+  /** Lowest the skids may go over open water. */
+  minSeaAltitude: 1.5,
+  maxAltitude: 600,
+} as const;
+
+/**
+ * Panoramic glass elevator on the south side, from the boat landing up to the main deck.
+ * The shaft stands on the landing; its door faces north at both stops.
+ */
+export const ELEVATOR = {
+  x0: -13.4,
+  x1: -11.2,
+  z0: 20.4,
+  z1: 22.4,
+  /** Floor height of each stop: the boat landing, the main deck. */
+  stops: [3, 20] as const,
+  stopNames: ['Boat landing', 'Main deck'] as const,
+  door: { x0: -13.0, x1: -11.6, height: 2.2 },
+  head: 23.1,
+  speed: 2.0,
+  accel: 0.8,
+  doorMs: 1600,
+  /** Doors stay open at least this long after arriving. */
+  dwellMs: 3000,
 } as const;
 
 /** The tender moored along the south edge of the boat landing. */

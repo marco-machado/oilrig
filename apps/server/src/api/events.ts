@@ -3,7 +3,7 @@ import type { World } from '../world/world.ts';
 // Numbered log of world events for the SSE stream. Clients that reconnect with
 // Last-Event-ID get what they missed from a short ring buffer.
 
-export type WorldEventType = 'join' | 'leave' | 'chat' | 'door' | 'weather' | 'helicopter';
+export type WorldEventType = 'join' | 'leave' | 'chat' | 'door' | 'weather' | 'drone' | 'elevator';
 
 export interface LoggedEvent {
   id: number;
@@ -25,7 +25,8 @@ export class EventLog {
     world.on('chat', (e) => this.push('chat', e));
     world.on('door', (d) => this.push('door', d));
     world.on('weather', (w) => this.push('weather', w));
-    world.on('helicopter', (s) => this.push('helicopter', { phase: s.phase, since: s.t0, until: s.until, bearing: Math.round(s.bearing) }));
+    world.on('drone', (s) => this.push('drone', { phase: s.phase, since: s.t0, until: Number.isFinite(s.until) ? s.until : null, bearing: Math.round(s.bearing) }));
+    world.on('elevator', (s) => this.push('elevator', { from: s.from, to: s.to, since: s.t0 }));
   }
 
   private push(type: WorldEventType, data: unknown) {

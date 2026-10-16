@@ -1,4 +1,4 @@
-import type { PerspectiveCamera } from 'three/webgpu';
+import { type PerspectiveCamera, Vector3 } from 'three/webgpu';
 import {
   CharacterMotor,
   type Layout,
@@ -6,14 +6,27 @@ import {
   type StaticWorld,
   type Surface,
   type Vec3,
+  inCar,
 } from '@ocean-home/shared';
 import type { Controls } from './controls.ts';
 
+export type StepSurface = Surface | 'water';
+
 export interface PlayerEvents {
-  onFootstep?: (surface: Surface | undefined, run: boolean) => void;
-  onLand?: (surface: Surface | undefined, speed: number) => void;
+  onFootstep?: (surface: StepSurface | undefined, run: boolean) => void;
+  onLand?: (surface: StepSurface | undefined, speed: number) => void;
   onFellInSea?: () => void;
-  onInteract?: (doorId: string) => void;
+  onInteract?: (id: string) => void;
+}
+
+/** Something the crosshair can rest on and E operates: a door, a button, the drone. */
+export interface Interactable {
+  id: string;
+  point: Vec3;
+  /** Metres from the eye. */
+  reach: number;
+  /** How squarely it must be looked at (cosine of the angle), default 0.55. */
+  facing?: number;
 }
 
 const FIXED_DT = 1 / 120;
@@ -32,9 +45,16 @@ export class Player {
   private wasGrounded = true;
   private fallSpeed = 0;
   private respawning = false;
-  /** Door the crosshair rests on, if any (within reach). */
-  focusDoor: string | null = null;
+  private readonly dir = new Vector3();
+  /** A jump press waits here until a physics step uses it (some frames run no step). */
+  private jumpHeld = false;
+  /** What the crosshair rests on, if anything within reach. */
+  focus: string | null = null;
+  /** Things that can be operated this frame (set by the game loop). */
+  targets: Interactable[] = [];
   frozen = false;
+  /** Sitting in the drone: no walking, the camera is placed by the seat. */
+  seated = false;
 
   constructor(sw: StaticWorld, layout: Layout, camera: PerspectiveCamera, controls: Controls, events: PlayerEvents) {
     this.sw = sw;
@@ -60,18 +80,34 @@ export class Player {
     return this.motor.zoneAt('indoor');
   }
 
+  /** Carries the player along with the elevator car if they are in it. */
+  ride(prevCarY: number, carY: number) {
+    if (carY !== prevCarY && !this.seated && inCar(prevCarY, this.motor.state.position)) this.motor.ride(carY - prevCarY);
+  }
+
+  private surface(): StepSurface | undefined {
+    return this.motor.zoneAt('pool') ? 'water' : this.motor.groundSurface();
+  }
+
   update(dt: number) {
     const input = this.controls.sample(dt);
+    if (this.seated) {
+      this.focus = this.pick();
+      if (input.interact && this.focus) this.events.onInteract?.(this.focus);
+      return;
+    }
     if (this.frozen) {
       input.forward = 0;
       input.right = 0;
       input.jump = false;
     }
+    if (input.jump) this.jumpHeld = true;
     this.acc += Math.min(dt, 0.1);
     let steps = 0;
     while (this.acc >= FIXED_DT && steps < 12) {
+      input.jump = this.jumpHeld;
+      this.jumpHeld = false;
       this.motor.step(input, FIXED_DT);
-      input.jump = false;
       this.acc -= FIXED_DT;
       steps++;
       this.trackLanding();
@@ -86,7 +122,7 @@ export class Player {
       const len = input.run ? 1.05 : 0.78;
       if (this.stride >= len) {
         this.stride -= len;
-        this.events.onFootstep?.(this.motor.groundSurface(), input.run);
+        this.events.onFootstep?.(this.surface(), input.run);
       }
     } else {
       this.bob *= 0.9;
@@ -97,8 +133,8 @@ export class Player {
     this.camera.rotation.set(this.controls.pitch, this.controls.yaw, 0, 'YXZ');
 
     // Interaction ray.
-    this.focusDoor = this.pickDoor();
-    if (input.interact && this.focusDoor) this.events.onInteract?.(this.focusDoor);
+    this.focus = this.pick();
+    if (input.interact && this.focus) this.events.onInteract?.(this.focus);
 
     // Fell into the sea.
     if (!this.respawning && s.position[1] < 0.2) {
@@ -111,30 +147,31 @@ export class Player {
     const s = this.motor.state;
     if (!s.grounded) this.fallSpeed = Math.max(this.fallSpeed, -s.velocity[1]);
     if (s.grounded && !this.wasGrounded && this.fallSpeed > 2) {
-      this.events.onLand?.(this.motor.groundSurface(), this.fallSpeed);
+      this.events.onLand?.(this.surface(), this.fallSpeed);
     }
     if (s.grounded) this.fallSpeed = 0;
     this.wasGrounded = s.grounded;
   }
 
-  private pickDoor(): string | null {
-    const cp = Math.cos(this.controls.pitch);
-    const dx = -Math.sin(this.controls.yaw) * cp;
-    const dy = Math.sin(this.controls.pitch);
-    const dz = -Math.cos(this.controls.yaw) * cp;
+  /** The target most squarely in view within its reach. */
+  private pick(): string | null {
+    const dir = this.camera.getWorldDirection(this.dir);
     const o = this.camera.position;
     let best: string | null = null;
-    let bestDist = 3.2;
-    for (const d of this.layout.doors) {
-      const vx = d.center[0] - o.x;
-      const vy = d.center[1] - o.y;
-      const vz = d.center[2] - o.z;
+    let bestScore = -Infinity;
+    for (const t of this.targets) {
+      const vx = t.point[0] - o.x;
+      const vy = t.point[1] - o.y;
+      const vz = t.point[2] - o.z;
       const dist = Math.hypot(vx, vy, vz);
-      if (dist > bestDist) continue;
-      const facing = (vx * dx + vy * dy + vz * dz) / dist;
-      if (facing < 0.55) continue;
-      best = d.id;
-      bestDist = dist;
+      if (dist > t.reach || dist < 1e-3) continue;
+      const facing = (vx * dir.x + vy * dir.y + vz * dir.z) / dist;
+      if (facing < (t.facing ?? 0.55)) continue;
+      const score = facing * 2 - dist / t.reach;
+      if (score > bestScore) {
+        best = t.id;
+        bestScore = score;
+      }
     }
     return best;
   }

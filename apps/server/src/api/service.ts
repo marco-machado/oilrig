@@ -1,4 +1,4 @@
-import type { ChatEntry, Vec3 } from '@ocean-home/shared';
+import { type ChatEntry, DIMS, type Vec3, elevatorPose } from '@ocean-home/shared';
 import type { Agent, TaskResult } from '../agents/agent.ts';
 import { AgentError, type AgentManager, type AvatarStatus } from '../agents/manager.ts';
 import { type Perception, areaAt, timeReport, weatherReport } from '../agents/perception.ts';
@@ -27,8 +27,9 @@ export class ApiService {
 
   worldStatus(now = Date.now()) {
     const w = this.world;
-    const heli = w.heli.state;
-    const pose = w.helicopterPose(now);
+    const drone = w.drone.state;
+    const pose = w.dronePose(now);
+    const pilot = w.crew.pilot;
     const round = (p: Vec3): Vec3 => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10, Math.round(p[2] * 10) / 10];
     return {
       time: timeReport(w, now),
@@ -41,12 +42,18 @@ export class ApiService {
         area: areaAt(w, p.pose.p)?.id ?? null,
       })),
       doors: Object.fromEntries(Object.entries(w.doorStates()).map(([id, open]) => [id, open ? ('open' as const) : ('closed' as const)])),
-      helicopter: {
-        phase: heli.phase,
-        position: heli.phase === 'away' ? null : round(pose.position),
-        nextArrival: heli.phase === 'away' ? iso(heli.until) : null,
-        departs: heli.phase === 'landed' ? iso(heli.until) : null,
+      drone: {
+        phase: drone.phase,
+        position: drone.phase === 'away' ? null : round(pose.position),
+        nextArrival: drone.phase === 'away' ? iso(drone.until) : null,
+        departs: drone.phase === 'landed' ? iso(drone.until) : null,
+        pilot: pilot ? (w.player(pilot)?.info.name ?? null) : null,
+        passengers: w.crew.seats.slice(1).filter(Boolean).length,
       },
+      elevator: (() => {
+        const e = elevatorPose(w.elevator.state, now);
+        return { at: e.stop === null ? null : DIMS.ELEVATOR.stopNames[e.stop], moving: e.phase === 'travel', doors: e.doors > 0.5 ? ('open' as const) : ('closed' as const) };
+      })(),
     };
   }
 

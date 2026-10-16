@@ -13,7 +13,7 @@ export interface ServerConfig {
   weatherSeed: number;
   dbPath: string;
   staticDir: string | null;
-  helicopter?: Partial<{ intervalMs: number; stayMs: number; firstArrivalMs: number; seed: number }>;
+  drone?: Partial<{ intervalMs: number; stayMs: number; firstArrivalMs: number; seed: number; startLanded: boolean }>;
   agents?: Partial<{ perKey: number; total: number; idleMs: number }>;
 }
 
@@ -34,10 +34,11 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServerConfi
     weatherSeed: Math.trunc(num(env.WEATHER_SEED, 1337)),
     dbPath: env.DB_PATH ?? path.join(dataDir, 'ocean-home.db'),
     staticDir: env.STATIC_DIR ?? path.resolve(here, '../../client/dist'),
-    helicopter: {
-      intervalMs: Math.max(3, num(env.HELI_INTERVAL_MINUTES, 15)) * 60_000,
-      stayMs: Math.max(0.5, num(env.HELI_STAY_MINUTES, 4)) * 60_000,
-      firstArrivalMs: Math.max(0, num(env.HELI_FIRST_ARRIVAL_MINUTES, 1)) * 60_000,
+    drone: {
+      intervalMs: Math.max(0.5, num(env.DRONE_AWAY_MINUTES, 3)) * 60_000,
+      stayMs: Math.max(0.5, num(env.DRONE_STAY_MINUTES, 12)) * 60_000,
+      firstArrivalMs: Math.max(0, num(env.DRONE_FIRST_ARRIVAL_MINUTES, 1)) * 60_000,
+      startLanded: env.DRONE_START_AWAY !== 'true' && env.DRONE_START_AWAY !== '1',
     },
     agents: {
       perKey: Math.max(1, Math.trunc(num(env.AGENTS_PER_KEY, 3))),

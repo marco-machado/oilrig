@@ -21,12 +21,15 @@ const SHOTS: Array<[string, string]> = [
   ['swim-platform', `cam=swim&${SUMMER}&hour=11&weather=clear&wind=5`],
   ['lower-walkway', `cam=walkway&${SUMMER}&hour=10&weather=fair`],
   ['living-room', `cam=living&${SUMMER}&hour=10&weather=fair`],
+  ['doors', `cam=doors&${SUMMER}&hour=18.6&weather=clear`],
+  ['elevator', `cam=elevator&${SUMMER}&hour=16&weather=fair`],
+  ['elevator-from-landing', `cam=lift&${SUMMER}&hour=15&weather=fair`],
   ['firepit-lounge', `cam=lounge&${SUMMER}&hour=19.4&weather=clear`],
-  ['kitchen', `cam=kitchen&${SUMMER}&hour=10&weather=fair`],
   ['hammock-nets', `cam=hammocks&${SUMMER}&hour=10&weather=fair`],
   ['tender', `cam=tender&${SUMMER}&hour=10&weather=fair`],
-  ['helicopter-landing', `cam=pad&${SUMMER}&hour=16&weather=fair&heli=descend&heliT=20`],
-  ['helicopter-parked', `cam=pad&${SUMMER}&hour=17.5&weather=fair&heli=landed&heliT=60`],
+  ['drone-landing', `cam=pad&${SUMMER}&hour=16&weather=fair&drone=descend&droneT=14`],
+  ['drone-parked', `cam=drone3q&${SUMMER}&hour=17.5&weather=fair&drone=landed&droneT=60`],
+  ['drone-side', `cam=drone&${SUMMER}&hour=11&weather=fair&drone=landed&droneT=60`],
 ];
 
 test.describe.configure({ mode: 'serial' });

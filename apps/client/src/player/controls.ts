@@ -76,6 +76,20 @@ export class Controls {
     return null;
   }
 
+  /** Flying the drone: stick in the view frame, Space climbs, Shift or C descends. */
+  sampleFlight(dt: number) {
+    const walk = this.sample(dt);
+    const k = this.keys;
+    let up = 0;
+    if (this.enabled) {
+      if (k.has('Space')) up += 1;
+      if (k.has('ShiftLeft') || k.has('ShiftRight') || k.has('KeyC')) up -= 1;
+      const pad = this.gamepad();
+      if (pad) up += (pad.buttons[7]?.value ?? 0) - (pad.buttons[6]?.value ?? 0) + (pad.buttons[0]?.pressed ? 1 : 0) - (pad.buttons[1]?.pressed ? 1 : 0);
+    }
+    return { forward: walk.forward, right: walk.right, up: Math.max(-1, Math.min(1, up)), interact: walk.interact, yaw: this.yaw };
+  }
+
   /** Samples the current input. Consumes queued jump/interact presses. */
   sample(dt: number): MoveInput & { interact: boolean } {
     let forward = 0;

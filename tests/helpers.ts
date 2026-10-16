@@ -67,8 +67,9 @@ export function mulberry(seed: number) {
   };
 }
 
-/** A real World (in-memory store) for tests that need agents, doors or the helicopter. */
-export async function makeWorld(opts: { weatherSeed?: number } = {}) {
+/** A real World (in-memory store) for tests that need agents, doors, the drone or the elevator.
+ * The drone starts away (and stays away) unless the test asks otherwise. */
+export async function makeWorld(opts: { weatherSeed?: number; drone?: { startLanded?: boolean } } = {}) {
   const [{ World }, { Store }, { makeClock }] = await Promise.all([
     import('../apps/server/src/world/world.ts'),
     import('../apps/server/src/db.ts'),
@@ -79,6 +80,7 @@ export async function makeWorld(opts: { weatherSeed?: number } = {}) {
     weatherSeed: opts.weatherSeed ?? 3,
     joinPassword: null,
     store: new Store(':memory:'),
+    drone: { startLanded: false, firstArrivalMs: 24 * 3600_000, ...opts.drone },
   });
 }
 
@@ -92,4 +94,5 @@ export const TEST_SERVER_CONFIG = {
   weatherSeed: 5,
   dbPath: ':memory:',
   staticDir: null,
+  drone: { startLanded: false, firstArrivalMs: 24 * 3600_000 },
 };

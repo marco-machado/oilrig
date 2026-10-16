@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { PLAYER, type Vec3, findPlace, getLayout, heliBodyBoxes } from '@ocean-home/shared';
+import { DIMS, PLAYER, type Vec3, droneBodyBoxes, findPlace, getLayout } from '@ocean-home/shared';
 import { AGENT_DT, Agent, type TaskResult } from '../apps/server/src/agents/agent.ts';
 import { NavigationMesh } from '../apps/server/src/agents/navmesh.ts';
 import type { World } from '../apps/server/src/world/world.ts';
@@ -78,7 +78,7 @@ describe('agent navigation', () => {
       ['living-room', 'kitchen'],
       ['living-room', 'bedroom'],
       ['firepit', 'pool-deck'],
-      ['kitchen', 'dining'],
+      ['bedroom', 'pool-deck'],
       ['walkway-west', 'hammocks'],
     ];
     for (const [from, to] of routes) {
@@ -98,24 +98,23 @@ describe('agent navigation', () => {
     }
   });
 
-  it('walks around the parked helicopter and stops beside it', async () => {
-    world.sw.setHelicopter(0);
-    nav.setHelicopter(0);
+  it('walks around the parked drone and stops beside its cabin', async () => {
+    const stand = { position: [...DIMS.DRONE.pad] as Vec3, yaw: 0 };
+    world.sw.setDrone(stand);
+    nav.setDrone(stand);
     try {
       const a = spawn(place('terrace'), 'Spotter');
       const r = await settle(a, a.moveTo(place('helipad'), 'Helipad'));
       expect(r?.status).toBe('nearest');
       const [x, , z] = a.position;
-      for (const box of heliBodyBoxes(0)) {
-        const inside = Math.abs(x - box.center[0]) < box.half[0] && Math.abs(z - box.center[2]) < box.half[2];
-        expect(inside).toBe(false);
-      }
+      const cabin = droneBodyBoxes(stand.position, 0)[0];
+      expect(Math.abs(x - cabin.center[0]) < cabin.half[0] && Math.abs(z - cabin.center[2]) < cabin.half[2]).toBe(false);
       expect(Math.hypot(x - 42, z)).toBeLessThan(3.5);
       a.dispose();
       world.removeAgent(a.player);
     } finally {
-      world.sw.setHelicopter(null);
-      nav.setHelicopter(null);
+      world.sw.setDrone(null);
+      nav.setDrone(null);
     }
   });
 

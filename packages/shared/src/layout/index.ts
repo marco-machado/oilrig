@@ -1,5 +1,5 @@
 import { LayoutBuilder } from './builder.ts';
-import { HELIPAD, LANDING, LOWER, NORTH_STAIR, PAVILION, POOL, SWIM, TERRACE, TOWER } from './dims.ts';
+import { ELEVATOR, HELIPAD, LANDING, LOWER, NORTH_STAIR, PAVILION, POOL, SWIM, TERRACE, TOWER } from './dims.ts';
 import { buildFurniture } from './furniture.ts';
 import { buildHome } from './home.ts';
 import { buildRig } from './rig.ts';
@@ -37,8 +37,10 @@ export function getLayout(): Layout {
   b.place('boat-landing', 'Boat landing', [-16, LANDING.top, 21.8]);
   b.place('swim-platform', 'Swim platform', [-5, SWIM.top, 21]);
   b.place('firepit', 'Firepit lounge', [-9, TERRACE.top, 9.4]);
-  b.place('dining', 'Dining table', [-1.6, floor, -6.2]);
   b.place('hammocks', 'Hammock nets', [-16.5, LOWER.top, -16.3]);
+  const ex = (ELEVATOR.door.x0 + ELEVATOR.door.x1) / 2;
+  b.place('elevator-deck', 'Elevator (main deck)', [ex, ELEVATOR.stops[1], 19.1]);
+  b.place('elevator-landing', 'Elevator (boat landing)', [ex, ELEVATOR.stops[0], 19.3]);
 
   b.zone('helipad', 'helipad', [HELIPAD.x0, HELIPAD.top - 0.5, HELIPAD.z0], [HELIPAD.x1, HELIPAD.top + 4, HELIPAD.z1]);
 

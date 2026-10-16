@@ -91,43 +91,38 @@ export function buildHome(b: LayoutBuilder) {
     b.tube('roof-column', [x, TERRACE.top, z], [x, ceiling, z], 0.08, 'mullion', { collide: true });
   }
 
-  // Facades: doors on the south (terrace) and east (pool) sides; frosted glass at the bath.
+  // Facades: a sliding door on every side (two on the terrace side); frosted glass at the bath.
   const southDoors: Array<[number, number]> = [
     [-8, -5.6],
     [2, 4.4],
   ];
+  const northDoor: [number, number] = [-7.2, -4.8];
   const eastDoor: [number, number] = [-6, -3.6];
+  const westDoor: [number, number] = [-5.2, -2.8];
   facade(b, { axis: 'x', fixed: P.z1, from: P.x0, to: P.x1, openings: southDoors, frosted: [] });
-  facade(b, { axis: 'x', fixed: P.z0, from: P.x0, to: P.x1, openings: [], frosted: [[P.x0, -18]] });
-  facade(b, { axis: 'z', fixed: P.x0, from: P.z0, to: P.z1, openings: [], frosted: [[P.z0, -7]] });
+  facade(b, { axis: 'x', fixed: P.z0, from: P.x0, to: P.x1, openings: [northDoor], frosted: [[P.x0, -18]] });
+  facade(b, { axis: 'z', fixed: P.x0, from: P.z0, to: P.z1, openings: [westDoor], frosted: [[P.z0, -7]] });
   facade(b, { axis: 'z', fixed: P.x1, from: P.z0, to: P.z1, openings: [eastDoor], frosted: [] });
 
   const doorH = P.height - 0.12;
   const doorY = P.floor + doorH / 2 + 0.02;
-  southDoors.forEach(([a, c], i) => {
-    b.door({
-      id: `door-south-${i + 1}`,
-      name: i === 0 ? 'Living room sliding door' : 'Kitchen sliding door',
-      center: [(a + c) / 2, doorY, P.z1 + 0.07],
-      size: [c - a, doorH, 0.05],
-      openOffset: [-(c - a) + 0.12, 0, 0],
-    });
-  });
-  b.door({
-    id: 'door-east',
-    name: 'Pool sliding door',
-    center: [P.x1 + 0.07, doorY, (eastDoor[0] + eastDoor[1]) / 2],
-    size: [0.05, doorH, eastDoor[1] - eastDoor[0]],
-    openOffset: [0, 0, -(eastDoor[1] - eastDoor[0]) + 0.12],
-  });
+  // Panels hang just outside the glass line and slide over the fixed glass beside the opening.
+  const alongX = (id: string, name: string, [a, c]: [number, number], z: number, out: 1 | -1) =>
+    b.door({ id, name, center: [(a + c) / 2, doorY, z + out * 0.07], size: [c - a, doorH, 0.05], openOffset: [-(c - a) + 0.12, 0, 0], outward: [0, out] });
+  const alongZ = (id: string, name: string, [a, c]: [number, number], x: number, out: 1 | -1) =>
+    b.door({ id, name, center: [x + out * 0.07, doorY, (a + c) / 2], size: [0.05, doorH, c - a], openOffset: [0, 0, -(c - a) + 0.12], outward: [out, 0] });
+  alongX('door-south-1', 'Living room sliding door', southDoors[0], P.z1, 1);
+  alongX('door-south-2', 'Kitchen sliding door', southDoors[1], P.z1, 1);
+  alongX('door-north', 'North sliding door', northDoor, P.z0, -1);
+  alongZ('door-east', 'Pool sliding door', eastDoor, P.x1, 1);
+  alongZ('door-west', 'West sliding door', westDoor, P.x0, -1);
 
-  // Interior: bath enclosure (frosted) and a bedroom divider wall.
+  // Interior: the frosted bath enclosure.
   const iy = P.floor + P.height / 2;
   b.boxMinMax('frosted-glass', [-18 - GLASS_T / 2, P.floor, P.z0], [-18 + GLASS_T / 2, ceiling, -8.6], 'glassFrosted');
   b.boxMinMax('frosted-glass', [P.x0, P.floor, -7 - GLASS_T / 2], [-18, ceiling, -7 + GLASS_T / 2], 'glassFrosted');
   b.box('mullion', [-18, iy, -8.6], [0.12, P.height, 0.12], 'mullion', { collide: false });
   b.box('mullion', [-18, iy, -7], [0.12, P.height, 0.12], 'mullion', { collide: false });
-  b.boxMinMax('divider-wall', [-12.1, P.floor, P.z0], [-11.9, ceiling, -5.5], 'plaster', { surface: 'stone' });
 
   // Recessed downlights.
   for (let x = P.x0 + 2; x < P.x1; x += 4) {

@@ -12,6 +12,8 @@ export type MaterialId =
   | 'plaster'
   | 'mullion'
   | 'glass'
+  /** Thin clear glass drawn as a transparent surface (shows the sea behind it). */
+  | 'glassThin'
   | 'glassFrosted'
   | 'helideck'
   | 'rubber'
@@ -101,6 +103,8 @@ export interface DoorDef {
   size: Vec3;
   /** Offset applied to the panel when fully open. */
   openOffset: Vec3;
+  /** Unit vector pointing out of the building through the doorway (x, z). */
+  outward: readonly [number, number];
 }
 
 export interface ZoneDef {
@@ -150,22 +154,7 @@ export interface PropDef {
   rotationY?: number;
 }
 
-export type FurnitureKind =
-  | 'sofa'
-  | 'coffee-table'
-  | 'rug'
-  | 'dining-table'
-  | 'dining-chair'
-  | 'kitchen-island'
-  | 'kitchen-counter'
-  | 'bar-stool'
-  | 'bed'
-  | 'nightstand'
-  | 'bathtub'
-  | 'outdoor-sofa'
-  | 'firepit'
-  | 'sun-lounger'
-  | 'hammock-net';
+export type FurnitureKind = 'outdoor-sofa' | 'firepit' | 'sun-lounger' | 'hammock-net';
 
 /**
  * A piece of furniture. `position` is the centre of the footprint at floor level; `size` is

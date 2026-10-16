@@ -1,10 +1,11 @@
 import { NavMeshQuery, type NavMesh, type Obstacle, type TileCache, init as initRecast } from '@recast-navigation/core';
 import { generateTileCache } from '@recast-navigation/generators';
-import { PLAYER, type StaticWorld, type Vec3, heliBodyBoxes, staticTriangles } from '@ocean-home/shared';
+import { PLAYER, type StaticWorld, type Vec3, droneBodyBoxes, staticTriangles } from '@ocean-home/shared';
 
 // Navigation mesh for AI agents, generated from the same colliders the character
 // controller collides with. Doorways are left open (agents open doors as they reach
-// them), and the parked helicopter is a dynamic obstacle.
+// them), the parked drone is a dynamic obstacle, and the elevator is left out (agents take
+// the stairs).
 
 const CS = 0.1;
 const CH = 0.05;
@@ -28,7 +29,7 @@ export class NavigationMesh {
   readonly navMesh: NavMesh;
   readonly query: NavMeshQuery;
   private readonly tileCache: TileCache;
-  private heli: Obstacle[] = [];
+  private drone: Obstacle[] = [];
 
   private constructor(navMesh: NavMesh, tileCache: TileCache) {
     this.navMesh = navMesh;
@@ -39,7 +40,7 @@ export class NavigationMesh {
   static async build(sw: StaticWorld): Promise<NavigationMesh> {
     recastReady ??= initRecast();
     await recastReady;
-    const soup = staticTriangles(sw, (info) => !info.doorId && info.kind !== 'helicopter');
+    const soup = staticTriangles(sw, (info) => !info.doorId && info.kind !== 'drone' && info.kind !== 'elevator-car');
     const result = generateTileCache(soup.positions, soup.indices, {
       bounds: [BOUNDS[0] as [number, number, number], BOUNDS[1] as [number, number, number]],
       cs: CS,
@@ -65,18 +66,19 @@ export class NavigationMesh {
     for (let i = 0; i < 64; i++) if (this.tileCache.update(this.navMesh).upToDate) break;
   }
 
-  /** Blocks (or frees) the pad area taken by the parked helicopter. */
-  setHelicopter(padYaw: number | null) {
-    for (const o of this.heli) this.tileCache.removeObstacle(o);
-    this.heli = [];
-    if (padYaw !== null) {
-      for (const box of heliBodyBoxes(padYaw)) {
+  /** Blocks (or frees) the area taken by the parked drone. */
+  setDrone(stand: { position: Vec3; yaw: number } | null) {
+    for (const o of this.drone) this.tileCache.removeObstacle(o);
+    this.drone = [];
+    if (stand !== null) {
+      // Only the cabin: the rotor ducts are overhead, and people walk under them.
+      for (const box of droneBodyBoxes(stand.position, stand.yaw).slice(0, 1)) {
         const r = this.tileCache.addBoxObstacle(
           { x: box.center[0], y: box.center[1] - box.half[1] - 0.2, z: box.center[2] },
           { x: box.half[0] + 0.1, y: box.half[1] + 0.4, z: box.half[2] + 0.1 },
           box.yaw,
         );
-        if (r.success) this.heli.push(r.obstacle);
+        if (r.success) this.drone.push(r.obstacle);
       }
     }
     this.flush();

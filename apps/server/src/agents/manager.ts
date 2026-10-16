@@ -50,9 +50,9 @@ export class AgentManager {
     world.on('chat', (e) => {
       for (const a of this.agents.values()) a.hear(e);
     });
-    world.on('helicopter', (s) => {
-      if (s.phase === 'landed') this.nav.setHelicopter(s.padYaw);
-      else this.nav.setHelicopter(null);
+    world.on('drone', (s) => {
+      if (s.phase === 'landed') this.nav.setDrone({ position: s.from, yaw: s.padYaw });
+      else this.nav.setDrone(null);
     });
     world.on('displaced', (p) => {
       const a = this.agents.get(p.info.id);
@@ -62,7 +62,8 @@ export class AgentManager {
 
   static async create(world: World, limits: Partial<AgentLimits> = {}) {
     const nav = await NavigationMesh.build(world.sw);
-    if (world.sw.helicopterParked) nav.setHelicopter(world.heli.state.padYaw);
+    const s = world.drone.state;
+    if (world.sw.droneParked) nav.setDrone({ position: s.from, yaw: s.padYaw });
     return new AgentManager(world, nav, { perKey: 3, total: 24, idleMs: 30 * 60_000, ...limits });
   }
 
@@ -206,7 +207,7 @@ export class AgentManager {
   locate(id: string): Vec3 | null {
     const o = this.ctx.objects.find((q) => q.id === id);
     if (o) return o.points[0];
-    if (id === 'helicopter') return this.world.helicopterPose().position;
+    if (id === 'drone') return this.world.dronePose().position;
     const p = this.world.online().find((q) => q.info.id === id || q.info.name.toLowerCase() === id.toLowerCase());
     if (p) return p.pose.p;
     const place = this.world.layout.places.find((q) => q.id === id);

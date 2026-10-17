@@ -107,7 +107,14 @@ export interface FlightHud {
   speed: number;
   climb: number;
   heading: number;
+  /** Body attitude (radians) for the horizon. */
+  pitch: number;
+  roll: number;
+  /** Rotor speed as a fraction of hover rpm. */
+  rotor: number;
   grounded: boolean;
+  /** Rotors coming up to speed for a lift-off. */
+  spooling: boolean;
   seats: string;
   /** Flying itself home: what it is doing and how far it has to go (m). */
   autopilot: { stage: string; distance: number } | null;
@@ -186,7 +193,20 @@ export class UI {
   private readonly chatBox = el('div', { class: 'oh-chatbox' }, this.chatInput, el('div', { class: 'oh-chatbox__hint', 'aria-hidden': 'true' }, el('span', {}, kbd('Enter'), 'send'), el('span', {}, kbd('Esc'), 'cancel')));
   private readonly aboard = el('div', { class: 'oh-aboard oh-glass oh-glass--strong' });
   private readonly flight = el('div', { class: 'oh-flight' });
-  private flightBuilt: { values: HTMLElement[]; hint: HTMLElement; mode: string; ap: HTMLElement; apStage: HTMLElement; apDistance: HTMLElement } | null = null;
+  private flightBuilt: {
+    values: HTMLElement[];
+    hint: HTMLElement;
+    mode: string;
+    ap: HTMLElement;
+    apStage: HTMLElement;
+    apDistance: HTMLElement;
+    horizon: HTMLElement;
+    state: HTMLElement;
+    rotorBar: HTMLElement;
+    attitude: string;
+    rotor: number;
+    flightState: string;
+  } | null = null;
   private players: PlayerInfo[] = [];
   private connected = false;
   private self: PlayerInfo | null = null;
@@ -672,6 +692,17 @@ export class UI {
     }
     if (!this.flightBuilt) {
       const gauges = el('div', { class: 'oh-gauges oh-glass' });
+      // Attitude indicator: a round window on the horizon, which banks and slides with the cabin.
+      const horizon = el('div', { class: 'oh-horizon__disc' }, el('div', { class: 'oh-horizon__sky' }), el('div', { class: 'oh-horizon__line' }), el('div', { class: 'oh-horizon__ticks' }));
+      const state = el('span', { class: 'oh-horizon__state' }, '');
+      const rotorBar = el('i', {});
+      const horizonBox = el(
+        'div',
+        { class: 'oh-gauge oh-gauge--horizon' },
+        el('div', { class: 'oh-horizon' }, horizon, el('div', { class: 'oh-horizon__wings', 'aria-hidden': 'true' })),
+        el('div', { class: 'oh-horizon__side' }, state, el('span', { class: 'oh-rotor' }, el('span', { class: 'oh-rotor__track' }, rotorBar), el('span', { class: 'oh-rotor__label' }, 'RPM'))),
+      );
+      gauges.append(horizonBox);
       const values: HTMLElement[] = [];
       for (const [label, unit] of [
         ['ALT', 'm'],
@@ -690,7 +721,7 @@ export class UI {
       const ap = el('div', { class: 'oh-autopilot oh-glass', role: 'status' }, el('span', { class: 'oh-autopilot__dot', 'aria-hidden': 'true' }), el('b', {}, 'Autopilot'), apStage, apDistance);
       ap.hidden = true;
       this.flight.append(ap, gauges, hint);
-      this.flightBuilt = { values, hint, mode: '', ap, apStage, apDistance };
+      this.flightBuilt = { values, hint, mode: '', ap, apStage, apDistance, horizon, state, rotorBar, attitude: '', rotor: -1, flightState: '' };
     }
     reveal(this.flight, true);
     const b = this.flightBuilt;
@@ -700,13 +731,32 @@ export class UI {
     setText(spd, String(Math.round(f.speed * 3.6)));
     setText(vs, `${f.climb >= 0 ? '+' : ''}${f.climb.toFixed(1)}`);
     setText(hdg, String(Math.round(((f.heading % 360) + 360) % 360)).padStart(3, '0'));
+    // Horizon: nose up slides the line down; a right bank (roll < 0) tilts it anticlockwise.
+    const rollDeg = (-f.roll * 180) / Math.PI;
+    const pitchPx = Math.max(-26, Math.min(26, (f.pitch * 180) / Math.PI * 1.6));
+    const attitude = `${rollDeg.toFixed(1)}|${pitchPx.toFixed(1)}`;
+    if (attitude !== b.attitude) {
+      b.attitude = attitude;
+      b.horizon.style.transform = `rotate(${rollDeg.toFixed(1)}deg) translateY(${pitchPx.toFixed(1)}px)`;
+    }
+    const rotor = Math.round(Math.min(1, Math.max(0, f.rotor)) * 100);
+    if (rotor !== b.rotor) {
+      b.rotor = rotor;
+      b.rotorBar.style.width = `${rotor}%`;
+    }
+    const flightState = f.autopilot ? 'AUTO' : f.spooling ? 'SPOOL' : f.grounded ? 'PARKED' : f.speed > 3 ? (Math.abs(f.climb) > 1.2 ? (f.climb > 0 ? 'CLIMB' : 'DESCENT') : 'CRUISE') : Math.abs(f.climb) > 0.8 ? (f.climb > 0 ? 'CLIMB' : 'DESCENT') : 'HOVER';
+    if (flightState !== b.flightState) {
+      b.flightState = flightState;
+      setText(b.state, flightState);
+      b.state.dataset.state = flightState.toLowerCase();
+    }
     if (f.autopilot) {
       setText(b.apStage, f.autopilot.stage);
       const d = f.autopilot.distance;
       setText(b.apDistance, d >= 1000 ? `${(d / 1000).toFixed(1)} km` : `${Math.round(d)} m`);
     }
     reveal(b.ap, !!f.autopilot);
-    const mode = `${f.pilot}|${f.grounded}|${f.seats}|${!!f.autopilot}|${f.atPad}`;
+    const mode = `${f.pilot}|${f.grounded}|${f.spooling}|${f.seats}|${!!f.autopilot}|${f.atPad}`;
     if (mode !== b.mode) {
       b.mode = mode;
       const home: Array<[string | null, string]> = f.atPad ? [] : [['H', 'fly home']];
@@ -718,7 +768,7 @@ export class UI {
               [null, 'Mouse looks around'],
             ]
           : f.grounded
-            ? [['Space', 'lift off'], ...home, ['E', 'climb out']]
+            ? [['Space', f.spooling ? 'hold to lift off' : 'lift off'], ...home, ['E', 'climb out']]
             : [['W A S D', 'fly'], [null, 'Mouse steer'], ['Space', 'climb'], ['Shift / C', 'descend'], ...home]
         : f.grounded
           ? [['E', 'climb out']]

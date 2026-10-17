@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import { NeutralToneMapping, PerspectiveCamera, type PointLight, Scene, Timer, Vector3, WebGPURenderer } from 'three/webgpu';
+import { Euler, NeutralToneMapping, PerspectiveCamera, type PointLight, Quaternion, Scene, Timer, Vector3, WebGPURenderer } from 'three/webgpu';
 import { SunLight } from 'three/addons/lights/SunLight.js';
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js';
 import { StableClusteredLighting } from './render/stableClusteredLighting.ts';
@@ -55,7 +55,7 @@ import { QUALITY, loadQualityName, saveQualityName } from './render/quality.ts';
 import { U } from './state.ts';
 import { UI, loadSettings } from './ui/ui.ts';
 import { Doors } from './world/doors.ts';
-import { Drone } from './world/drone.ts';
+import { Drone, swayPose } from './world/drone.ts';
 import { ElevatorView } from './world/elevator.ts';
 import { buildFurniture } from './world/furniture.ts';
 import { Tender } from './world/tender.ts';
@@ -309,6 +309,7 @@ async function boot() {
         else ui.addChat({ id: 'local', from: 'local', name: 'You', text, t: Date.now() });
       },
       onSettings(s, qualityChanged) {
+        baseFov = s.fov;
         camera.fov = s.fov;
         camera.updateProjectionMatrix();
         controls.settings.sensitivity = s.sensitivity;
@@ -420,12 +421,12 @@ async function boot() {
     const seat = DIMS.DRONE.seats[mySeat ?? 0];
     const side = seat[0] < 0 ? -1 : 1;
     const cands: Array<[number, number]> = [
-      [side * 1.9, seat[2]],
-      [-side * 1.9, seat[2]],
-      [0, 3.0],
-      [0, -3.1],
-      [side * 1.9, 1.6],
-      [-side * 1.9, -1.6],
+      [side * 2.1, seat[2]],
+      [-side * 2.1, seat[2]],
+      [0, 3.4],
+      [0, -3.7],
+      [side * 2.1, 1.8],
+      [-side * 2.1, -1.8],
     ];
     const c = Math.cos(pose.yaw);
     const s = Math.sin(pose.yaw);
@@ -731,6 +732,16 @@ async function boot() {
   let simTime = 0;
   let introAngle = 0.6;
   let lastDrone: (DronePose & { grounded: boolean }) | null = null;
+  /** The seated view: the cabin's attitude, the look around it, and the rotor shake. */
+  const bodyQ = new Quaternion();
+  const viewQ = new Quaternion();
+  const shakeQ = new Quaternion();
+  const bodyE = new Euler();
+  const viewE = new Euler();
+  const shakeE = new Euler();
+  let baseFov = settings.fov;
+  /** Extra field of view at speed in the drone, eased. */
+  let fovKick = 0;
   let uiTick = 0;
   const stats = { frames: 0, gpuReady: false };
   const doorTargets: Interactable[] = layout.doors.map((d) => ({ id: d.id, point: d.center, reach: 3.2 }));
@@ -864,18 +875,33 @@ async function boot() {
       const pose = currentDrone(realNow, renderT);
       if (input.interact) climbOut(pose);
       if (player.seated && mySeat !== null) {
-        const eye = seatPosition(pose, mySeat, true);
+        // The seat follows the cabin's bank and pitch (and its hover sway), and so does the
+        // view: strapped in, the pilot sees the horizon tilt. A fraction is left out so the
+        // mouse still feels in charge of where the nose points.
+        const shown = swayPose(pose, simTime);
+        const eye = seatPosition(shown, mySeat, true);
         camera.position.set(eye[0], eye[1], eye[2]);
-        camera.rotation.set(controls.pitch, viewYaw(pose), 0, 'YXZ');
+        bodyQ.setFromEuler(bodyE.set(shown.pitch * 0.6, shown.yaw, shown.roll * 0.8, 'YXZ'));
+        viewQ.setFromEuler(viewE.set(controls.pitch, viewYaw(pose) - shown.yaw, 0, 'YXZ'));
+        camera.quaternion.copy(bodyQ).multiply(viewQ);
         player.motor.teleport([eye[0], eye[1] - DIMS.DRONE.seatedEye - 0.45, eye[2]]);
+        // A touch of rotor shake, and a wider view at speed.
+        const speed = Math.hypot(shown.velocity[0], shown.velocity[2]);
+        if (!shown.grounded) {
+          const shake = 0.0012 * Math.min(1, shown.rotor) * (0.6 + 0.4 * Math.min(1, speed / 15));
+          shakeE.set(Math.sin(simTime * 61) * shake, Math.sin(simTime * 47 + 1) * shake, Math.sin(simTime * 53 + 2) * shake);
+          camera.quaternion.multiply(shakeQ.setFromEuler(shakeE));
+        }
+        fovKick += ((shown.grounded ? 0 : 7 * Math.min(1, speed / DIMS.DRONE.maxSpeed)) - fovKick) * Math.min(1, dt * 3);
       }
       ui.setPrompt(null);
     } else {
+      fovKick += (0 - fovKick) * Math.min(1, dt * 3);
       // What can be operated from here: doors, elevator buttons, the drone if it is landed.
       const targets = [...doorTargets, ...liftTargets];
       if (inCar(liftNow.y, player.position)) targets.push({ id: 'lift-car', point: carPanel(liftNow.y), reach: 2.4, facing: 0.35 });
       const dp = lastDrone;
-      if (dp && dp.visible && dp.grounded && crew.some((c) => c === null)) targets.push({ id: 'drone', point: [dp.position[0], dp.position[1] + 1.3, dp.position[2]], reach: 6.5, facing: 0.45 });
+      if (dp && dp.visible && dp.grounded && crew.some((c) => c === null)) targets.push({ id: 'drone', point: [dp.position[0], dp.position[1] + 1.6, dp.position[2]], reach: 8, facing: 0.45 });
       player.targets = targets;
       player.update(dt);
       doors.setFocus(player.focus?.startsWith('door-') ? player.focus : null);
@@ -890,12 +916,18 @@ async function boot() {
       }
       ui.setPrompt(promptFor(player.focus, liftNow));
     }
+    const fovNow = Math.round((baseFov + fovKick) * 10) / 10;
+    if (fovNow !== camera.fov) {
+      camera.fov = fovNow;
+      camera.updateProjectionMatrix();
+    }
     prof.end('player');
 
     // Drone: draw it, its sound, and its instruments for whoever sits in it.
     prof.begin('drone');
     const dpose = currentDrone(realNow, renderT);
     lastDrone = dpose;
+    const shownPose = swayPose(dpose, simTime);
     const under = dpose.visible ? ground(dpose.position) : null;
     if (dpose.visible) {
       // Out on the ring where the spray billows, beyond the landing light's spot under the drone.
@@ -903,8 +935,8 @@ async function boot() {
       for (const [dx, dz] of RING) e += lampLightAt(lamps, lampProbe.set(dpose.position[0] + dx * 2, (under ?? 0) + 0.8, dpose.position[2] + dz * 2));
       drone.sprayLamplight = e / RING.length;
     }
-    drone.update(dpose, dt, under, crew.some((c) => c !== null));
-    sound.setDrone(dpose);
+    drone.update(shownPose, dt, under, crew.some((c) => c !== null));
+    sound.setDrone(dpose, player.seated ? Math.hypot(dpose.velocity[0], dpose.velocity[1], dpose.velocity[2]) : 0);
     ui.setFlight(
       player.seated && mySeat !== null
         ? {
@@ -914,7 +946,11 @@ async function boot() {
             speed: Math.hypot(dpose.velocity[0], dpose.velocity[2]),
             climb: dpose.velocity[1],
             heading: (-dpose.yaw * 180) / Math.PI,
+            pitch: dpose.pitch,
+            roll: dpose.roll,
+            rotor: dpose.rotor,
             grounded: dpose.grounded,
+            spooling: !!flight?.spooling,
             seats: `Pilot: ${nameOf(crew[0]) ?? 'nobody'} · ${crew.filter(Boolean).length} aboard`,
             autopilot: autopilot ? { stage: AUTOPILOT_STAGE[autopilot.stage] ?? 'Autopilot', distance: autopilot.distanceHome(dpose.position) } : null,
             atPad: dpose.grounded && Math.hypot(dpose.position[0] - DIMS.DRONE.pad[0], dpose.position[2] - DIMS.DRONE.pad[2]) < 2.5,
@@ -963,9 +999,9 @@ async function boot() {
     rain.update();
     prof.end('world');
     prof.time('avatars', () => {
-      const seated = new Map<string, { position: Vec3; yaw: number }>();
+      const seated = new Map<string, { position: Vec3; yaw: number; pitch: number; roll: number }>();
       crew.forEach((id, i) => {
-        if (id && id !== selfId) seated.set(id, { position: seatPosition(dpose, i), yaw: dpose.yaw });
+        if (id && id !== selfId) seated.set(id, { position: seatPosition(shownPose, i, -DIMS.DRONE.seatedHips), yaw: shownPose.yaw, pitch: shownPose.pitch, roll: shownPose.roll });
       });
       avatars.update(online ? net.serverNow() : Date.now(), dt, seated);
     });

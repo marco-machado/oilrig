@@ -202,7 +202,7 @@ function placeAt(s: DroneState, now: number): { p: Vec3; yaw: number } {
 function rotorAt(s: DroneState, now: number): number {
   const e = now - s.t0;
   if (s.phase === 'away') return 0;
-  if (s.phase === 'piloted') return 0.4;
+  if (s.phase === 'piloted') return ROTOR_IDLE;
   if (s.phase !== 'landed') return 1;
   const down = 1 - smooth(e / DRONE_TIMING.spinDownMs);
   const up = smooth(1 - (s.until - now) / DRONE_TIMING.spinUpMs);
@@ -243,7 +243,7 @@ export function tiltFrom(acc: Vec3, vel: Vec3, yaw: number) {
   const ar = acc[0] * rx + acc[2] * rz;
   const vf = vel[0] * fx + vel[2] * fz;
   const cl = (v: number, m: number) => Math.max(-m, Math.min(m, v));
-  return { pitch: cl(-af * 0.045 - vf * 0.004, 0.35), roll: cl(-ar * 0.05, 0.35) };
+  return { pitch: cl(-af * 0.042 - vf * 0.004, 0.36), roll: cl(-ar * 0.05, 0.36) };
 }
 
 export function altitudeOf(p: Vec3) {
@@ -257,19 +257,49 @@ export function droneBodyBoxes(position: Vec3, yaw: number): Array<{ center: Vec
   const s = Math.sin(yaw);
   // Body frame (x right, z back) to world, rotating counter-clockwise by yaw.
   const at = (x: number, y: number, z: number): Vec3 => [position[0] + x * c + z * s, position[1] + y, position[2] - x * s + z * c];
-  const boxes = [{ center: at(0, 1.25, 0.05), half: [1.0, 0.95, 1.95] as Vec3, yaw }];
+  const B = DRONE.body;
+  const boxes = [{ center: at(0, (B.roof + B.belly) / 2, (B.nose + B.tail) / 2), half: [B.halfWidth, (B.roof - B.belly) / 2, (B.tail - B.nose) / 2] as Vec3, yaw }];
   for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) boxes.push({ center: at(sx * DRONE.armX, DRONE.ductY, sz * DRONE.armZ), half: [DRONE.ductRadius + 0.08, 0.18, DRONE.ductRadius + 0.08], yaw });
+    for (const sz of [-1, 1]) boxes.push({ center: at(sx * DRONE.armX, DRONE.ductY, sz * DRONE.armZ), half: [DRONE.ductRadius + 0.1, 0.22, DRONE.ductRadius + 0.1], yaw });
   }
   return boxes;
 }
 
-/** World position of a seat's cushion and the eye above it. */
-export function seatPosition(pose: { position: Vec3; yaw: number }, seat: number, eye = false): Vec3 {
+/** Attitude of the drone: yaw, then pitch, then roll (the renderer's 'YXZ' order). */
+export interface Attitude {
+  yaw: number;
+  pitch?: number;
+  roll?: number;
+}
+
+/** A body-frame point (x right, y up, z back) placed in the world for an attitude. */
+export function bodyToWorld(origin: Vec3, local: Vec3, att: Attitude): Vec3 {
+  const p = att.pitch ?? 0;
+  const r = att.roll ?? 0;
+  // Roll about z, then pitch about x, then yaw about y.
+  const cr = Math.cos(r);
+  const sr = Math.sin(r);
+  const x1 = local[0] * cr - local[1] * sr;
+  const y1 = local[0] * sr + local[1] * cr;
+  const z1 = local[2];
+  const cp = Math.cos(p);
+  const sp = Math.sin(p);
+  const y2 = y1 * cp - z1 * sp;
+  const z2 = y1 * sp + z1 * cp;
+  const cy = Math.cos(att.yaw);
+  const sy = Math.sin(att.yaw);
+  return [origin[0] + x1 * cy + z2 * sy, origin[1] + y2, origin[2] - x1 * sy + z2 * cy];
+}
+
+/**
+ * World position of a seat's cushion, or of a point `dy` above it in the body frame (the eye
+ * at DRONE.seatedEye, the feet of a sitting avatar at -DRONE.seatedHips). Follows the body's
+ * pitch and roll when the pose has them, so the seat stays put inside a banking cabin.
+ */
+export function seatPosition(pose: { position: Vec3 } & Attitude, seat: number, dy: number | boolean = 0): Vec3 {
   const [x, y, z] = DRONE.seats[seat];
-  const c = Math.cos(pose.yaw);
-  const s = Math.sin(pose.yaw);
-  return [pose.position[0] + x * c + z * s, pose.position[1] + y + (eye ? DRONE.seatedEye : 0), pose.position[2] - x * s + z * c];
+  const up = dy === true ? DRONE.seatedEye : dy === false ? 0 : dy;
+  return bodyToWorld(pose.position, [x, y + up, z], pose);
 }
 
 export function padOccupied(positions: Iterable<Vec3>): boolean {
@@ -493,9 +523,10 @@ export class DroneScheduler {
 /** Whether the drone could fly straight from a to b (skid points) without touching the platform. */
 export function droneClearPath(sw: StaticWorld, a: Vec3, b: Vec3): boolean {
   const { R, world, info } = sw;
-  const shape = new R.Cuboid(4.2, 1.2, 4.2);
+  const half = Math.max(BODY_HALF.x, BODY_HALF.z) + 0.1;
+  const shape = new R.Cuboid(half, BODY_HALF.y + 0.05, half);
   const d = { x: b[0] - a[0], y: b[1] - a[1], z: b[2] - a[2] };
-  const hit = world.castShape({ x: a[0], y: a[1] + 1.3, z: a[2] }, { x: 0, y: 0, z: 0, w: 1 }, d, shape, 0, 1, true, undefined, undefined, undefined, undefined, (c) => {
+  const hit = world.castShape({ x: a[0], y: a[1] + BODY_HALF.y + 0.05, z: a[2] }, { x: 0, y: 0, z: 0, w: 1 }, d, shape, 0, 1, true, undefined, undefined, undefined, undefined, (c) => {
     const i = info.get(c.handle);
     return !!i && i.kind !== 'drone';
   });
@@ -516,7 +547,10 @@ export interface DroneInput {
 }
 
 /** Skids to duct tops, out to the nav lights. */
-const BODY_HALF = { x: 4.1, y: (DRONE.ductY + 0.25) / 2, z: 3.95 };
+const BODY_HALF = { x: DRONE.armX + DRONE.ductRadius + 0.2, y: (DRONE.ductY + 0.3) / 2, z: DRONE.armZ + DRONE.ductRadius + 0.2 };
+/** Idle rpm on the ground, and the rpm the rotors must reach before the skids leave it. */
+const ROTOR_IDLE = 0.35;
+const ROTOR_LIFT = 0.8;
 
 /**
  * Arcade multicopter flown by its pilot's browser: velocity follows the stick with limited
@@ -532,10 +566,17 @@ export class DroneFlight {
   yaw = 0;
   pitch = 0;
   roll = 0;
-  rotor = 0.4;
+  rotor = ROTOR_IDLE;
   grounded = true;
+  /** Seconds the skids have been off the ground (0 while landed). */
+  airborne = 0;
   private ax = 0;
   private az = 0;
+
+  /** Whether the rotors are still coming up to speed for a lift-off the pilot has asked for. */
+  get spooling() {
+    return this.grounded && this.rotor < ROTOR_LIFT && this.rotor > ROTOR_IDLE + 0.02;
+  }
 
   constructor(sw: StaticWorld, start: Vec3, yaw: number) {
     this.sw = sw;
@@ -578,8 +619,10 @@ export class DroneFlight {
       iz /= il;
     }
     const up = Math.max(-1, Math.min(1, input.up));
-    // On the ground it only lifts off; sideways input waits until it is airborne.
-    const lifting = up > 0.05;
+    // On the ground it only lifts off, and only once the rotors have spooled up to lift rpm;
+    // sideways input waits until it is airborne.
+    const asking = up > 0.05;
+    const lifting = asking && (!this.grounded || this.rotor >= ROTOR_LIFT);
     const flying = !this.grounded || lifting;
     const tx = flying ? ix * DRONE.maxSpeed : 0;
     const tz = flying ? iz * DRONE.maxSpeed : 0;
@@ -587,9 +630,11 @@ export class DroneFlight {
     // Gentle on the last metres down, like a pilot easing it onto the deck.
     const below = this.groundBelow(8);
     if (ty < 0 && below !== null) ty = Math.max(ty, -Math.max(0.6, below * 0.9));
-    // Accelerates briskly and brakes harder still, so it stops where the pilot lets go.
-    const braking = Math.hypot(tx, tz) < Math.hypot(this.velocity.x, this.velocity.z) - 0.5;
-    const ah = this.grounded ? 3 : braking ? 11 : 7;
+    // Accelerates briskly and brakes harder, so it stops near where the pilot lets go, with
+    // enough give that the stop reads as a heavy machine settling rather than a cut.
+    const hs = Math.hypot(this.velocity.x, this.velocity.z);
+    const braking = Math.hypot(tx, tz) < hs - 0.5;
+    const ah = this.grounded ? 3 : braking ? 9 : 6.5;
     const dvx = tx - this.velocity.x;
     const dvz = tz - this.velocity.z;
     const dl = Math.hypot(dvx, dvz);
@@ -599,7 +644,7 @@ export class DroneFlight {
     this.velocity.x += dvx * k;
     this.velocity.z += dvz * k;
     const dvy = ty - this.velocity.y;
-    this.velocity.y += Math.sign(dvy) * Math.min(Math.abs(dvy), 5 * dt);
+    this.velocity.y += Math.sign(dvy) * Math.min(Math.abs(dvy), 4.5 * dt);
     if (this.grounded && !lifting) this.velocity.y = Math.min(this.velocity.y, 0);
     // Sea and ceiling limits.
     if (this.position.y < DRONE.minSeaAltitude && this.velocity.y < 0 && below === null) this.velocity.y = 0;
@@ -631,13 +676,16 @@ export class DroneFlight {
     if (this.grounded) {
       this.velocity.x *= Math.max(0, 1 - 6 * dt);
       this.velocity.z *= Math.max(0, 1 - 6 * dt);
+      this.airborne = 0;
+    } else {
+      this.airborne += dt;
     }
     this.sync();
 
     // Lean into the acceleration (smoothed), spin the rotors with the effort.
     const ax = (this.velocity.x - prevVx) / dt;
     const az = (this.velocity.z - prevVz) / dt;
-    const s = Math.min(1, 6 * dt);
+    const s = Math.min(1, 5 * dt);
     this.ax += (ax - this.ax) * s;
     this.az += (az - this.az) * s;
     const tilt = tiltFrom([this.ax, 0, this.az], [this.velocity.x, 0, this.velocity.z], this.yaw);
@@ -647,8 +695,12 @@ export class DroneFlight {
       this.pitch *= 0.8;
       this.roll *= 0.8;
     }
-    const effort = this.grounded ? 0.4 : 0.85 + 0.1 * Math.max(0, up) + 0.08 * Math.hypot(this.velocity.x, this.velocity.z) / DRONE.maxSpeed;
-    this.rotor += (Math.min(1.1, effort) - this.rotor) * Math.min(1, 2.5 * dt);
+    // On the ground the rotors idle, or spool up for a lift-off the pilot asks for; in the air
+    // they work harder for a climb and for speed.
+    const speed = Math.hypot(this.velocity.x, this.velocity.z);
+    const effort = this.grounded ? (asking ? 1.0 : ROTOR_IDLE) : 0.85 + 0.1 * Math.max(0, up) + (0.1 * speed) / DRONE.maxSpeed;
+    const rate = this.grounded ? (asking ? 2.2 : 1.6) : 2.5;
+    this.rotor += (Math.min(1.1, effort) - this.rotor) * Math.min(1, rate * dt);
   }
 
   /** Clearance under the skids, if anything solid is within `max` metres. */

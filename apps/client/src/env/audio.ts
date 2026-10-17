@@ -42,6 +42,8 @@ export class SoundEngine {
   private readonly lastStep = new Map<string, number>();
   private drone: LoopVoice | null = null;
   private lift: LoopVoice | null = null;
+  /** Speed through the air aboard the drone: wind rush in the cabin. */
+  private slipstream = 0;
   /** Inside the drone cabin: its own hum is close and muffled, the outside is quieter. */
   private seated = false;
   private loaded: Promise<void> | null = null;
@@ -178,10 +180,11 @@ export class SoundEngine {
 
     this.windWander += (Math.random() - 0.5) * dt * 3;
     this.windWander *= 0.995;
-    const ws = o.windSpeed;
+    // Aboard the drone the slipstream adds to the wind, deeper and steadier than a gust.
+    const ws = o.windSpeed + this.slipstream * 0.7;
     const exposure = 0.55 + 0.45 * (1 - near);
     this.windGain.gain.setTargetAtTime(Math.min(0.5, (ws / 18) ** 2 * 0.6) * exposure, t, 0.4);
-    this.windFilter.frequency.setTargetAtTime(380 + ws * 25 + this.windWander * 120, t, 0.6);
+    this.windFilter.frequency.setTargetAtTime(380 + ws * 25 + this.windWander * 120 - this.slipstream * 6, t, 0.6);
 
     this.rainGain.gain.setTargetAtTime(o.rain * (o.indoors ? 0.35 : 0.22), t, 0.5);
     this.rainFilter.type = o.indoors ? 'lowpass' : 'highpass';
@@ -258,11 +261,15 @@ export class SoundEngine {
     this.seated = seated;
   }
 
-  /** The drone: four ducted rotors, pitched by rotor speed, placed in 3D with Doppler. */
-  setDrone(pose: DronePose | null) {
+  /**
+   * The drone: four ducted rotors, pitched by rotor speed, placed in 3D with Doppler.
+   * `airspeed` is the listener's own speed aboard it (0 when not aboard): the slipstream.
+   */
+  setDrone(pose: DronePose | null, airspeed = 0) {
     const ctx = this.ctx;
     if (!ctx) return;
     const t = ctx.currentTime;
+    this.slipstream = airspeed;
     if (!pose || !pose.visible || pose.rotor < 0.01) {
       this.drone?.gain.gain.setTargetAtTime(0, t, 0.4);
       return;

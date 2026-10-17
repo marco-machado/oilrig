@@ -79,38 +79,43 @@ export const RAIL_HEIGHT = 1.1;
 export const RAIL_GUARD = 0.3;
 
 /**
- * The platform's passenger drone: a four-seat electric quadcopter with ducted rotors.
+ * The platform's passenger drone: a four-seat electric multicopter with ducted rotors, the
+ * size of a small air taxi (10.4 m across the ducts, 5.4 m of fuselage).
  * Body frame: x right, y up from the skids, z towards the tail (nose at -z).
  */
 export const DRONE = {
   pad: [42, 20, 0] as const,
   /**
    * Duct (rotor) centres in the body frame: (±armX, ductY, ±armZ). Nothing on the ducts hangs
-   * below 2.61 (the motors), clear of the top of a jump (1.80 + 0.76): people walk and jump under them.
+   * below 2.9 (the motors), clear of the top of a jump (1.80 + 0.76): people walk and jump under them.
    */
-  armX: 2.9,
-  armZ: 2.7,
-  ductY: 2.8,
-  ductRadius: 1.15,
+  armX: 3.7,
+  armZ: 3.45,
+  ductY: 3.15,
+  ductRadius: 1.5,
   blades: 3,
   /** Propeller revolutions per second at hover rpm. */
-  rotorHz: 26,
+  rotorHz: 19,
+  /** Fuselage: nose and tail tips along z, widest half-width, roof and belly heights above the skids. */
+  body: { nose: -2.85, tail: 2.55, halfWidth: 1.22, roof: 2.32, belly: 0.74, floor: 0.78 } as const,
   /** Nobody may stand this close to the pad centre while it lands. */
-  clearRadius: 7,
+  clearRadius: 8.5,
   /** Seats in the body frame (cushion top): pilot front left, then front right, rear left, rear right. */
   seats: [
-    [-0.47, 0.95, -0.42],
-    [0.47, 0.95, -0.42],
-    [-0.47, 0.95, 0.62],
-    [0.47, 0.95, 0.62],
+    [-0.56, 1.22, -0.62],
+    [0.56, 1.22, -0.62],
+    [-0.56, 1.22, 0.58],
+    [0.56, 1.22, 0.58],
   ] as ReadonlyArray<readonly [number, number, number]>,
   /** Eye height above the seat cushion. */
   seatedEye: 0.78,
+  /** Hips above the feet of a seated avatar (its root sits this far below the cushion). */
+  seatedHips: 0.87,
   /** Flight envelope (pilot input). */
-  maxSpeed: 24,
-  maxClimb: 6,
-  maxDescent: 4.5,
-  maxYawRate: 1.4,
+  maxSpeed: 30,
+  maxClimb: 7,
+  maxDescent: 5,
+  maxYawRate: 1.5,
   /** Lowest the skids may go over open water. */
   minSeaAltitude: 1.5,
   maxAltitude: 600,

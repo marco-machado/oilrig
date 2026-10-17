@@ -178,26 +178,25 @@ export class Avatars {
     a.bubbleUntil = performance.now() + 7000;
   }
 
-  /** `seated`: people in the drone, placed on their seat cushions (feet frame) facing its heading. */
-  update(serverNow: number, dt: number, seated?: Map<string, { position: Vec3; yaw: number }>) {
+  /** `seated`: people in the drone, their feet (root) placed in its cabin, following its attitude. */
+  update(serverNow: number, dt: number, seated?: Map<string, { position: Vec3; yaw: number; pitch?: number; roll?: number }>) {
     const renderT = serverNow - NET.interpolationDelayMs;
     const now = performance.now();
     for (const [id, a] of this.avatars) {
       const seat = seated?.get(id);
       if (seat) {
-        // Hips on the cushion (eyes DRONE.seatedEye above it). The cabin floor is only 0.31 below
-        // the cushion, so the knees ride up and the shins stand straight down: feet stretched
-        // forward would go through the front seats or, in front, out of the narrowing nose. The
-        // knees are drawn together a little, so the outer foot stays clear of the belly's curve.
+        // Sitting: thighs level, shins down to the cabin floor (0.44 below the cushion), hands
+        // on the lap. The root is the feet frame; the caller puts it DRONE.seatedHips below the
+        // cushion in the body frame, so the hips rest on the seat whatever the cabin's bank.
         a.root.visible = true;
-        a.root.position.set(seat.position[0], seat.position[1] - 0.87, seat.position[2]);
-        a.root.rotation.y = seat.yaw;
-        a.legs[0].position.x = -0.07;
-        a.legs[1].position.x = 0.07;
-        a.legs[0].rotation.x = a.legs[1].rotation.x = 1.88;
-        a.knees[0].rotation.x = a.knees[1].rotation.x = -1.88;
-        a.arms[0].rotation.x = a.arms[1].rotation.x = 0.3;
-        a.elbows[0].rotation.x = a.elbows[1].rotation.x = 1.0;
+        a.root.position.set(seat.position[0], seat.position[1], seat.position[2]);
+        a.root.rotation.set(seat.pitch ?? 0, seat.yaw, seat.roll ?? 0, 'YXZ');
+        a.legs[0].position.x = -HIP_X;
+        a.legs[1].position.x = HIP_X;
+        a.legs[0].rotation.x = a.legs[1].rotation.x = 1.5;
+        a.knees[0].rotation.x = a.knees[1].rotation.x = -1.45;
+        a.arms[0].rotation.x = a.arms[1].rotation.x = 0.35;
+        a.elbows[0].rotation.x = a.elbows[1].rotation.x = 1.1;
         expireBubble(a, now);
         continue;
       }
@@ -205,7 +204,7 @@ export class Avatars {
       if (!s) continue;
       a.root.visible = true;
       a.root.position.set(s.p[0], s.p[1], s.p[2]);
-      a.root.rotation.y = s.yaw;
+      a.root.rotation.set(0, s.yaw, 0, 'YXZ');
       a.head.rotation.x = s.pitch * 0.6;
       a.phase += dt * Math.min(s.speed, 7) * 2.6;
       const swing = Math.sin(a.phase) * Math.min(1, s.speed / 3) * 0.55;

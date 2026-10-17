@@ -118,7 +118,7 @@ const drone: Entry = {
   name: 'Passenger drone',
   category: 'Vehicles',
   about:
-    'Four-seat electric quadcopter: pearl-white pod with a wrap-around canopy, ducted rotors on carbon arms, skids, a cabin with a dashboard and side stick, and navigation lights and a strobe.',
+    'Four-seat electric air taxi: a lofted pearl-white fuselage with a graphite belly, a wrap-around canopy from the nose over the front seats, four swept carbon arms with airfoil ducts and three-blade rotors, skids, bucket seats, a glass dashboard and side stick, navigation lights, a beacon, a strobe and a landing light.',
   source: 'apps/client/src/world/drone.ts',
   inWorld: 'One, based on the helipad. Anyone can fly it; now and then it flies off on its own.',
   view: { dir: [-1, 0.55, -1.25] },
@@ -199,8 +199,8 @@ const avatar: Entry = {
       info = { ...info, ...next };
       avatars.add(info);
     };
-    // A plain block to sit on, as high as a drone seat (0.305 above its cabin floor) and only under the hips.
-    const seat = new Mesh(new BoxGeometry(0.5, 0.305, 0.4).translate(0, 0.1525, 0.05), new MeshStandardNodeMaterial({ color: 0x3a3f46, roughness: 0.75 }));
+    // A plain block to sit on, as high as a drone seat (0.44 above its cabin floor) and only under the hips.
+    const seat = new Mesh(new BoxGeometry(0.5, 0.44, 0.4).translate(0, 0.22, 0.05), new MeshStandardNodeMaterial({ color: 0x3a3f46, roughness: 0.75 }));
     seat.castShadow = seat.receiveShadow = true;
     seat.visible = false;
     root.add(seat);
@@ -211,7 +211,7 @@ const avatar: Entry = {
       update(dt) {
         const now = performance.now();
         avatars.snapshot(now, [{ id: info.id, p: [0, 0, 0], yaw: 0, pitch: 0, speed: speeds[pose], grounded: true }]);
-        const seated = pose === 'seat' ? new Map([[info.id, { position: [0, 0.305, 0] as Vec3, yaw: 0 }]]) : undefined;
+        const seated = pose === 'seat' ? new Map([[info.id, { position: [0, 0.44 - DIMS.DRONE.seatedHips, 0] as Vec3, yaw: 0 }]]) : undefined;
         avatars.update(now + NET.interpolationDelayMs, dt, seated);
         seat.visible = pose === 'seat';
       },

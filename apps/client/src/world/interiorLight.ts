@@ -3,7 +3,9 @@ import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js';
 import { LightProbeGridNode } from 'three/addons/tsl/lighting/LightProbeGridNode.js';
 import { DIMS } from '@ocean-home/shared';
 
-const PER_FRAME = 15;
+// Each probe renders the scene six times (a cube map), all on the GPU: 15 a frame stalled
+// the next frame about 100 ms. 4 keeps a chunk near 25 ms; the whole grid is still ~34 frames.
+const PER_FRAME = 4;
 const MIN_INTERVAL_MS = 20_000;
 
 /**
@@ -44,30 +46,30 @@ export class InteriorLight {
     scene.add(this.grid);
   }
 
-  update(sunDir: Vector3, cloudCover: number) {
+  /** Describes the probes baked this frame (range and time), or null when none were. */
+  update(sunDir: Vector3, cloudCover: number): string | null {
     const now = performance.now();
     if (this.cursor < 0) {
       const moved = this.lastSun.angleTo(sunDir) > 0.05 || Math.abs(this.lastCloud - cloudCover) > 0.1;
-      if (!moved || now - this.lastBake < MIN_INTERVAL_MS) return;
+      if (!moved || now - this.lastBake < MIN_INTERVAL_MS) return null;
       this.lastSun.copy(sunDir);
       this.lastCloud = cloudCover;
       this.lastBake = now;
       this.cursor = 0;
     }
+    const start = this.cursor;
+    const count = Math.min(PER_FRAME, this.total - start);
     const visibility = this.hidden.map((o) => o.visible);
     for (const o of this.hidden) o.visible = false;
+    const t0 = performance.now();
     try {
-      this.grid.bake(this.renderer, this.scene, {
-        start: this.cursor,
-        count: Math.min(PER_FRAME, this.total - this.cursor),
-        cubemapSize: 16,
-        near: 0.05,
-        far: 80,
-      });
+      this.grid.bake(this.renderer, this.scene, { start, count, cubemapSize: 16, near: 0.05, far: 80 });
     } finally {
       this.hidden.forEach((o, i) => (o.visible = visibility[i]));
     }
+    const bakeMs = performance.now() - t0;
     this.cursor += PER_FRAME;
     if (this.cursor >= this.total) this.cursor = -1;
+    return `probe bake ${start}–${start + count} of ${this.total}, bake() ${bakeMs.toFixed(0)} ms`;
   }
 }

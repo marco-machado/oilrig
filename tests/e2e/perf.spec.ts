@@ -17,7 +17,7 @@ for (const cam of ['refn', 'deck', 'interior', 'aerial', 'swim', 'pad']) {
     const r = await page.evaluate(() => (window as any).__oceanHome.perf.report());
     const sections = r.sections.slice(0, 6).map((s: { name: string; ms: number }) => `${s.name} ${s.ms.toFixed(2)}`).join(', ');
     console.log(
-      `PERF ${cam}: ${r.fps.toFixed(1)} fps · frame ${r.frameMs.avg} ms (p95 ${r.frameMs.p95}) · GPU ${r.gpu.renderMs ?? '?'} ms render + ${r.gpu.computeMs ?? '?'} ms compute · CPU ${r.cpuMs} ms [${sections}] · ${r.renderer.drawCalls} draws, ${(r.renderer.triangles / 1e6).toFixed(2)} M tris`,
+      `PERF ${cam}: ${r.fps.toFixed(1)} fps · frame ${r.frameMs.avg} ms (p95 ${r.frameMs.p95}) · GPU ≥${r.gpu.renderMs ?? '?'} ms render, ≥${r.gpu.computeMs ?? '?'} ms compute · CPU ${r.cpuMs} ms [${sections}] · ${r.renderer.drawCalls} draws, ${(r.renderer.triangles / 1e6).toFixed(2)} M tris`,
     );
     expect(r.fps).toBeGreaterThan(1);
   });

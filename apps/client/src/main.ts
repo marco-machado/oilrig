@@ -2,7 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { NeutralToneMapping, PerspectiveCamera, Scene, Timer, Vector3, WebGPURenderer } from 'three/webgpu';
 import { SunLight } from 'three/addons/lights/SunLight.js';
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js';
-import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
+import { StableClusteredLighting } from './render/stableClusteredLighting.ts';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import {
   type ClockConfig,
@@ -102,7 +102,7 @@ async function boot() {
     return;
   }
   renderer.library.addLight(SunLightNode, SunLight);
-  renderer.lighting = new ClusteredLighting();
+  renderer.lighting = new StableClusteredLighting();
   renderer.toneMapping = NeutralToneMapping;
   renderer.shadowMap.enabled = !off.has('shadows');
   // Never more than 2 device pixels per CSS pixel: Ultra's supersampling on a Retina screen
@@ -115,6 +115,7 @@ async function boot() {
   // Fixed-camera captures and ?fixedres measure at the preset's full resolution.
   const fixedRes = !!dbg.camera || new URLSearchParams(location.search).has('fixedres');
   const dynRes = new DynamicResolution(renderer, basePixelRatio, settings.autoResolution && !fixedRes);
+  let renderedScale = dynRes.scale;
 
   const labels = new CSS2DRenderer();
   labels.setSize(window.innerWidth, window.innerHeight);
@@ -122,6 +123,7 @@ async function boot() {
   document.body.appendChild(labels.domElement);
 
   const scene = new Scene();
+  prof.watchLights(scene);
   const camera = new PerspectiveCamera(settings.fov, window.innerWidth / window.innerHeight, 0.1, 30000);
   scene.add(camera);
 
@@ -805,7 +807,10 @@ async function boot() {
     prof.end('audio');
 
     prof.time('atmosphere', () => atmosphere.update(dt, camera.position, celestial, weather));
-    if (!off.has('probes')) prof.time('interior', () => interior.update(sunDir.set(...celestial.sunDirection), weather.cloudCover));
+    if (!off.has('probes')) {
+      const baked = prof.time('interior', () => interior.update(sunDir.set(...celestial.sunDirection), weather.cloudCover));
+      if (baked) prof.note(baked);
+    }
     if (!off.has('ocean')) prof.time('ocean', () => ocean.update(simTime, dt, camera.position, weather.windSpeed, weather.windDirection));
     prof.time('tender', () => tender.update(dt));
     prof.begin('world');
@@ -831,6 +836,11 @@ async function boot() {
       }
     });
 
+    // A resolution change resizes every post-processing target in this render.
+    if (dynRes.scale !== renderedScale) {
+      prof.note(`resolution ${renderedScale}→${dynRes.scale}`);
+      renderedScale = dynRes.scale;
+    }
     prof.time('render', () => pipeline.render());
     // Only the avatars carry CSS labels: traversing them alone is much cheaper than the scene.
     if (!off.has('labels')) prof.time('labels', () => labels.render(avatars.group as unknown as Scene, camera));

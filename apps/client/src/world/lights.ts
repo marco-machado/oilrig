@@ -87,8 +87,9 @@ export function buildLights(layout: Layout, materials: MaterialSet): NightLights
         let k = night;
         if (def.kind === 'obstruction') k = blink.value;
         if (def.kind === 'helipadEdge') k = 0.15 + 0.85 * night;
+        // Intensity only, never visibility: the light set is part of every lit material's
+        // shader key, so hiding a light rebuilds the scene's shaders (multi-second freezes).
         light.intensity = def.intensity * k;
-        light.visible = k > 0.01;
       }
     },
   };

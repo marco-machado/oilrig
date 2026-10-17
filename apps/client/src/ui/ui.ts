@@ -19,14 +19,17 @@ export interface Settings {
   sensitivity: number;
   invertY: boolean;
   volume: number;
-  /** Lower the resolution when frames run late, to hold 60 fps. */
+  /**
+   * Lower the resolution when frames run late, to hold 60 fps. Off by default: every
+   * change rebuilds the post-processing targets, which freezes the game for ~1.3 s.
+   */
   autoResolution: boolean;
 }
 
 const SETTINGS_KEY = 'ocean-home.settings';
 
 export function loadSettings(defaultQuality: QualityName): Settings {
-  const base: Settings = { quality: defaultQuality, fov: 72, sensitivity: 1, invertY: false, volume: 0.8, autoResolution: true };
+  const base: Settings = { quality: defaultQuality, fov: 72, sensitivity: 1, invertY: false, volume: 0.8, autoResolution: false };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...base, ...JSON.parse(raw) };
@@ -416,7 +419,7 @@ export class UI {
         g.fillRect((i / Math.max(1, n)) * w, h - bh, Math.max(1, w / Math.max(1, n)), bh);
       }
     }
-    const gpu = r.gpu.enabled ? (r.gpu.renderMs === null ? '…' : `${r.gpu.renderMs.toFixed(1)} ms render + ${(r.gpu.computeMs ?? 0).toFixed(1)} ms compute`) : 'off';
+    const gpu = r.gpu.enabled ? (r.gpu.renderMs === null ? '…' : `≥${r.gpu.renderMs.toFixed(1)} ms render, ≥${(r.gpu.computeMs ?? 0).toFixed(1)} ms compute`) : 'off';
     const rows: Array<[string, string]> = [
       ['FPS', `${r.fps.toFixed(0)}`],
       ['Frame', `${r.frameMs.avg.toFixed(1)} ms · p95 ${r.frameMs.p95.toFixed(1)} · max ${r.frameMs.max.toFixed(0)}`],

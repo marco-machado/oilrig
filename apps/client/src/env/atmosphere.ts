@@ -146,7 +146,12 @@ export class Atmosphere {
       this.sun.color.setRGB(0.62, 0.72, 1.0);
       this.sun.intensity = moonIrr;
     }
-    this.sun.castShadow = (useSun ? sunIrr : moonIrr * 20) > 0.5;
+    // castShadow stays on: toggling it changes the light set (every lit shader rebuilds) and
+    // three 0.186 disposes the sun's shadow node while old shaders still update it, which
+    // throws mid-render. Too dim to cast: fade the shadow out and stop re-rendering its map.
+    const casts = (useSun ? sunIrr : moonIrr * 20) > 0.5;
+    this.sun.shadow.intensity = casts ? 1 : 0;
+    this.sun.shadow.autoUpdate = casts;
     U.sunDir.value.copy(dir);
     U.sunColor.value.copy(this.sun.color);
     U.sunIntensity.value = this.sun.intensity;

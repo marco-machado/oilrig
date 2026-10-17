@@ -419,7 +419,8 @@ export class Drone {
     }
     const powered = rpm > 0.02 || occupied;
     this.screens.value += ((powered ? 1 : 0) - this.screens.value) * Math.min(1, dt * 3);
-    this.cabinLight.intensity = occupied ? 0.6 + 2.5 * U.nightLights.value : 0;
+    // Dim: night exposure runs up to 6×, and anything brighter blows the white shell out into a haze.
+    this.cabinLight.intensity = occupied ? 0.3 : 0;
 
     // Strobe flashes whenever the motors run; the landing light near the ground at night.
     const flash = rpm > 0.05 && this.time % 1.0 < 0.08 ? 1 : 0;

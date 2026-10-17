@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 // CLIENT_PORT / SERVER_URL let a second copy run next to the default one.
@@ -17,5 +18,12 @@ export default defineConfig({
     target: 'es2024',
     outDir: 'dist',
     chunkSizeWarningLimit: 6000,
+    // The game, and the standalone object viewer (/viewer.html).
+    rolldownOptions: {
+      input: {
+        main: resolve(import.meta.dirname, 'index.html'),
+        viewer: resolve(import.meta.dirname, 'viewer.html'),
+      },
+    },
   },
 });

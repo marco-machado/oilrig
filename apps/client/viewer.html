@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ocean Home Objects</title>
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1a26'/%3E%3Cpath d='M5 21h22' stroke='%233a8fb7' stroke-width='2'/%3E%3Cpath d='M6 11h20M9 11v12M23 11v12M9 15l14 6M23 15L9 21' stroke='%23f0b20a' stroke-width='2.2' fill='none'/%3E%3C/svg%3E" />
+  </head>
+  <body class="viewer">
+    <nav class="v-list" aria-label="Objects">
+      <header>
+        <h1>Objects</h1>
+        <a href="/">Ocean Home ↗</a>
+      </header>
+      <div class="v-items"></div>
+      <p class="v-keys">↑ ↓ to step through the list · drag to orbit · scroll to zoom</p>
+    </nav>
+    <main class="v-stage">
+      <div class="v-toolbar" role="toolbar" aria-label="View">
+        <div class="v-seg" role="group" aria-label="Light">
+          <button type="button" data-light="day" aria-pressed="true">Day</button>
+          <button type="button" data-light="night" aria-pressed="false">Night</button>
+        </div>
+        <button type="button" class="v-btn" data-act="spin" aria-pressed="false">Turntable</button>
+        <button type="button" class="v-btn" data-act="frame">Reset view</button>
+      </div>
+      <div class="v-status" role="status" aria-live="polite"></div>
+    </main>
+    <aside class="v-info" aria-live="polite"></aside>
+    <script type="module" src="/src/viewer/viewer.ts"></script>
+  </body>
+</html>

@@ -38,12 +38,12 @@ function etchMaterial(alongX: boolean) {
 export class Doors {
   readonly group = new Group();
   private readonly views = new Map<string, DoorView>();
-  private readonly sw: StaticWorld;
+  private readonly sw: Pick<StaticWorld, 'setDoorOpen'>;
   private focused: string | null = null;
   /** Called when a door starts to move (for its sound). */
   onMove: ((def: DoorDef, open: boolean) => void) | null = null;
 
-  constructor(layout: Layout, materials: MaterialSet, sw: StaticWorld) {
+  constructor(layout: Layout, materials: MaterialSet, sw: Pick<StaticWorld, 'setDoorOpen'>) {
     this.sw = sw;
     this.group.name = 'doors';
     const header = new MeshStandardNodeMaterial({ color: 0x1a1b1d, roughness: 0.4 });

@@ -1,0 +1,422 @@
+/* Object viewer (viewer.html). Shares the game's palette and name-tag styles from ui/style.css. */
+
+body.viewer {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 340px;
+  grid-template-areas: 'list stage info';
+  height: 100vh;
+  height: 100dvh;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.viewer h1,
+.viewer h2,
+.viewer h3 {
+  margin: 0;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.viewer code {
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink);
+}
+
+/* ---------- list */
+
+.v-list {
+  grid-area: list;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel-strong);
+  border-right: 1px solid var(--line);
+}
+
+.v-list header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 16px 8px;
+}
+
+.v-list h1 {
+  font-size: 17px;
+}
+
+.v-list header a {
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  text-decoration: none;
+}
+
+.v-list header a:hover {
+  color: var(--accent);
+}
+
+.v-items {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+
+.v-items section {
+  margin-top: 10px;
+}
+
+.v-items h2 {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-dim);
+}
+
+.v-items ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.v-items button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.v-items button:hover {
+  background: rgba(244, 241, 234, 0.07);
+}
+
+.v-items button[aria-current='true'] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.v-items button:focus-visible,
+.v-btn:focus-visible,
+.v-seg button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.v-count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(244, 241, 234, 0.1);
+  font-size: 11.5px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.v-items button[aria-current='true'] .v-count {
+  background: rgba(27, 21, 5, 0.15);
+}
+
+.v-keys {
+  margin: 0;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+/* ---------- stage */
+
+.v-stage {
+  grid-area: stage;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.v-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.v-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.v-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.v-btn,
+.v-seg button {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.v-btn:hover,
+.v-seg button:hover {
+  border-color: rgba(244, 241, 234, 0.35);
+}
+
+.v-btn[aria-pressed='true'],
+.v-seg button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.v-seg {
+  display: flex;
+}
+
+.v-seg button:first-child {
+  border-radius: 7px 0 0 7px;
+}
+
+.v-seg button:last-child {
+  border-radius: 0 7px 7px 0;
+  border-left: 0;
+}
+
+.v-status {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.v-stage .fatal {
+  position: absolute;
+}
+
+/* ---------- info */
+
+.v-info {
+  grid-area: info;
+  overflow-y: auto;
+  padding: 18px 18px 24px;
+  background: var(--panel-strong);
+  border-left: 1px solid var(--line);
+}
+
+.v-cat {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--accent);
+}
+
+.v-info h2 {
+  font-size: 20px;
+}
+
+.v-about {
+  margin: 8px 0 14px;
+  color: var(--ink-dim);
+}
+
+.v-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  margin: 0 0 18px;
+  font-size: 13px;
+}
+
+.v-facts dt {
+  color: var(--ink-dim);
+}
+
+.v-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.v-facts summary {
+  cursor: pointer;
+}
+
+.v-ids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0 0;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.v-ids code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(244, 241, 234, 0.08);
+  font-size: 11.5px;
+}
+
+.v-info h3 {
+  margin-bottom: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.v-controls {
+  display: grid;
+  gap: 12px;
+}
+
+.v-row {
+  display: grid;
+  gap: 5px;
+}
+
+.v-row > label,
+.v-row-head label {
+  color: var(--ink-dim);
+  font-size: 13px;
+}
+
+.v-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.v-row-head output {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.v-toggle,
+.v-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.v-toggle label {
+  color: var(--ink);
+}
+
+.v-inline {
+  justify-content: space-between;
+}
+
+.viewer input[type='range'],
+.viewer input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+
+.viewer input[type='range'] {
+  width: 100%;
+  margin: 0;
+}
+
+.viewer input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.viewer select,
+.viewer input[type='text'] {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(244, 241, 234, 0.06);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.viewer input[type='color'] {
+  width: 44px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+}
+
+.v-text {
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------- narrow screens: the stage on top, the list and details below */
+
+@media (max-width: 900px) {
+  html,
+  body.viewer {
+    overflow: auto;
+    height: auto;
+  }
+
+  body.viewer {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'stage' 'list' 'info';
+  }
+
+  .v-stage {
+    height: 58vh;
+    height: 58dvh;
+  }
+
+  .v-list,
+  .v-info {
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .v-items {
+    overflow: visible;
+  }
+
+  .v-items ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .v-items button {
+    width: auto;
+  }
+
+  .v-keys {
+    display: none;
+  }
+}

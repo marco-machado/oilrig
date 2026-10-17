@@ -112,6 +112,37 @@ function collarGeometry(L: number, B: number): BufferGeometry {
   return new TubeGeometry(new CatmullRomCurve3(pts, false, 'centripetal'), 120, 0.24, 14, false);
 }
 
+/** The boat itself (hull, deck, collar, console, outboard) in its own frame: bow at -z, waterline at y = 0. */
+export function buildTenderHull(def: VesselDef, materials: MaterialSet): Group {
+  const [L, B] = def.size;
+  const hull = new Group();
+  const white = new MeshPhysicalNodeMaterial({ color: 0xf4f5f2, roughness: 0.25, clearcoat: 0.6 });
+  const tube = new MeshStandardNodeMaterial({ color: 0x3b4148, roughness: 0.75 });
+  const dark = new MeshStandardNodeMaterial({ color: 0x1d1f22, roughness: 0.45, metalness: 0.2 });
+  const glass = new MeshPhysicalNodeMaterial({ color: 0x9fb4bd, roughness: 0.05, transmission: 0.6, transparent: true, opacity: 0.5, side: DoubleSide });
+  const add = (g: BufferGeometry, m: Material) => {
+    const mesh = new Mesh(g, m);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    hull.add(mesh);
+    return mesh;
+  };
+  add(hullGeometry(L, B), white);
+  add(deckGeometry(L, B), materials.teak);
+  add(collarGeometry(L, B), tube);
+  // Centre console with windscreen, a bench seat and the outboard.
+  const box = (w: number, h: number, d: number, x: number, y: number, z: number) => {
+    const geo = new BoxGeometry(w, h, d);
+    geo.translate(x, y + h / 2, z);
+    return geo;
+  };
+  add(mergeGeometries([box(0.75, 0.85, 0.65, 0, 0.5, 0.1), box(0.9, 0.42, 0.5, 0, 0.5, 1.05)], false)!, white);
+  add(box(0.72, 0.32, 0.03, 0, 1.33, -0.18), glass);
+  add(mergeGeometries([box(0.42, 0.55, 0.42, 0, 0.35, L / 2 + 0.2), box(0.22, 0.6, 0.22, 0, -0.25, L / 2 + 0.22)], false)!, dark);
+  add(tubeGeometry([0.25, 1.35, 0.12], [-0.25, 1.35, 0.12], 0.018, 8), materials.steelGrey);
+  return hull;
+}
+
 interface Spring {
   x: number;
   v: number;
@@ -125,7 +156,7 @@ const spring = (s: Spring, target: number, k: number, damping: number, dt: numbe
 export class Tender {
   readonly group = new Group();
   readonly sampler: WaveSampler;
-  private readonly hull = new Group();
+  private readonly hull: Group;
   private readonly def: VesselDef;
   private readonly heave: Spring = { x: 0, v: 0 };
   private readonly pitch: Spring = { x: 0, v: 0 };
@@ -141,32 +172,9 @@ export class Tender {
 
   constructor(renderer: WebGPURenderer, ocean: Ocean, def: VesselDef, materials: MaterialSet) {
     this.def = def;
-    const [L, B] = def.size;
+    const [L] = def.size;
     this.sampler = new WaveSampler(renderer, ocean.sim.cascades, 5);
-    const white = new MeshPhysicalNodeMaterial({ color: 0xf4f5f2, roughness: 0.25, clearcoat: 0.6 });
-    const tube = new MeshStandardNodeMaterial({ color: 0x3b4148, roughness: 0.75 });
-    const dark = new MeshStandardNodeMaterial({ color: 0x1d1f22, roughness: 0.45, metalness: 0.2 });
-    const glass = new MeshPhysicalNodeMaterial({ color: 0x9fb4bd, roughness: 0.05, transmission: 0.6, transparent: true, opacity: 0.5, side: DoubleSide });
-    const add = (g: BufferGeometry, m: Material) => {
-      const mesh = new Mesh(g, m);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      this.hull.add(mesh);
-      return mesh;
-    };
-    add(hullGeometry(L, B), white);
-    add(deckGeometry(L, B), materials.teak);
-    add(collarGeometry(L, B), tube);
-    // Centre console with windscreen, a bench seat and the outboard.
-    const box = (w: number, h: number, d: number, x: number, y: number, z: number) => {
-      const geo = new BoxGeometry(w, h, d);
-      geo.translate(x, y + h / 2, z);
-      return geo;
-    };
-    add(mergeGeometries([box(0.75, 0.85, 0.65, 0, 0.5, 0.1), box(0.9, 0.42, 0.5, 0, 0.5, 1.05)], false)!, white);
-    add(box(0.72, 0.32, 0.03, 0, 1.33, -0.18), glass);
-    add(mergeGeometries([box(0.42, 0.55, 0.42, 0, 0.35, L / 2 + 0.2), box(0.22, 0.6, 0.22, 0, -0.25, L / 2 + 0.22)], false)!, dark);
-    add(tubeGeometry([0.25, 1.35, 0.12], [-0.25, 1.35, 0.12], 0.018, 8), materials.steelGrey);
+    this.hull = buildTenderHull(def, materials);
     this.hull.rotation.order = 'YXZ';
     this.group.add(this.hull);
     this.group.position.set(def.position[0], 0, def.position[2]);

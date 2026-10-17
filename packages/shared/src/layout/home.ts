@@ -128,12 +128,13 @@ export function buildHome(b: LayoutBuilder) {
   b.boxMinMax('pool-wall', [POOL.x0 - pw, pb, POOL.z1], [POOL.x1 + pw, TERRACE.top - 0.02, POOL.z1 + pw], 'poolTile');
   b.boxMinMax('pool-wall', [POOL.x0 - pw, pb, POOL.z0], [POOL.x0, TERRACE.top - 0.02, POOL.z1], 'poolTile');
   b.boxMinMax('pool-wall', [POOL.x1, pb, POOL.z0], [POOL.x1 + pw, TERRACE.top - 0.02, POOL.z1], 'poolTile');
-  // Wide steps out of the east end; the collider is a ramp up to terrace level.
+  // Wide steps out of the east end (0.24 rise, 0.42 tread); the collider is a ramp up to terrace level.
   const stepRun = 2.5;
+  const steps = 6;
   const rise = TERRACE.top - POOL.floor;
-  for (let k = 0; k < 4; k++) {
-    const x0 = POOL.x1 - stepRun + (stepRun / 4) * k;
-    b.boxMinMax('pool-step', [x0, POOL.floor, POOL.z0], [POOL.x1, POOL.floor + (rise * (k + 1)) / 4 - 0.02, POOL.z1], 'poolTile', {
+  for (let k = 0; k < steps; k++) {
+    const x0 = POOL.x1 - stepRun + (stepRun / steps) * k;
+    b.boxMinMax('pool-step', [x0, POOL.floor, POOL.z0], [POOL.x1, POOL.floor + (rise * (k + 1)) / steps - 0.02, POOL.z1], 'poolTile', {
       collide: false,
     });
   }

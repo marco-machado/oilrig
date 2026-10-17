@@ -512,7 +512,8 @@ export interface DroneInput {
   yaw: number;
 }
 
-const BODY_HALF = { x: 4.1, y: 1.15, z: 3.95 };
+/** Skids to duct tops, out to the nav lights. */
+const BODY_HALF = { x: 4.1, y: (DRONE.ductY + 0.25) / 2, z: 3.95 };
 
 /**
  * Arcade multicopter flown by its pilot's browser: velocity follows the stick with limited

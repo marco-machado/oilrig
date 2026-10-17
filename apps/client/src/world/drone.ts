@@ -5,6 +5,7 @@ import {
   CircleGeometry,
   CylinderGeometry,
   DoubleSide,
+  ExtrudeGeometry,
   Group,
   LatheGeometry,
   Mesh,
@@ -12,6 +13,7 @@ import {
   MeshPhysicalNodeMaterial,
   MeshStandardNodeMaterial,
   PointLight,
+  Shape,
   Sphere,
   SphereGeometry,
   Vector2,
@@ -244,6 +246,12 @@ export class Drone {
       return 0;
     };
     const roofY = (z: number) => POD_Y + POD_SQUASH[1] * radiusAt(z) + 0.03;
+    // Half-width of the pod's inside at height y and station z (0 below the belly).
+    const halfWidthAt = (y: number, z: number) => {
+      const r = radiusAt(z);
+      const u = (y - POD_Y) / (POD_SQUASH[1] * r);
+      return r > 0 && Math.abs(u) < 1 ? POD_SQUASH[0] * r * Math.sqrt(1 - u * u) : 0;
+    };
     const shoulders = new BoxGeometry(1.3, 0.07, 0.24);
     const shoulderF = shoulders.clone().translate(0, roofY(-1.0), -1.0);
     const shoulderB = shoulders.translate(0, roofY(1.15), 1.15);
@@ -328,19 +336,31 @@ export class Drone {
     }
     this.body.add(new Mesh(mergeGeometries(gear, false)!, steel));
 
-    // Cabin: floor, four seats, a dashboard with screens and a side stick.
+    // Cabin: floor, four seats, a dashboard with screens and a side stick, all inside the belly.
+    const FLOOR = 0.645;
+    // The floor (0.05 thick) is cut to the belly's curve 1.5 cm below its underside, so it clears
+    // the shell all round, even where the belly is nearly flat.
+    const edge: Vector2[] = [];
+    for (let z = -1.4; z <= 1.5; z += 0.05) {
+      const w = halfWidthAt(FLOOR - 0.065, z);
+      if (w > 0.1) edge.push(new Vector2(w, z));
+    }
+    const floor = new ExtrudeGeometry(new Shape([...edge, ...edge.map((p) => new Vector2(-p.x, p.y)).reverse()]), { depth: 0.05, bevelEnabled: false });
+    floor.rotateX(Math.PI / 2).translate(0, FLOOR, 0);
+    this.body.add(new Mesh(floor, seatMat));
     const cabin: BufferGeometry[] = [];
-    const floor = new BoxGeometry(1.5, 0.05, 2.6);
-    floor.translate(0, 0.62, 0.1);
-    cabin.push(floor);
     for (const [x, y, z] of D.seats) {
       const cushion = new BoxGeometry(0.52, 0.12, 0.5);
       cushion.translate(x, y - 0.06, z);
+      // Reclined: the top leans back, towards the tail.
       const back = new BoxGeometry(0.52, 0.7, 0.1);
-      back.rotateX(-0.18);
+      back.rotateX(0.18);
       back.translate(x, y + 0.32, z + 0.28);
-      const base = new BoxGeometry(0.4, y - 0.66, 0.4);
-      base.translate(x, (y + 0.66) / 2 - 0.03, z);
+      // The base stands on the floor, its outer side clear of the belly's curve.
+      const inner = Math.abs(x) - 0.2;
+      const outer = Math.min(Math.abs(x) + 0.2, Math.min(halfWidthAt(FLOOR, z - 0.2), halfWidthAt(FLOOR, z + 0.2)) - 0.015);
+      const base = new BoxGeometry(outer - inner, y - 0.03 - FLOOR, 0.4);
+      base.translate((Math.sign(x) * (inner + outer)) / 2, (y - 0.03 + FLOOR) / 2, z);
       cabin.push(cushion, back, base);
     }
     this.body.add(new Mesh(mergeGeometries(cabin, false)!, seatMat));
@@ -348,8 +368,8 @@ export class Drone {
     const dash = new BoxGeometry(1.25, 0.16, 0.3);
     dash.rotateX(0.3);
     dash.translate(0, 0.98, -1.18);
-    const pedestal = new BoxGeometry(0.34, 0.32, 0.22);
-    pedestal.translate(0, 0.76, -1.16);
+    const pedestal = new BoxGeometry(0.34, 0.92 - FLOOR, 0.22);
+    pedestal.translate(0, (0.92 + FLOOR) / 2, -1.16);
     this.body.add(new Mesh(mergeGeometries([dash, pedestal], false)!, dark));
     const screen = new BoxGeometry(0.8, 0.1, 0.01);
     screen.rotateX(-1.0);

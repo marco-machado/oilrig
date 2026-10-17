@@ -141,7 +141,7 @@ export interface PlaceDef {
   position: Vec3;
 }
 
-export type PropKind = 'grass' | 'windsock' | 'ladder' | 'chain' | 'fender' | 'bollard' | 'helipadLight' | 'flood';
+export type PropKind = 'grass' | 'windsock' | 'ladder' | 'fender' | 'bollard' | 'helipadLight' | 'flood';
 
 /** Client-only procedural decoration with no physics. */
 export interface PropDef {

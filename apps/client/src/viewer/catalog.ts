@@ -199,8 +199,8 @@ const avatar: Entry = {
       info = { ...info, ...next };
       avatars.add(info);
     };
-    // A plain block to sit on, at seat height and only under the hips (the thighs slope down from there).
-    const seat = new Mesh(new BoxGeometry(0.5, 0.45, 0.4).translate(0, 0.225, 0.05), new MeshStandardNodeMaterial({ color: 0x3a3f46, roughness: 0.75 }));
+    // A plain block to sit on, as high as a drone seat (0.305 above its cabin floor) and only under the hips.
+    const seat = new Mesh(new BoxGeometry(0.5, 0.305, 0.4).translate(0, 0.1525, 0.05), new MeshStandardNodeMaterial({ color: 0x3a3f46, roughness: 0.75 }));
     seat.castShadow = seat.receiveShadow = true;
     seat.visible = false;
     root.add(seat);
@@ -211,7 +211,7 @@ const avatar: Entry = {
       update(dt) {
         const now = performance.now();
         avatars.snapshot(now, [{ id: info.id, p: [0, 0, 0], yaw: 0, pitch: 0, speed: speeds[pose], grounded: true }]);
-        const seated = pose === 'seat' ? new Map([[info.id, { position: [0, 0.45, 0] as Vec3, yaw: 0 }]]) : undefined;
+        const seated = pose === 'seat' ? new Map([[info.id, { position: [0, 0.305, 0] as Vec3, yaw: 0 }]]) : undefined;
         avatars.update(now + NET.interpolationDelayMs, dt, seated);
         seat.visible = pose === 'seat';
       },
@@ -424,8 +424,7 @@ const PROPS: Record<PropKind, PropInfo> = {
     light: 'obstruction',
     mount: 'windsock-pole',
   },
-  ladder: { name: 'Swim ladder', about: 'Steel ladder hanging off the swim platform into the sea.', y: (p) => p.size?.[1] ?? 3 },
-  chain: { name: 'Safety chain', about: 'Sagging chain across the ladder opening of the swim platform, hung 0.9 m above the deck as in the game.', y: () => 0.9 },
+  ladder: { name: 'Ladder', about: 'Steel ladders hanging into the sea: off the swim platform, and off the boat landing beside the tender.', y: (p) => p.size?.[1] ?? 3 },
   fender: { name: 'Fender', about: 'Rubber fender along the edge of the boat landing.', y: () => 0.9 },
   bollard: { name: 'Bollard lamp', about: 'Low lamp posts along the terrace paths. The band under the cap glows at night and lights the deck around it.', y: () => 0, light: 'deckLamp' },
   helipadLight: { name: 'Helipad edge light', about: 'Green dome lights round the helipad: dim by day, bright at night. A few real lights spill green on the deck.', y: () => 0, light: 'helipadEdge' },

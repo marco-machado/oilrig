@@ -176,17 +176,6 @@ export function buildProps(layout: Layout, materials: MaterialSet, grassDensity:
         for (let ry = y - 0.3; ry > y - h; ry -= 0.3) add(materials.steelGrey, tubeGeometry([x - w / 2, ry, z], [x + w / 2, ry, z], 0.016, 6));
         break;
       }
-      case 'chain': {
-        const [len] = p.size ?? [1, 0, 0];
-        const n = 10;
-        for (let k = 0; k < n; k++) {
-          const t0 = k / n;
-          const t1 = (k + 1) / n;
-          const sag = (t: number) => -0.18 * 4 * t * (1 - t);
-          add(materials.steelDark, tubeGeometry([x - len / 2 + len * t0, y + sag(t0), z], [x - len / 2 + len * t1, y + sag(t1), z], 0.012, 5));
-        }
-        break;
-      }
       case 'fender': {
         add(materials.rubber, tubeGeometry([x, y - 0.9, z], [x, y + 0.9, z], 0.26, 16));
         break;

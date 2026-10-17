@@ -10,7 +10,7 @@ import {
   type Vec3,
   dronePose,
 } from '@ocean-home/shared';
-import { makeWorld, motor, walk, world as staticWorld } from './helpers.ts';
+import { DT, idle, makeWorld, motor, walk, world as staticWorld } from './helpers.ts';
 
 // The drone is a schedule plus a pure pose function when nobody flies it, and a flight model
 // run by the pilot's browser when someone does. These tests fly it in simulated time and check
@@ -164,6 +164,28 @@ describe('drone colliders', () => {
     const m = motor(sw, [PAD[0] - 7, 20, PAD[2] + DIMS.DRONE.armZ]);
     expect(walk(m, [[PAD[0] + 7, PAD[2] + DIMS.DRONE.armZ]]).reached).toBe(true);
     sw.setDrone(null);
+  });
+
+  it('a jump under a rotor duct goes as high as one in the open', async () => {
+    const sw = await staticWorld({});
+    const under: Vec3 = [PAD[0] + DIMS.DRONE.armX, 20, PAD[2] + DIMS.DRONE.armZ];
+    const peak = () => {
+      const m = motor(sw, under);
+      const y0 = m.state.position[1];
+      let top = y0;
+      m.step({ ...idle(0), jump: true }, DT);
+      for (let i = 0; i < 90; i++) {
+        m.step(idle(0), DT);
+        top = Math.max(top, m.state.position[1]);
+      }
+      return top - y0;
+    };
+    const open = peak();
+    sw.setDrone({ position: [...PAD], yaw: 0 });
+    const ducted = peak();
+    sw.setDrone(null);
+    expect(open).toBeGreaterThan(0.7);
+    expect(ducted).toBeCloseTo(open, 2);
   });
 });
 

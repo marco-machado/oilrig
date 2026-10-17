@@ -17,6 +17,7 @@ import {
   RAIL_HEIGHT,
   SECONDARY_COLUMN_INSET,
   SWIM,
+  TENDER,
   TERRACE,
   TOWER,
   TOWER_X1,
@@ -307,6 +308,8 @@ function waterline(b: LayoutBuilder) {
   b.tube('landing-tie', [LEGS[2][0], L.top - 0.5, LEGS[2][1]], [L.x0 + 0.5, L.top - 0.5, L.z0 + 0.5], 0.3);
   b.tube('landing-tie', [LEGS[2][0], L.top - 0.5, LEGS[2][1]], [L.x1 - 0.5, L.top - 0.5, L.z0 + 0.5], 0.3);
   for (let x = L.x0 + 1; x <= L.x1 - 0.5; x += 2) b.prop('fender', [x, L.top - 2.1, L.z1 + 0.35]);
+  // Boarding ladder down to the tender beside its stern half; the rail above stays closed, like a shut gate.
+  b.prop('ladder', [TENDER.x + 1.5, L.top, L.z1 + 0.15], { size: [0.6, L.top + 0.8, 0] });
   b.light('flood', [L.x0 + 1, L.top + 3.2, L.z1 - 0.3], 0xfff4e0, 60, 18);
   b.light('flood', [L.x1 - 1, L.top + 3.2, L.z1 - 0.3], 0xfff4e0, 60, 18);
 
@@ -330,23 +333,17 @@ function waterline(b: LayoutBuilder) {
   ] as const) {
     b.tube('swim-pile', [x, WORLD.seabed - 1, z], [x, S.top - 0.2, z], 0.3);
   }
+  // The rail runs on across the ladder bay, like a shut gate (no diving in v1).
   b.rail('swim-rail', [
     [S.x0, S.top, sz.z0],
     [S.x0, S.top, S.z0],
     [S.x1, S.top, S.z0],
     [S.x1, S.top, S.z1],
     [S.ladderX[1], S.top, S.z1],
-  ]);
-  b.rail('swim-rail', [
     [S.ladderX[0], S.top, S.z1],
     [S.x0, S.top, S.z1],
     [S.x0, S.top, sz.z1],
   ]);
-  // The ladder gap is closed by a chain (no diving in v1).
-  b.wall('swim-chain', [S.ladderX[0], S.z1], [S.ladderX[1], S.z1], S.top, S.top + 1.3);
-  b.prop('chain', [(S.ladderX[0] + S.ladderX[1]) / 2, S.top + 0.9, S.z1], {
-    size: [S.ladderX[1] - S.ladderX[0], 0, 0],
-  });
   b.prop('ladder', [(S.ladderX[0] + S.ladderX[1]) / 2, S.top, S.z1 + 0.15], { size: [0.6, 3.2, 0] });
   b.light('flood', [S.x1 - 0.3, S.top + 2.6, S.z0 + 0.3], 0xfff4e0, 25, 12);
 }
@@ -426,11 +423,14 @@ function helipad(b: LayoutBuilder) {
   const ox1 = H.x1 + n;
   const oz0 = H.z0 - n;
   const oz1 = H.z1 + n;
-  b.wall('net-stop', [ox0, oz0], [ox1, oz0], ny, ny + 1.2);
-  b.wall('net-stop', [ox0, oz1], [ox1, oz1], ny, ny + 1.2);
-  b.wall('net-stop', [ox1, oz0], [ox1, oz1], ny, ny + 1.2);
-  b.wall('net-stop', [ox0, oz0], [ox0, BRIDGE.z0], ny, ny + 1.2);
-  b.wall('net-stop', [ox0, BRIDGE.z1], [ox0, oz1], ny, ny + 1.2);
+  const stop = 1.2;
+  b.wall('net-stop', [ox0, oz0], [ox1, oz0], ny, ny + stop);
+  b.wall('net-stop', [ox0, oz1], [ox1, oz1], ny, ny + stop);
+  b.wall('net-stop', [ox1, oz0], [ox1, oz1], ny, ny + stop);
+  b.wall('net-stop', [ox0, oz0], [ox0, BRIDGE.z0], ny, ny + stop);
+  b.wall('net-stop', [ox0, BRIDGE.z1], [ox0, oz1], ny, ny + stop);
+  // The stop is drawn as a rail round the net's outer edge, as high as it blocks.
+  b.rail('net-rail', [[ox0, ny, BRIDGE.z0], [ox0, ny, oz0], [ox1, ny, oz0], [ox1, ny, oz1], [ox0, ny, oz1], [ox0, ny, BRIDGE.z1]], { height: stop, collide: false });
   // Net frame tubes.
   b.tube('net-frame', [ox0, ny, oz0], [ox1, ny, oz0], 0.04, 'steelGrey');
   b.tube('net-frame', [ox0, ny, oz1], [ox1, ny, oz1], 0.04, 'steelGrey');

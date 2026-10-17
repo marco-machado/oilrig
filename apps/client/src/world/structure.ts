@@ -9,7 +9,7 @@ import {
   Vector3,
 } from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { BoxElement, Element, Layout, MaterialId, RailElement, StairElement, Vec3 } from '@ocean-home/shared';
+import { type BoxElement, DIMS, type Element, type Layout, type MaterialId, type RailElement, type StairElement, type Vec3 } from '@ocean-home/shared';
 import type { MaterialSet } from './materials/index.ts';
 
 const UP = new Vector3(0, 1, 0);
@@ -134,6 +134,9 @@ function rail(bins: GeometryBins, el: RailElement) {
     const q = pts[i + 1];
     const len = Math.hypot(q[0] - p[0], q[2] - p[2]);
     if (len < 1e-3) continue;
+    const level = Math.abs(p[1] - q[1]) < 0.01;
+    // A colliding level rail blocks RAIL_GUARD above the handrail: a glass strip on taller posts shows it.
+    const guard = el.collide && level ? DIMS.RAIL_GUARD : 0;
     const posts = Math.max(1, Math.ceil(len / 1.8));
     for (let k = 0; k <= posts; k++) {
       if (k === 0 && i > 0) continue; // shared corner post
@@ -141,12 +144,16 @@ function rail(bins: GeometryBins, el: RailElement) {
       const x = p[0] + (q[0] - p[0]) * t;
       const y = p[1] + (q[1] - p[1]) * t;
       const z = p[2] + (q[2] - p[2]) * t;
-      bins.add(el.material, tubeGeometry([x, y, z], [x, y + h, z], 0.024, 8));
+      bins.add(el.material, tubeGeometry([x, y, z], [x, y + h + guard, z], 0.024, 8));
     }
     bins.add(el.material, tubeGeometry([p[0], p[1] + h, p[2]], [q[0], q[1] + h, q[2]], 0.026, 10));
     bins.add(el.material, tubeGeometry([p[0], p[1] + h * 0.5, p[2]], [q[0], q[1] + h * 0.5, q[2]], 0.018, 8));
-    if (Math.abs(p[1] - q[1]) < 0.01) {
+    if (level) {
       bins.add(el.material, orientedBox([p[0], p[1] + 0.06, p[2]], [q[0], q[1] + 0.06, q[2]], 0.1, 0.008));
+    }
+    if (guard > 0) {
+      bins.add('glassThin', orientedBox([p[0], p[1] + h + guard / 2, p[2]], [q[0], q[1] + h + guard / 2, q[2]], guard, 0.012));
+      bins.add(el.material, tubeGeometry([p[0], p[1] + h + guard, p[2]], [q[0], q[1] + h + guard, q[2]], 0.014, 8));
     }
   }
 }

@@ -3,7 +3,7 @@ import { findPlace } from '@ocean-home/shared';
 import { DT, allDoorsOpen, motor, mulberry, world } from './helpers.ts';
 
 // Bots wander at random (turning, running, jumping) for several simulated minutes.
-// Rails, nets, walls and chains must keep every one of them out of the sea.
+// Rails, nets and walls must keep every one of them out of the sea.
 
 const STARTS = ['terrace', 'helipad', 'walkway-east', 'walkway-west', 'tower-top', 'boat-landing', 'swim-platform', 'pool-deck', 'living-room', 'hammocks', 'firepit'];
 const MINUTES = 4;

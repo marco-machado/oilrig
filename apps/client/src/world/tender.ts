@@ -29,25 +29,30 @@ import { tubeGeometry } from './structure.ts';
 
 type V = [number, number, number];
 
-/** Hull half-section at station s (0 = transom, 1 = stem): [halfBeam, keelY, chineY, sheerY]. */
-function section(s: number, B: number): [number, number, number, number] {
+/** Hull half-section at station s (0 = transom, 1 = stem), freeboard F: [halfBeam, keelY, chineY, sheerY]. */
+function section(s: number, B: number, F: number): [number, number, number, number] {
   const bowStart = 0.62;
   const u = Math.max(0, (s - bowStart) / (1 - bowStart));
   const half = (B / 2) * Math.sqrt(Math.max(0, 1 - u * u * u));
   const keel = -0.38 + 0.62 * u * u;
-  const sheer = 0.55 + 0.25 * u * u;
+  const sheer = F + 0.25 * u * u;
   const chine = keel + 0.22 + 0.15 * u;
   return [half, keel, Math.min(chine, sheer - 0.05), sheer];
 }
 
-function hullGeometry(L: number, B: number): BufferGeometry {
+/** Height of the cockpit floor at station s. */
+function deckY(s: number, B: number, F: number) {
+  return Math.min(section(s, B, F)[3], F + 0.07) - 0.12;
+}
+
+function hullGeometry(L: number, B: number, F: number): BufferGeometry {
   const N = 24;
   const verts: number[] = [];
   const idx: number[] = [];
   for (let i = 0; i <= N; i++) {
     const s = i / N;
     const z = L / 2 - s * L; // transom at +z, stem at -z
-    const [b, k, c, sh] = section(s, B);
+    const [b, k, c, sh] = section(s, B, F);
     // port sheer, port chine, keel, starboard chine, starboard sheer
     verts.push(-b, sh, z, -b * 0.82, c, z, 0, k, z, b * 0.82, c, z, b, sh, z);
   }
@@ -60,7 +65,7 @@ function hullGeometry(L: number, B: number): BufferGeometry {
   }
   // Transom.
   const t0 = verts.length / 3;
-  const [b0, k0, c0, s0] = section(0, B);
+  const [b0, k0, c0, s0] = section(0, B, F);
   verts.push(-b0, s0, L / 2, -b0 * 0.82, c0, L / 2, 0, k0, L / 2, b0 * 0.82, c0, L / 2, b0, s0, L / 2);
   idx.push(t0, t0 + 1, t0 + 2, t0, t0 + 2, t0 + 3, t0, t0 + 3, t0 + 4);
   const g = new BufferGeometry();
@@ -72,15 +77,15 @@ function hullGeometry(L: number, B: number): BufferGeometry {
   return ni;
 }
 
-function deckGeometry(L: number, B: number): BufferGeometry {
+function deckGeometry(L: number, B: number, F: number): BufferGeometry {
   const N = 20;
   const verts: number[] = [];
   const idx: number[] = [];
   for (let i = 0; i <= N; i++) {
     const s = (i / N) * 0.9;
     const z = L / 2 - s * L;
-    const [b, , , sh] = section(s, B);
-    const y = Math.min(sh, 0.62) - 0.12;
+    const [b] = section(s, B, F);
+    const y = deckY(s, B, F);
     verts.push(-b * 0.92, y, z, b * 0.92, y, z);
   }
   for (let i = 0; i < N; i++) {
@@ -96,17 +101,17 @@ function deckGeometry(L: number, B: number): BufferGeometry {
 }
 
 /** The inflatable collar: a tube following the sheer round the bow. */
-function collarGeometry(L: number, B: number): BufferGeometry {
+function collarGeometry(L: number, B: number, F: number): BufferGeometry {
   const pts: Vector3[] = [];
   const N = 14;
   for (let i = 0; i <= N; i++) {
     const s = (i / N) * 0.985;
-    const [b, , , sh] = section(s, B);
+    const [b, , , sh] = section(s, B, F);
     pts.push(new Vector3(-b - 0.05, sh + 0.05, L / 2 + 0.15 - s * (L + 0.1)));
   }
   for (let i = N; i >= 0; i--) {
     const s = (i / N) * 0.985;
-    const [b, , , sh] = section(s, B);
+    const [b, , , sh] = section(s, B, F);
     pts.push(new Vector3(b + 0.05, sh + 0.05, L / 2 + 0.15 - s * (L + 0.1)));
   }
   return new TubeGeometry(new CatmullRomCurve3(pts, false, 'centripetal'), 120, 0.24, 14, false);
@@ -114,7 +119,7 @@ function collarGeometry(L: number, B: number): BufferGeometry {
 
 /** The boat itself (hull, deck, collar, console, outboard) in its own frame: bow at -z, waterline at y = 0. */
 export function buildTenderHull(def: VesselDef, materials: MaterialSet): Group {
-  const [L, B] = def.size;
+  const [L, B, F] = def.size;
   const hull = new Group();
   const white = new MeshPhysicalNodeMaterial({ color: 0xf4f5f2, roughness: 0.25, clearcoat: 0.6 });
   const tube = new MeshStandardNodeMaterial({ color: 0x3b4148, roughness: 0.75 });
@@ -127,19 +132,21 @@ export function buildTenderHull(def: VesselDef, materials: MaterialSet): Group {
     hull.add(mesh);
     return mesh;
   };
-  add(hullGeometry(L, B), white);
-  add(deckGeometry(L, B), materials.teak);
-  add(collarGeometry(L, B), tube);
-  // Centre console with windscreen, a bench seat and the outboard.
+  add(hullGeometry(L, B, F), white);
+  add(deckGeometry(L, B, F), materials.teak);
+  add(collarGeometry(L, B, F), tube);
+  // Centre console with windscreen, a bench seat and the outboard; console and bench stand on the floor.
   const box = (w: number, h: number, d: number, x: number, y: number, z: number) => {
     const geo = new BoxGeometry(w, h, d);
     geo.translate(x, y + h / 2, z);
     return geo;
   };
-  add(mergeGeometries([box(0.75, 0.85, 0.65, 0, 0.5, 0.1), box(0.9, 0.42, 0.5, 0, 0.5, 1.05)], false)!, white);
-  add(box(0.72, 0.32, 0.03, 0, 1.33, -0.18), glass);
+  const floorAt = (z: number) => deckY((L / 2 - z) / L, B, F);
+  const consoleY = floorAt(0.1);
+  add(mergeGeometries([box(0.75, 0.92, 0.65, 0, consoleY, 0.1), box(0.9, 0.42, 0.5, 0, floorAt(1.05), 1.05)], false)!, white);
+  add(box(0.72, 0.32, 0.03, 0, consoleY + 0.9, -0.18), glass);
   add(mergeGeometries([box(0.42, 0.55, 0.42, 0, 0.35, L / 2 + 0.2), box(0.22, 0.6, 0.22, 0, -0.25, L / 2 + 0.22)], false)!, dark);
-  add(tubeGeometry([0.25, 1.35, 0.12], [-0.25, 1.35, 0.12], 0.018, 8), materials.steelGrey);
+  add(tubeGeometry([0.25, consoleY + 0.92, 0.12], [-0.25, consoleY + 0.92, 0.12], 0.018, 8), materials.steelGrey);
   return hull;
 }
 
@@ -172,7 +179,7 @@ export class Tender {
 
   constructor(renderer: WebGPURenderer, ocean: Ocean, def: VesselDef, materials: MaterialSet) {
     this.def = def;
-    const [L] = def.size;
+    const [L, B, F] = def.size;
     this.sampler = new WaveSampler(renderer, ocean.sim.cascades, 5);
     this.hull = buildTenderHull(def, materials);
     this.hull.rotation.order = 'YXZ';
@@ -181,10 +188,10 @@ export class Tender {
     this.group.rotation.y = def.rotationY;
     this.group.name = 'tender';
 
-    // Mooring lines from bow and stern cleats to the landing edge.
+    // Mooring lines from bow and stern cleats, just inboard of the tube, to the landing edge.
     this.cleats = [
-      [-0.6, 0.75, -L / 2 + 0.5],
-      [0.7, 0.75, L / 2 - 0.4],
+      [-(B / 2 - 0.47), F + 0.2, -L / 2 + 0.5],
+      [B / 2 - 0.4, F + 0.2, L / 2 - 0.4],
     ];
     const edgeZ = DIMS.LANDING.z1;
     this.bollards = [

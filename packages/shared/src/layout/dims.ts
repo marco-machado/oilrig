@@ -72,6 +72,11 @@ export const SWIM = {
 } as const;
 
 export const RAIL_HEIGHT = 1.1;
+/**
+ * Colliding rails block this far above the handrail, so a jump plus an auto-step can't clear
+ * them. The client draws the band as a glass strip with a slim cap.
+ */
+export const RAIL_GUARD = 0.3;
 
 /**
  * The platform's passenger drone: a four-seat electric quadcopter with ducted rotors.
@@ -79,10 +84,13 @@ export const RAIL_HEIGHT = 1.1;
  */
 export const DRONE = {
   pad: [42, 20, 0] as const,
-  /** Duct (rotor) centres in the body frame: (±armX, ductY, ±armZ). */
+  /**
+   * Duct (rotor) centres in the body frame: (±armX, ductY, ±armZ). Nothing on the ducts hangs
+   * below 2.61 (the motors), clear of the top of a jump (1.80 + 0.76): people walk and jump under them.
+   */
   armX: 2.9,
   armZ: 2.7,
-  ductY: 2.05,
+  ductY: 2.8,
   ductRadius: 1.15,
   blades: 3,
   /** Propeller revolutions per second at hover rpm. */
@@ -129,5 +137,9 @@ export const ELEVATOR = {
   dwellMs: 3000,
 } as const;
 
-/** The tender moored along the south edge of the boat landing. */
-export const TENDER = { x: -15.5, z: 25.0, length: 5.6, beam: 2.2, freeboard: 0.75 } as const;
+/**
+ * The tender moored along the south edge of the boat landing, its tube against the fenders.
+ * Beam is the hull's; the inflatable tube adds 0.29 a side (2.38 overall). Freeboard is the
+ * height of the hull side amidships, under the tube (whose top is 0.29 higher).
+ */
+export const TENDER = { x: -15.5, z: 24.8, length: 5.6, beam: 1.8, freeboard: 0.55 } as const;

@@ -1,6 +1,6 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat';
 import type RAPIER_DEFAULT from '@dimforge/rapier3d-compat';
-import { ELEVATOR } from '../layout/dims.ts';
+import { ELEVATOR, RAIL_GUARD } from '../layout/dims.ts';
 import type { DoorDef, Element, Layout, Surface, Vec3 } from '../layout/types.ts';
 import { droneBodyBoxes } from '../sim/drone.ts';
 
@@ -91,7 +91,7 @@ function descsFor(R: Rapier, el: Element): RAPIER.ColliderDesc[] {
         const dz = q[2] - p[2];
         const len = Math.hypot(dx, dz);
         if (len < 1e-3) continue;
-        const h = el.height + 0.3;
+        const h = el.height + RAIL_GUARD;
         out.push(
           R.ColliderDesc.cuboid(len / 2 + 0.05, h / 2, 0.05)
             .setTranslation((p[0] + q[0]) / 2, p[1] + h / 2, (p[2] + q[2]) / 2)

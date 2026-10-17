@@ -109,6 +109,10 @@ export interface FlightHud {
   heading: number;
   grounded: boolean;
   seats: string;
+  /** Flying itself home: what it is doing and how far it has to go (m). */
+  autopilot: { stage: string; distance: number } | null;
+  /** Standing on the helipad (nowhere to fly home to). */
+  atPad: boolean;
 }
 
 type Section = 'env' | 'settings' | 'perf' | 'controls';
@@ -171,14 +175,18 @@ export class UI {
   private readonly presenceText = el('span', {}, 'Offline');
   private readonly presence = el('div', { class: 'oh-presence oh-glass oh-joined-only is-offline' }, this.presenceDot, this.presenceText);
   private readonly prompt = el('div', { class: 'oh-prompt oh-glass oh-joined-only' });
+  private readonly shutter = el('div', { class: 'oh-shutter', 'aria-hidden': 'true' });
+  private readonly toast = el('div', { class: 'oh-toast oh-glass', role: 'status' });
+  private toastTimer = 0;
   private promptText: string | null = null;
   private readonly chat = el('div', { class: 'oh-chat oh-joined-only' });
+  private chatBurst = 0;
   private readonly chatLog = el('div', { class: 'oh-chat__log', role: 'log', 'aria-live': 'polite' });
   private readonly chatInput = input({ type: 'text', maxlength: '280', placeholder: 'Say something…', 'aria-label': 'Chat message' });
   private readonly chatBox = el('div', { class: 'oh-chatbox' }, this.chatInput, el('div', { class: 'oh-chatbox__hint', 'aria-hidden': 'true' }, el('span', {}, kbd('Enter'), 'send'), el('span', {}, kbd('Esc'), 'cancel')));
   private readonly aboard = el('div', { class: 'oh-aboard oh-glass oh-glass--strong' });
   private readonly flight = el('div', { class: 'oh-flight' });
-  private flightBuilt: { values: HTMLElement[]; hint: HTMLElement; mode: string } | null = null;
+  private flightBuilt: { values: HTMLElement[]; hint: HTMLElement; mode: string; ap: HTMLElement; apStage: HTMLElement; apDistance: HTMLElement } | null = null;
   private players: PlayerInfo[] = [];
   private connected = false;
   private self: PlayerInfo | null = null;
@@ -488,7 +496,10 @@ export class UI {
     this.perfHud.append(el('div', { class: 'oh-perf-top' }, el('div', { class: 'oh-fps' }, this.hudFps, el('span', { class: 'oh-fps__u' }, 'FPS')), this.hudHealth.el), this.hudGraph, this.hudCaption);
     this.perfHud.hidden = true;
     this.flight.hidden = true;
+    this.toast.hidden = true;
     this.hud.append(
+      this.shutter,
+      this.toast,
       this.status,
       this.presence,
       el('div', { class: 'oh-crosshair oh-joined-only' }),
@@ -584,29 +595,73 @@ export class UI {
       if (color) line.style.setProperty('--c', color);
       line.append(el('b', {}, entry.name), entry.text);
     }
-    this.chatLog.append(line);
-    while (this.chatLog.childElementCount > 40) this.chatLog.firstElementChild?.remove();
+    // Lines that arrive together (the history on joining) come in one after another.
+    line.style.animationDelay = `${Math.min(this.chatBurst, 10) * 45}ms`;
+    if (this.chatBurst++ === 0) queueMicrotask(() => (this.chatBurst = 0));
+    this.glideChat(() => {
+      this.chatLog.append(line);
+      while (this.chatLog.childElementCount > 40) this.chatLog.firstElementChild?.remove();
+    });
     setTimeout(() => line.classList.add('is-faded'), 12000);
+  }
+
+  /**
+   * Runs a change to the chat's layout and lets the lines already shown glide to their new
+   * places (a FLIP animation) instead of jumping: up to make room for a new line, down when
+   * the input box closes.
+   */
+  private glideChat(change: () => void) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      change();
+      return;
+    }
+    const lines = [...this.chatLog.children] as HTMLElement[];
+    const tops = lines.map((l) => l.getBoundingClientRect().top);
+    change();
+    lines.forEach((l, i) => {
+      if (!l.isConnected) return;
+      const dy = tops[i] - l.getBoundingClientRect().top;
+      if (Math.abs(dy) < 0.5) return;
+      l.animate([{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }], { duration: 420, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', composite: 'add' });
+    });
   }
 
   openChat() {
     this.chatOpen = true;
-    this.chat.classList.add('is-open');
-    this.chat.append(this.chatBox);
+    // Faded lines come back from the newest up, one after another.
+    const lines = [...this.chatLog.children] as HTMLElement[];
+    lines.forEach((l, i) => l.style.setProperty('--i', String(lines.length - 1 - i)));
+    this.glideChat(() => {
+      this.chat.classList.add('is-open');
+      this.chat.append(this.chatBox);
+    });
     this.chatInput.value = '';
     this.chatInput.focus();
   }
 
   closeChat() {
     this.chatOpen = false;
-    this.chat.classList.remove('is-open');
     this.chatInput.blur();
-    this.chatBox.remove();
+    this.glideChat(() => {
+      this.chat.classList.remove('is-open');
+      this.chatBox.remove();
+    });
     this.handlers.onResume();
   }
 
   setFade(on: boolean) {
     this.veil.classList.toggle('on', on);
+  }
+
+  /** A shutter flash and a note with the file name. */
+  screenshotTaken(name: string) {
+    this.shutter.classList.remove('is-on');
+    void this.shutter.offsetWidth; // restart the flash
+    this.shutter.classList.add('is-on');
+    this.toast.replaceChildren(icon('camera'), el('span', {}, 'Screenshot saved'), el('span', { class: 'oh-toast__file' }, name));
+    reveal(this.toast, true);
+    clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => reveal(this.toast, false, 260), 2600);
   }
 
   /** Instruments while flying or riding in the drone, or null to hide them. Runs every frame. */
@@ -630,8 +685,12 @@ export class UI {
         gauges.append(el('div', { class: 'oh-gauge' }, el('span', { class: 'oh-gauge__label' }, label), el('span', { class: 'oh-gauge__value' }, v, el('span', { class: 'oh-gauge__unit' }, unit))));
       }
       const hint = el('div', { class: 'oh-flight__hint oh-glass' });
-      this.flight.append(gauges, hint);
-      this.flightBuilt = { values, hint, mode: '' };
+      const apStage = el('span', {});
+      const apDistance = el('span', { class: 'oh-autopilot__dist' });
+      const ap = el('div', { class: 'oh-autopilot oh-glass', role: 'status' }, el('span', { class: 'oh-autopilot__dot', 'aria-hidden': 'true' }), el('b', {}, 'Autopilot'), apStage, apDistance);
+      ap.hidden = true;
+      this.flight.append(ap, gauges, hint);
+      this.flightBuilt = { values, hint, mode: '', ap, apStage, apDistance };
     }
     reveal(this.flight, true);
     const b = this.flightBuilt;
@@ -641,21 +700,26 @@ export class UI {
     setText(spd, String(Math.round(f.speed * 3.6)));
     setText(vs, `${f.climb >= 0 ? '+' : ''}${f.climb.toFixed(1)}`);
     setText(hdg, String(Math.round(((f.heading % 360) + 360) % 360)).padStart(3, '0'));
-    const mode = `${f.pilot}|${f.grounded}|${f.seats}`;
+    if (f.autopilot) {
+      setText(b.apStage, f.autopilot.stage);
+      const d = f.autopilot.distance;
+      setText(b.apDistance, d >= 1000 ? `${(d / 1000).toFixed(1)} km` : `${Math.round(d)} m`);
+    }
+    reveal(b.ap, !!f.autopilot);
+    const mode = `${f.pilot}|${f.grounded}|${f.seats}|${!!f.autopilot}|${f.atPad}`;
     if (mode !== b.mode) {
       b.mode = mode;
+      const home: Array<[string | null, string]> = f.atPad ? [] : [['H', 'fly home']];
       const items: Array<[string | null, string]> = f.pilot
-        ? f.grounded
+        ? f.autopilot
           ? [
-              ['Space', 'lift off'],
-              ['E', 'climb out'],
+              ['H', 'take over'],
+              [null, 'or move the stick'],
+              [null, 'Mouse looks around'],
             ]
-          : [
-              ['W A S D', 'fly'],
-              [null, 'Mouse steer'],
-              ['Space', 'climb'],
-              ['Shift / C', 'descend'],
-            ]
+          : f.grounded
+            ? [['Space', 'lift off'], ...home, ['E', 'climb out']]
+            : [['W A S D', 'fly'], [null, 'Mouse steer'], ['Space', 'climb'], ['Shift / C', 'descend'], ...home]
         : f.grounded
           ? [['E', 'climb out']]
           : [[null, 'Riding along · look around with the mouse']];
@@ -975,11 +1039,15 @@ export class UI {
           keyRow('T / Enter', 'Chat'),
           keyRow('Tab', 'Who’s aboard (hold)'),
           keyRow('Esc', 'Menu'),
+          keyRow('P', 'Screenshot'),
           keyRow('F3', 'Performance'),
         ),
       ),
-      section('Flying the drone', group(keyRow('W A S D', 'Fly'), keyRow('Space', 'Climb'), keyRow('Shift / C', 'Descend'), keyRow('E', 'Climb out once landed'))),
-      el('p', { class: 'oh-note' }, icon('alert'), el('span', {}, 'Gamepad: left stick moves, right stick looks, A jumps, X uses, LB runs.')),
+      section(
+        'Flying the drone',
+        group(keyRow('W A S D', 'Fly'), keyRow('Space', 'Climb'), keyRow('Shift / C', 'Descend'), keyRow('H', 'Fly home and land on the helipad'), keyRow('E', 'Climb out once landed')),
+      ),
+      el('p', { class: 'oh-note' }, icon('alert'), el('span', {}, 'Gamepad: left stick moves, right stick looks, A jumps, X uses, LB runs, Y flies the drone home.')),
     );
   }
 }

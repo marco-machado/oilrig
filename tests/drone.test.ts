@@ -4,10 +4,14 @@ import {
   DRONE_SAFE_Y,
   DRONE_TIMING,
   type DronePhase,
+  DroneAutopilot,
   DroneFlight,
   DroneScheduler,
   type ServerMessage,
+  PAD_YAW,
+  type StaticWorld,
   type Vec3,
+  droneClearPath,
   dronePose,
 } from '@ocean-home/shared';
 import { DT, idle, makeWorld, motor, walk, world as staticWorld } from './helpers.ts';
@@ -239,6 +243,95 @@ describe('flying the drone', () => {
     expect(sea.position.y).toBeGreaterThanOrEqual(DIMS.DRONE.minSeaAltitude - 0.1);
     d.dispose();
     sea.dispose();
+  });
+});
+
+describe('flying home on autopilot', () => {
+  /** Flies on autopilot from `start` until it lands (or gives up), recording what a passenger would notice. */
+  function flyHome(sw: StaticWorld, start: Vec3, yaw: number, opts: { occupiedFor?: number; maxSeconds?: number; landFirst?: boolean } = {}) {
+    const d = new DroneFlight(sw, start, yaw);
+    // Put it down where it is first (the pilot landed there), with the same flight model.
+    if (opts.landFirst) for (let t = 0; t < 15; t += 1 / 120) d.step({ forward: 0, right: 0, up: -1, yaw }, 1 / 120);
+    const from: Vec3 = [d.position.x, d.position.y, d.position.z];
+    const startedGrounded = d.grounded;
+    const ap = new DroneAutopilot(from, (a, b) => droneClearPath(sw, a, b));
+    const dt = 1 / 120;
+    let t = 0;
+    let lowest = Infinity;
+    let fastest = 0;
+    let maxJump = 0;
+    let prev = { ...d.position };
+    const stages: string[] = [ap.stage];
+    while (t < (opts.maxSeconds ?? 240) && ap.stage !== 'landed' && ap.stage !== 'stuck') {
+      d.step(ap.step(d, dt, t < (opts.occupiedFor ?? 0)), dt);
+      t += dt;
+      if (stages.at(-1) !== ap.stage) stages.push(ap.stage);
+      const overPlatform = d.groundBelow(40) !== null;
+      if (!overPlatform) lowest = Math.min(lowest, d.position.y);
+      fastest = Math.max(fastest, Math.hypot(d.velocity.x, d.velocity.z));
+      maxJump = Math.max(maxJump, Math.hypot(d.position.x - prev.x, d.position.y - prev.y, d.position.z - prev.z));
+      prev = { ...d.position };
+    }
+    const result = { from, startedGrounded, stages, seconds: t, lowest, fastest, maxJump, position: { ...d.position }, yaw: d.yaw, grounded: d.grounded };
+    d.dispose();
+    return result;
+  }
+
+  const onPad = (r: { position: { x: number; y: number; z: number }; grounded: boolean; yaw: number }) => {
+    expect(r.grounded).toBe(true);
+    expect(Math.hypot(r.position.x - PAD[0], r.position.z - PAD[2])).toBeLessThan(0.8);
+    expect(r.position.y).toBeGreaterThan(PAD[1] - 0.05);
+    expect(r.position.y).toBeLessThan(PAD[1] + 0.2);
+    let dy = (r.yaw - PAD_YAW) % (Math.PI * 2);
+    if (dy > Math.PI) dy -= Math.PI * 2;
+    if (dy < -Math.PI) dy += Math.PI * 2;
+    expect(Math.abs(dy)).toBeLessThan(0.3); // parked nose to the platform
+  };
+
+  it('from out over the sea, it flies back, lines up over the pad and lands', async () => {
+    const sw = await staticWorld({});
+    const r = flyHome(sw, [PAD[0] + 260, 12, 140], 1.2);
+    expect(r.stages).toEqual(['climb', 'cruise', 'descend', 'landed']);
+    onPad(r);
+    expect(r.lowest).toBeGreaterThanOrEqual(DIMS.DRONE.minSeaAltitude);
+    expect(r.fastest).toBeLessThanOrEqual(DIMS.DRONE.maxSpeed + 1e-6);
+    expect(r.maxJump).toBeLessThan(0.5);
+    expect(r.seconds).toBeLessThan(90);
+  });
+
+  it('from under the main deck, it flies out from under the platform before climbing, then lands', async () => {
+    const sw = await staticWorld({});
+    const r = flyHome(sw, [0, 9, 0], 0);
+    expect(r.stages[0]).toBe('climb');
+    expect(r.stages.at(-1)).toBe('landed');
+    onPad(r);
+  });
+
+  it('from the ground on the terrace, it lifts off and lands on the pad', async () => {
+    const sw = await staticWorld({});
+    const r = flyHome(sw, [16, 26, 11], 1, { landFirst: true });
+    // It was standing on the terrace, well away from the pad.
+    expect(r.startedGrounded).toBe(true);
+    expect(r.from[1]).toBeLessThan(21);
+    expect(Math.hypot(r.from[0] - PAD[0], r.from[2] - PAD[2])).toBeGreaterThan(20);
+    expect(r.stages.at(-1)).toBe('landed');
+    onPad(r);
+  });
+
+  it('already on the pad, there is nothing to do', async () => {
+    const sw = await staticWorld({});
+    const r = flyHome(sw, [...PAD], PAD_YAW);
+    expect(r.stages).toEqual(['descend', 'landed']);
+    expect(r.seconds).toBeLessThan(0.1);
+  });
+
+  it('holds over the pad while someone stands on the landing circle, then lands once they leave', async () => {
+    const sw = await staticWorld({});
+    const r = flyHome(sw, [PAD[0] + 60, 40, 0], 0, { occupiedFor: 45 });
+    expect(r.stages).toContain('hold');
+    expect(r.stages.at(-1)).toBe('landed');
+    expect(r.seconds).toBeGreaterThan(45);
+    onPad(r);
   });
 });
 

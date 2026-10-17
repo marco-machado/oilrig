@@ -337,6 +337,22 @@ export interface DroneHooks {
   onChange?: (next: DroneState, prev: DroneState) => void;
 }
 
+/** Waypoints from `from` up to a safe height, moving out from under the platform first if needed. */
+export function climbOutRoute(from: Vec3, clear: (a: Vec3, b: Vec3) => boolean): Vec3[] {
+  const up = (p: Vec3): Vec3 => [p[0], Math.max(p[1], DRONE_SAFE_Y), p[2]];
+  if (from[1] >= DRONE_SAFE_Y - 0.5 || clear(from, up(from))) return from[1] >= DRONE_SAFE_Y - 0.5 ? [from] : [from, up(from)];
+  const F = FOOTPRINT;
+  const exits: Vec3[] = [
+    [F.x0, from[1], from[2]],
+    [F.x1, from[1], from[2]],
+    [from[0], from[1], F.z0],
+    [from[0], from[1], F.z1],
+  ];
+  exits.sort((a, b) => Math.hypot(a[0] - from[0], a[2] - from[2]) - Math.hypot(b[0] - from[0], b[2] - from[2]));
+  for (const e of exits) if (clear(from, e) && clear(e, up(e))) return [from, e, up(e)];
+  return [from, up(from)];
+}
+
 /** Arrival/departure state machine. Holds off while the pad is occupied; hands over to a pilot while landed. */
 export class DroneScheduler {
   state: DroneState;
@@ -385,21 +401,8 @@ export class DroneScheduler {
     this.set({ phase: 'approach', t0: now, until: now + DRONE_TIMING.approachMs, bearing, from, fromYaw: yaw, padYaw: yaw });
   }
 
-  /** Waypoints from `from` up to a safe height, moving out from under the platform first if needed. */
   private climbOut(from: Vec3): Vec3[] {
-    const clear = this.hooks.clearPath ?? (() => true);
-    const up = (p: Vec3): Vec3 => [p[0], Math.max(p[1], DRONE_SAFE_Y), p[2]];
-    if (from[1] >= DRONE_SAFE_Y - 0.5 || clear(from, up(from))) return from[1] >= DRONE_SAFE_Y - 0.5 ? [from] : [from, up(from)];
-    const F = FOOTPRINT;
-    const exits: Vec3[] = [
-      [F.x0, from[1], from[2]],
-      [F.x1, from[1], from[2]],
-      [from[0], from[1], F.z0],
-      [from[0], from[1], F.z1],
-    ];
-    exits.sort((a, b) => Math.hypot(a[0] - from[0], a[2] - from[2]) - Math.hypot(b[0] - from[0], b[2] - from[2]));
-    for (const e of exits) if (clear(from, e) && clear(e, up(e))) return [from, e, up(e)];
-    return [from, up(from)];
+    return climbOutRoute(from, this.hooks.clearPath ?? (() => true));
   }
 
   private startDepart(now: number) {
@@ -677,4 +680,139 @@ export class DroneFlight {
     this.sw.world.removeCharacterController(this.controller);
     this.sw.world.removeCollider(this.collider, false);
   }
+}
+
+// ---------- autopilot ----------
+
+export type AutopilotStage = 'climb' | 'cruise' | 'hold' | 'descend' | 'landed' | 'stuck';
+
+/** Heading the drone parks with on the pad: nose towards the platform. */
+export const PAD_YAW = yawFacing(-1, 0);
+/** Comfortable accelerations the autopilot plans with, well inside the flight model's limits. */
+const AP_ACCEL = 3.5;
+const AP_VACCEL = 2.5;
+/** Within this of an intermediate waypoint, it carries on to the next one without stopping. */
+const AP_PASS = 3;
+/** Over the pad: how close (m) and slow (m/s) before it starts down. */
+const AP_OVER_PAD = 1.2;
+
+/**
+ * Flies the drone home and puts it down on the pad, by working the same stick a pilot uses
+ * (so the flight model, its limits and the platform's colliders all still apply): out from
+ * under the deck if it is there, up to a safe height, across to above the pad, then straight
+ * down, turning to the parking heading on the way. It holds above the pad while anyone stands
+ * on the landing circle, and gives up if something stops it making progress.
+ */
+export class DroneAutopilot {
+  stage: AutopilotStage = 'climb';
+  private readonly route: Vec3[];
+  private leg = 1;
+  private best = Infinity;
+  private sinceProgress = 0;
+
+  /** `clear`: whether a straight flight from a to b would hit nothing (droneClearPath). */
+  constructor(from: Vec3, clear: (a: Vec3, b: Vec3) => boolean) {
+    const above: Vec3 = [PAD[0], DRONE_SAFE_Y, PAD[2]];
+    const overPad = Math.hypot(from[0] - PAD[0], from[2] - PAD[2]) < AP_OVER_PAD * 2 && from[1] >= PAD[1] - 0.5;
+    if (overPad) {
+      // Already over the pad: straight down.
+      this.route = [from, [PAD[0], from[1], PAD[2]]];
+      this.stage = 'descend';
+    } else {
+      const out = climbOutRoute(from, clear);
+      this.route = [...out, above];
+      this.stage = out.length > 1 ? 'climb' : 'cruise';
+    }
+  }
+
+  /** Straight-line distance left to the pad (m), for the instruments. */
+  distanceHome(p: Vec3) {
+    return Math.hypot(p[0] - PAD[0], p[1] - PAD[1], p[2] - PAD[2]);
+  }
+
+  /** The stick for this step. `padOccupied`: someone stands on the landing circle. */
+  step(flight: DroneFlight, dt: number, padOccupied = false): DroneInput {
+    const p: Vec3 = [flight.position.x, flight.position.y, flight.position.z];
+    const hold: DroneInput = { forward: 0, right: 0, up: 0, yaw: flight.yaw };
+    if (this.stage === 'landed' || this.stage === 'stuck') return hold;
+    let want: Vec3 = [0, 0, 0];
+    let yaw = flight.yaw;
+    if (this.stage === 'descend' || this.stage === 'hold') {
+      // Over the pad: hold position over its centre, turn to the parking heading, and go down
+      // once it is lined up and nobody is on the circle.
+      const dx = PAD[0] - p[0];
+      const dz = PAD[2] - p[2];
+      const k = Math.min(1, 2.5 / Math.max(1e-6, Math.hypot(dx, dz)));
+      yaw = PAD_YAW;
+      const lined = Math.abs(angleDiff(flight.yaw, PAD_YAW)) < 0.25 && Math.hypot(dx, dz) < AP_OVER_PAD;
+      this.stage = padOccupied && p[1] - PAD[1] > 2.5 ? 'hold' : 'descend';
+      want = [dx * 1.2 * k, this.stage === 'descend' && lined ? -DRONE.maxDescent : 0, dz * 1.2 * k];
+      if (flight.grounded) {
+        this.stage = 'landed';
+        return hold;
+      }
+      this.watchProgress(p[1] - PAD[1] + Math.hypot(dx, dz), dt);
+    } else {
+      const target = this.route[this.leg];
+      const last = this.leg === this.route.length - 1;
+      const d: Vec3 = [target[0] - p[0], target[1] - p[1], target[2] - p[2]];
+      const dist = Math.hypot(d[0], d[1], d[2]);
+      if ((!last && dist < AP_PASS) || (last && Math.hypot(d[0], d[2]) < AP_OVER_PAD && Math.abs(d[1]) < 1.5 && Math.hypot(flight.velocity.x, flight.velocity.z) < 1)) {
+        this.leg++;
+        this.best = Infinity;
+        if (this.leg >= this.route.length) this.stage = 'descend';
+        else this.stage = this.leg === this.route.length - 1 ? 'cruise' : 'climb';
+        return this.step(flight, dt, padOccupied);
+      }
+      // Speed along the leg: as fast as the envelope allows, braking in time to stop at the
+      // end of the last leg (intermediate waypoints are flown through).
+      const dh = Math.hypot(d[0], d[2]);
+      const brakeH = last ? Math.sqrt(2 * AP_ACCEL * dh) : DRONE.maxSpeed;
+      const brakeV = Math.sqrt(2 * AP_VACCEL * Math.abs(d[1]));
+      let vh = Math.min(DRONE.maxSpeed, brakeH);
+      let vy = Math.sign(d[1]) * Math.min(d[1] > 0 ? DRONE.maxClimb : DRONE.maxDescent, brakeV);
+      // Keep to the straight line between waypoints: scale both so neither runs ahead.
+      if (dh > 1e-3 && Math.abs(d[1]) > 1e-3) {
+        const s = Math.min(vh / dh, Math.abs(vy / d[1]));
+        vh = dh * s;
+        vy = d[1] * s;
+      }
+      want = dh > 1e-3 ? [(d[0] / dh) * vh, vy, (d[2] / dh) * vh] : [0, vy, 0];
+      // Face where it is going once it moves along; otherwise keep the heading.
+      if (dh > 8) yaw = yawFacing(d[0], d[2]);
+      this.watchProgress(dist, dt);
+    }
+    return toStick(want, yaw);
+  }
+
+  /** Gives up when the distance to go has not shrunk by half a metre in 8 seconds. */
+  private watchProgress(dist: number, dt: number) {
+    if (this.stage === 'hold' || dist < this.best - 0.5) {
+      this.best = this.stage === 'hold' ? Infinity : dist;
+      this.sinceProgress = 0;
+    } else if ((this.sinceProgress += dt) > 8) {
+      this.stage = 'stuck';
+    }
+  }
+}
+
+function angleDiff(a: number, b: number) {
+  let d = (b - a) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+/** The stick deflections that ask the flight model for world velocity `v` while facing `yaw`. */
+function toStick(v: Vec3, yaw: number): DroneInput {
+  const fx = -Math.sin(yaw);
+  const fz = -Math.cos(yaw);
+  const rx = -fz;
+  const rz = fx;
+  return {
+    forward: (v[0] * fx + v[2] * fz) / DRONE.maxSpeed,
+    right: (v[0] * rx + v[2] * rz) / DRONE.maxSpeed,
+    up: v[1] > 0 ? v[1] / DRONE.maxClimb : v[1] / DRONE.maxDescent,
+    yaw,
+  };
 }

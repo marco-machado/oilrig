@@ -23,6 +23,9 @@ const SAMPLE_DIRS = [
   new Vector3(0, 0.5, -1).normalize(),
 ];
 
+/** How much lamplight near the camera counts towards the exposure, against sky and sun. */
+const LAMP_ADAPTATION = 0.2;
+
 const smooth = (e0: number, e1: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
   return t * t * (3 - 2 * t);
@@ -92,7 +95,8 @@ export class Atmosphere {
     this.sun.shadow.map = null;
   }
 
-  update(dt: number, cameraPos: Vector3, c: Celestial, w: WeatherState) {
+  /** `lamps`: lamplight falling around the camera (see lampLightAt), which the exposure adapts to as well. */
+  update(dt: number, cameraPos: Vector3, c: Celestial, w: WeatherState, lamps = 0) {
     const sky = this.sky;
     this.sunVec.set(...c.sunDirection);
     this.moonVec.set(...c.moonDirection);
@@ -196,12 +200,17 @@ export class Atmosphere {
     skyLum = (skyLum * (1 - cover) + cloudLum * cover) * dim + nightFloor * 0.5;
     const sinElev = Math.max(0.3, Math.sin((Math.max(sunElev, 0) * Math.PI) / 180));
     const direct = ((this.sun.intensity * 0.8) / Math.PI) * 0.25 * (useSun ? sinElev : 1);
-    // Partial adaptation: darker scenes are brightened, but storms and dusk stay moody.
-    const sceneLight = skyLum * 0.5 + direct + 0.0005;
+    // Partial adaptation: darker scenes are brightened, but storms and dusk stay moody. Lamplight
+    // counts too: at night a lit room or a floodlit deck sets the exposure, not the dark sky.
+    const sceneLight = skyLum * 0.5 + direct + lamps * LAMP_ADAPTATION + 0.0005;
     const target2 = Math.min(6, Math.max(0.05, 0.1 * Math.pow(10.6 / sceneLight, 0.78)));
     const k = Math.min(1, dt * 1.5);
     this.exposure = Math.exp(Math.log(this.exposure) + (Math.log(target2) - Math.log(this.exposure)) * k);
     U.exposure.value = this.exposure;
+    // Matte white under this sky: the sky's own radiance plus the sun (or moon) on a surface
+    // half turned towards it.
+    const sunPart = (this.sun.intensity * 0.5) / Math.PI;
+    U.ambient.value.setRGB(skyLum + sunPart * this.sun.color.r, skyLum + sunPart * this.sun.color.g, skyLum + sunPart * this.sun.color.b);
 
     U.nightLights.value = 1 - smooth(-3, 6, sunElev) * (1 - 0.5 * w.storminess * w.cloudCover);
 

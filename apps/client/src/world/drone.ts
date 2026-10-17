@@ -1,6 +1,7 @@
 import {
   BoxGeometry,
   BufferAttribute,
+  Color,
   BufferGeometry,
   CircleGeometry,
   CylinderGeometry,
@@ -39,6 +40,7 @@ import {
 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DIMS, type DronePose, type Vec3 } from '@ocean-home/shared';
+import type { AimedLight } from '../render/stableClusteredLighting.ts';
 import { U } from '../state.ts';
 import { tubeGeometry } from './structure.ts';
 
@@ -51,6 +53,8 @@ import { tubeGeometry } from './structure.ts';
 // over whatever deck it hovers above.
 
 const D = DIMS.DRONE;
+const STROBE_AIM = new Vector3(0, -1, 0);
+const LANDING_AIM = new Vector3(0, -1, -0.5).normalize();
 
 /** Pod profile along z (nose at -z): [z, radius]. */
 const STATIONS: Array<[number, number]> = [
@@ -85,7 +89,9 @@ function bodyMaterial() {
   const belly = smoothstep(0.86, 0.72, y);
   const accent = smoothstep(0.025, 0.0, y.sub(0.93).abs());
   m.colorNode = mix(mix(color(0xf2f3f0), color(0x2b2e33), belly), color(0x28d7f0), accent);
-  m.emissiveNode = color(0x28d7f0).mul(accent.mul(U.nightLights.mul(6).add(0.6)));
+  // A faint glow: night exposure runs up to 6×, and more turned the line across the nose into
+  // a cyan glare in the pilot's view.
+  m.emissiveNode = color(0x28d7f0).mul(accent.mul(0.12));
   return m;
 }
 
@@ -115,7 +121,8 @@ function discMaterial(opacity: any) {
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide });
   const r = positionLocal.xz.length().div(D.ductRadius);
   const bands = sin(r.mul(30)).mul(0.12).add(0.88);
-  m.colorNode = color(0x26282b);
+  // Unlit, so it takes the light of the sky around it: dark at night, not a grey glow.
+  m.colorNode = color(0x26282b).mul(U.ambient);
   m.opacityNode = opacity.mul(smoothstep(1.0, 0.9, r)).mul(smoothstep(0.1, 0.2, r)).mul(bands).mul(0.42);
   return m;
 }
@@ -154,6 +161,8 @@ function deckSpray(count: number) {
 
   const center = uniform(new Vector3(D.pad[0], D.pad[1], D.pad[2]));
   const strength = uniform(0);
+  /** Light on the spray: sky, sun and the lamps around it (unlit, it would glow white at night). */
+  const light = uniform(new Color(1, 1, 1));
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
   m.fog = true;
   const life: any = Fn(() => {
@@ -177,15 +186,16 @@ function deckSpray(count: number) {
   const c = attribute('aCorner', 'vec2') as any;
   const soft = smoothstep(1, 0.2, c.length());
   const n = mx_noise_float(vec3(c.mul(1.7), life.mul(3))).mul(0.5).add(0.5);
-  m.colorNode = mix(color(0xb9c2c6), color(0xeef2f3), n);
+  // Fine mist: it scatters back only part of the light falling on it.
+  m.colorNode = mix(color(0xb9c2c6), color(0xeef2f3), n).mul(light).mul(0.45);
   // Puffs fade out close to the camera, so none sweep through the cockpit as a hard-edged veil.
   const near = smoothstep(2.0, 4.5, positionWorld.sub(cameraPosition).length());
-  m.opacityNode = soft.mul(n.mul(0.6).add(0.4)).mul(life.oneMinus()).mul(smoothstep(0, 0.1, life)).mul(strength).mul(near).mul(0.3);
+  m.opacityNode = soft.mul(n.mul(0.6).add(0.4)).mul(life.oneMinus()).mul(smoothstep(0, 0.1, life)).mul(strength).mul(near).mul(0.2);
   const mesh = new Mesh(g, m);
   mesh.frustumCulled = false;
   mesh.renderOrder = 15;
   mesh.name = 'rotor-wash';
-  return { mesh, center, strength };
+  return { mesh, center, strength, light };
 }
 
 export class Drone {
@@ -196,11 +206,13 @@ export class Drone {
   private readonly discOpacity = uniform(0);
   private readonly strobe = uniform(0);
   private readonly strobeLight = new PointLight(0xffffff, 0, 30, 2);
-  private readonly landingLight = new PointLight(0xfff2dc, 0, 40, 1.6);
+  private readonly landingLight = new PointLight(0xfff2dc, 0, 40, 2);
   private readonly cabinLight = new PointLight(0x9fe8ff, 0, 4, 2);
   private readonly screens = uniform(0);
   private angle = 0;
   private time = 0;
+  /** Lamplight around the spray (lampLightAt), set by the caller each frame. */
+  sprayLamplight = 0;
   /** Latest pose, for audio and debugging. */
   pose: DronePose | null = null;
 
@@ -374,7 +386,8 @@ export class Drone {
     const screen = new BoxGeometry(0.8, 0.1, 0.01);
     screen.rotateX(-1.0);
     screen.translate(0, 1.07, -1.1);
-    this.body.add(new Mesh(screen, emissive(0x5fe0ff, this.screens.mul(2.2))));
+    // Dimmed at night, when the exposure would turn them into a glare across the dashboard.
+    this.body.add(new Mesh(screen, emissive(0x5fe0ff, this.screens.mul(mix(float(2.2), float(0.3), U.nightLights)))));
     const stick = tubeGeometry([-0.78, 0.98, -0.4], [-0.78, 1.18, -0.42], 0.02, 8);
     this.body.add(new Mesh(stick, dark));
 
@@ -392,8 +405,12 @@ export class Drone {
     const strobe = new SphereGeometry(0.07, 10, 8);
     strobe.translate(0, 0.42, 0.2);
     this.body.add(new Mesh(strobe, emissive(0xffffff, this.strobe.mul(60))));
+    // The strobe and the landing light are aimed down from the belly, so they light the deck
+    // and the sea, not the drone itself or the cabin above them.
     this.strobeLight.position.set(0, 0.35, 0.2);
-    this.landingLight.position.set(0, -0.8, -1.4);
+    this.landingLight.position.set(0, 0.6, -1.5);
+    Object.assign(this.strobeLight.userData, { aim: new Vector3(0, -1, 0), cone: 0.1 } satisfies AimedLight);
+    Object.assign(this.landingLight.userData, { aim: new Vector3(0, -1, -0.5).normalize(), cone: 0.72 } satisfies AimedLight);
     this.cabinLight.position.set(0, 1.9, 0.1);
     this.body.add(this.strobeLight, this.landingLight, this.cabinLight);
 
@@ -426,6 +443,13 @@ export class Drone {
     const [x, y, z] = pose.position;
     this.group.position.set(x, y, z);
     this.group.rotation.set(pose.pitch, pose.yaw, pose.roll, 'YXZ');
+    this.group.updateMatrixWorld();
+    for (const [l, local] of [
+      [this.strobeLight, STROBE_AIM],
+      [this.landingLight, LANDING_AIM],
+    ] as const) {
+      (l.userData as AimedLight).aim!.copy(local).transformDirection(this.group.matrixWorld);
+    }
     U.droneCabin.value.set(x, y + POD_Y, z, 1.25);
 
     // Propellers: blades blur into discs as they speed up.
@@ -448,7 +472,7 @@ export class Drone {
     this.strobeLight.intensity = flash * (2 + 25 * U.nightLights.value);
     const height = ground === null ? y : y - ground;
     const low = height < 60 && rpm > 0.5 && height > 0.4;
-    this.landingLight.intensity = low ? 80 * U.nightLights.value : 0;
+    this.landingLight.intensity = low ? 30 * U.nightLights.value : 0;
 
     // Rotor wash: spray on a deck below, flattening on the sea.
     // Idling on the pad (rotor 0.4) moves no air worth seeing; the spray builds towards lift-off.
@@ -456,6 +480,8 @@ export class Drone {
     const deck = ground !== null && ground > 0.5 ? thrust * thrust * Math.max(0, Math.min(1, 1 - height / 10)) : 0;
     this.spray.center.value.set(x, ground ?? 0, z);
     this.spray.strength.value = deck;
+    const lamps = this.sprayLamplight / Math.PI;
+    this.spray.light.value.copy(U.ambient.value).addScalar(lamps);
     U.washCenter.value.set(x, z);
     U.washSea.value = ground === null || ground < 0.5 ? rpm * rpm * Math.max(0, Math.min(1, (24 - y) / 18)) : 0;
   }

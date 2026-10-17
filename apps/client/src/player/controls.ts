@@ -16,7 +16,8 @@ export class Controls {
   private readonly keys = new Set<string>();
   private jumpQueued = false;
   private interactQueued = false;
-  private padPrev = { jump: false, interact: false };
+  private homeQueued = false;
+  private padPrev = { jump: false, interact: false, home: false };
   private readonly element: HTMLElement;
   onPointerLockChange: ((locked: boolean) => void) | null = null;
 
@@ -31,6 +32,7 @@ export class Controls {
         e.preventDefault();
       }
       if (e.code === 'KeyE') this.interactQueued = true;
+      if (e.code === 'KeyH') this.homeQueued = true;
     });
     document.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
@@ -76,7 +78,7 @@ export class Controls {
     return null;
   }
 
-  /** Flying the drone: stick in the view frame, Space climbs, Shift or C descends. */
+  /** Flying the drone: stick in the view frame, Space climbs, Shift or C descends, H (or Y) flies home. */
   sampleFlight(dt: number) {
     const walk = this.sample(dt);
     const k = this.keys;
@@ -87,11 +89,11 @@ export class Controls {
       const pad = this.gamepad();
       if (pad) up += (pad.buttons[7]?.value ?? 0) - (pad.buttons[6]?.value ?? 0) + (pad.buttons[0]?.pressed ? 1 : 0) - (pad.buttons[1]?.pressed ? 1 : 0);
     }
-    return { forward: walk.forward, right: walk.right, up: Math.max(-1, Math.min(1, up)), interact: walk.interact, yaw: this.yaw };
+    return { forward: walk.forward, right: walk.right, up: Math.max(-1, Math.min(1, up)), interact: walk.interact, home: walk.home, yaw: this.yaw };
   }
 
-  /** Samples the current input. Consumes queued jump/interact presses. */
-  sample(dt: number): MoveInput & { interact: boolean } {
+  /** Samples the current input. Consumes queued jump/interact/home presses. */
+  sample(dt: number): MoveInput & { interact: boolean; home: boolean } {
     let forward = 0;
     let right = 0;
     const k = this.keys;
@@ -104,8 +106,10 @@ export class Controls {
     let run = k.has('ShiftLeft') || k.has('ShiftRight');
     let jump = this.jumpQueued;
     let interact = this.interactQueued;
+    let home = this.homeQueued;
     this.jumpQueued = false;
     this.interactQueued = false;
+    this.homeQueued = false;
 
     const pad = this.enabled ? this.gamepad() : null;
     if (pad) {
@@ -119,11 +123,13 @@ export class Controls {
       this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
       const pj = !!pad.buttons[0]?.pressed;
       const pi = !!pad.buttons[2]?.pressed;
+      const ph = !!pad.buttons[3]?.pressed;
       if (pj && !this.padPrev.jump) jump = true;
       if (pi && !this.padPrev.interact) interact = true;
-      this.padPrev = { jump: pj, interact: pi };
+      if (ph && !this.padPrev.home) home = true;
+      this.padPrev = { jump: pj, interact: pi, home: ph };
       if (pad.buttons[10]?.pressed || pad.buttons[4]?.pressed) run = true;
     }
-    return { forward, right, run, jump, interact, yaw: this.yaw };
+    return { forward, right, run, jump, interact, home, yaw: this.yaw };
   }
 }

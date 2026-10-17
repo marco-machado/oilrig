@@ -132,6 +132,10 @@ export interface LightDef {
   distance: number;
   /** Whether a real point light is created (otherwise only the emissive fixture). */
   casts: boolean;
+  /** Aimed lights (downlights, floods) light only a cone around `aim` (a unit vector). */
+  aim?: Vec3;
+  /** Cosine of the cone's half angle. */
+  cone?: number;
 }
 
 export interface PlaceDef {

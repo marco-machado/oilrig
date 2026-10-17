@@ -48,6 +48,17 @@ const HIP_Y = 0.93;
 const HIP_X = 0.09;
 const SHOULDER_Y = 1.42;
 
+/** A speech bubble that has had its time plays its exit animation, then hides. */
+function expireBubble(a: Avatar, now: number) {
+  if (a.bubble.hidden || now <= a.bubbleUntil) return;
+  if (now > a.bubbleUntil + 260) {
+    a.bubble.hidden = true;
+    a.bubble.classList.remove('is-leaving');
+  } else if (!a.bubble.classList.contains('is-leaving')) {
+    a.bubble.classList.add('is-leaving');
+  }
+}
+
 /** Procedural figures for the other people on board, with name tags and chat bubbles. */
 export class Avatars {
   readonly group = new Group();
@@ -159,6 +170,10 @@ export class Avatars {
     const a = this.avatars.get(id);
     if (!a) return;
     a.bubble.textContent = text;
+    // Pop in again for each new message, even over one still showing.
+    a.bubble.classList.remove('is-leaving');
+    a.bubble.hidden = true;
+    void a.bubble.offsetWidth;
     a.bubble.hidden = false;
     a.bubbleUntil = performance.now() + 7000;
   }
@@ -183,7 +198,7 @@ export class Avatars {
         a.knees[0].rotation.x = a.knees[1].rotation.x = -1.88;
         a.arms[0].rotation.x = a.arms[1].rotation.x = 0.3;
         a.elbows[0].rotation.x = a.elbows[1].rotation.x = 1.0;
-        if (!a.bubble.hidden && now > a.bubbleUntil) a.bubble.hidden = true;
+        expireBubble(a, now);
         continue;
       }
       const s = a.buffer.sample(renderT);
@@ -202,11 +217,21 @@ export class Avatars {
       a.arms[0].rotation.x = -swing * 0.8;
       a.arms[1].rotation.x = swing * 0.8;
       a.elbows[0].rotation.x = a.elbows[1].rotation.x = 0.1;
-      if (!a.bubble.hidden && now > a.bubbleUntil) a.bubble.hidden = true;
+      expireBubble(a, now);
     }
   }
 
   get count() {
     return this.avatars.size;
+  }
+
+  /** Where the others stand (feet), leaving out anyone `skip` names (people seated in the drone). */
+  standing(skip: (id: string) => boolean): Vec3[] {
+    const out: Vec3[] = [];
+    for (const [id, a] of this.avatars) {
+      if (!a.root.visible || skip(id)) continue;
+      out.push([a.root.position.x, a.root.position.y, a.root.position.z]);
+    }
+    return out;
   }
 }

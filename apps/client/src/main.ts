@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import { NeutralToneMapping, PerspectiveCamera, Scene, Timer, Vector3, WebGPURenderer } from 'three/webgpu';
+import { NeutralToneMapping, PerspectiveCamera, type PointLight, Scene, Timer, Vector3, WebGPURenderer } from 'three/webgpu';
 import { SunLight } from 'three/addons/lights/SunLight.js';
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js';
 import { StableClusteredLighting } from './render/stableClusteredLighting.ts';
@@ -8,6 +8,8 @@ import {
   type ClockConfig,
   DEFAULT_EPOCH,
   DIMS,
+  type AutopilotStage,
+  DroneAutopilot,
   DroneCrew,
   DroneFlight,
   type DronePose,
@@ -66,11 +68,26 @@ import { debugParams } from './debug.ts';
 import { hideLoading, setLoading } from './loading.ts';
 import { Profiler, gpuTimingWanted, setGpuTimingWanted } from './perf.ts';
 import { DynamicResolution } from './render/dynamicResolution.ts';
+import { lampLightAt } from './render/localLight.ts';
+import { saveScreenshot } from './screenshot.ts';
 
 const DEFAULT_SEED = 1337;
 const LOCAL_ID = 'local';
 const PILOT_DT = 1 / 120;
+const AUTOPILOT_STAGE: Partial<Record<AutopilotStage, string>> = {
+  climb: 'Climbing clear',
+  cruise: 'Flying home',
+  hold: 'Holding: helipad occupied',
+  descend: 'Landing on the helipad',
+};
 const SEAT_NAMES = ['pilot', 'front passenger', 'rear left', 'rear right'];
+/** Sample offsets (m) around a point, for lamplight estimates. */
+const RING: Array<[number, number]> = [
+  [2.5, 0],
+  [-2.5, 0],
+  [0, 2.5],
+  [0, -2.5],
+];
 
 async function boot() {
   const app = document.getElementById('app')!;
@@ -155,6 +172,21 @@ async function boot() {
   scene.add(drone.group, drone.spray.mesh);
   const tender = new Tender(renderer, ocean, layout.vessels[0], materials);
   scene.add(tender.group, tender.lines);
+  // Every lamp in the world, for the exposure's adaptation to lamplight.
+  const lamps: PointLight[] = [];
+  scene.traverse((o) => {
+    if ((o as PointLight).isPointLight) lamps.push(o as PointLight);
+  });
+  const lampProbe = new Vector3();
+  /**
+   * Lamplight on the floor around the camera (what the eye sees lit, not what shines into it),
+   * on a ring as well as underfoot so walking under one lamp does not pump the exposure.
+   */
+  const lampsAround = (p: Vector3) => {
+    let e = 0;
+    for (const [dx, dz] of [[0, 0], ...RING]) e += lampLightAt(lamps, lampProbe.set(p.x + dx, p.y - 1.5, p.z + dz));
+    return e / (RING.length + 1);
+  };
   // Hidden while probes bake: anything transmissive or refractive (it would need its own
   // framebuffer copies at probe resolution) plus dynamic clutter.
   const transmissive = structure.children.filter((o) => /glass/i.test(o.name));
@@ -223,6 +255,8 @@ async function boot() {
   let crew: Array<string | null> = [...localCrew.seats];
   const dronePoses = new DronePoses();
   let flight: DroneFlight | null = null;
+  /** Flying home on its own, with the pilot looking around freely (relative to the drone). */
+  let autopilot: DroneAutopilot | null = null;
   let pilotAcc = 0;
   let mySeat: number | null = null;
   let parkedKey = '';
@@ -361,7 +395,8 @@ async function boot() {
       ui.addChat({ system: next === 0 ? 'You take the pilot’s seat. Space to lift off.' : `You take the ${SEAT_NAMES[next]} seat.` });
     } else {
       // Stood up (climbed out, or the server let us go): look the way we were looking.
-      if (mySeat !== null && mySeat > 0 && pose) controls.yaw += pose.yaw;
+      if (mySeat !== null && (mySeat > 0 || autopilot) && pose) controls.yaw += pose.yaw;
+      autopilot = null;
       player.seated = false;
       sound.setSeated(false);
       flight?.dispose();
@@ -418,7 +453,7 @@ async function boot() {
       return;
     }
     const wasPilot = mySeat === 0;
-    const yawNow = mySeat === 0 ? controls.yaw : pose.yaw + controls.yaw;
+    const yawNow = viewYaw(pose);
     if (online) net.send({ type: 'unboard', p: spot });
     // Leave locally straight away; the server agrees or corrects.
     const seats = crew.map((id) => (id === selfId ? null : id));
@@ -430,6 +465,36 @@ async function boot() {
     setDrone(next, seats, false);
     controls.yaw = yawNow;
     player.teleport(spot);
+  }
+
+  /** Where the seated player looks: the pilot steers with the view, everyone else looks around the cabin. */
+  function viewYaw(pose: DronePose) {
+    return mySeat === 0 && !autopilot ? controls.yaw : pose.yaw + controls.yaw;
+  }
+
+  /** H in the pilot's seat: fly home and land on the helipad, or hand the controls back. */
+  function toggleAutopilot() {
+    if (!flight) return;
+    if (autopilot) {
+      stopAutopilot('Autopilot off: you have the controls.');
+      return;
+    }
+    const p = flight.pose;
+    if (flight.grounded && Math.hypot(p.position[0] - DIMS.DRONE.pad[0], p.position[2] - DIMS.DRONE.pad[2]) < 2.5) {
+      ui.addChat({ system: 'You are already on the helipad.' });
+      return;
+    }
+    autopilot = new DroneAutopilot(p.position, (a, b) => droneClearPath(sw, a, b));
+    // The view stops steering: keep looking the same way, now relative to the drone.
+    controls.yaw -= flight.yaw;
+    ui.addChat({ system: 'Autopilot on: flying home to the helipad.' });
+  }
+
+  function stopAutopilot(message: string | null) {
+    if (!autopilot || !flight) return;
+    autopilot = null;
+    controls.yaw += flight.yaw;
+    if (message) ui.addChat({ system: message });
   }
 
   function interact(id: string) {
@@ -620,6 +685,9 @@ async function boot() {
     },
   });
 
+  /** P: save the next frame as a picture. */
+  let shotWanted = false;
+
   // Esc frees the cursor without pausing anything: the toolbar and panels become usable.
   controls.onPointerLockChange = (locked) => ui.setCursorFree(!locked && joined && !ui.chatOpen);
   renderer.domElement.addEventListener('click', () => {
@@ -637,6 +705,10 @@ async function boot() {
     if (e.code === 'Tab') {
       e.preventDefault();
       ui.togglePlayers(true);
+    }
+    if (e.code === 'KeyP' && !e.repeat) {
+      e.preventDefault();
+      shotWanted = true;
     }
   });
   document.addEventListener('keyup', (e) => {
@@ -774,13 +846,19 @@ async function boot() {
     } else if (player.seated && mySeat !== null) {
       const input = controls.sampleFlight(dt);
       if (flight) {
+        if (input.home) toggleAutopilot();
+        else if (autopilot && Math.abs(input.forward) + Math.abs(input.right) + Math.abs(input.up) > 0.05) stopAutopilot('You have the controls.');
+        // It waits above the pad while anyone (not aboard) stands on the landing circle.
+        const padBusy = autopilot ? padOccupied(avatars.standing((id) => crew.includes(id))) : false;
         pilotAcc += dt;
         let steps = 0;
         while (pilotAcc >= PILOT_DT && steps < 12) {
-          flight.step(input, PILOT_DT);
+          flight.step(autopilot ? autopilot.step(flight, PILOT_DT, padBusy) : input, PILOT_DT);
           pilotAcc -= PILOT_DT;
           steps++;
         }
+        if (autopilot?.stage === 'landed') stopAutopilot('Landed on the helipad. E to climb out.');
+        else if (autopilot?.stage === 'stuck') stopAutopilot('The autopilot cannot find a way home from here: you have the controls.');
         if (!online) localDrone.track(flight.pose.position, flight.yaw);
       }
       const pose = currentDrone(realNow, renderT);
@@ -788,8 +866,7 @@ async function boot() {
       if (player.seated && mySeat !== null) {
         const eye = seatPosition(pose, mySeat, true);
         camera.position.set(eye[0], eye[1], eye[2]);
-        const yaw = mySeat === 0 ? controls.yaw : pose.yaw + controls.yaw;
-        camera.rotation.set(controls.pitch, yaw, 0, 'YXZ');
+        camera.rotation.set(controls.pitch, viewYaw(pose), 0, 'YXZ');
         player.motor.teleport([eye[0], eye[1] - DIMS.DRONE.seatedEye - 0.45, eye[2]]);
       }
       ui.setPrompt(null);
@@ -820,6 +897,12 @@ async function boot() {
     const dpose = currentDrone(realNow, renderT);
     lastDrone = dpose;
     const under = dpose.visible ? ground(dpose.position) : null;
+    if (dpose.visible) {
+      // Out on the ring where the spray billows, beyond the landing light's spot under the drone.
+      let e = 0;
+      for (const [dx, dz] of RING) e += lampLightAt(lamps, lampProbe.set(dpose.position[0] + dx * 2, (under ?? 0) + 0.8, dpose.position[2] + dz * 2));
+      drone.sprayLamplight = e / RING.length;
+    }
     drone.update(dpose, dt, under, crew.some((c) => c !== null));
     sound.setDrone(dpose);
     ui.setFlight(
@@ -833,6 +916,8 @@ async function boot() {
             heading: (-dpose.yaw * 180) / Math.PI,
             grounded: dpose.grounded,
             seats: `Pilot: ${nameOf(crew[0]) ?? 'nobody'} · ${crew.filter(Boolean).length} aboard`,
+            autopilot: autopilot ? { stage: AUTOPILOT_STAGE[autopilot.stage] ?? 'Autopilot', distance: autopilot.distanceHome(dpose.position) } : null,
+            atPad: dpose.grounded && Math.hypot(dpose.position[0] - DIMS.DRONE.pad[0], dpose.position[2] - DIMS.DRONE.pad[2]) < 2.5,
           }
         : null,
     );
@@ -863,7 +948,7 @@ async function boot() {
     });
     prof.end('audio');
 
-    prof.time('atmosphere', () => atmosphere.update(dt, camera.position, celestial, weather));
+    prof.time('atmosphere', () => atmosphere.update(dt, camera.position, celestial, weather, lampsAround(camera.position)));
     if (!off.has('probes')) {
       const baked = prof.time('interior', () => interior.update(sunDir.set(...celestial.sunDirection), weather.cloudCover));
       if (baked) prof.note(baked);
@@ -899,6 +984,13 @@ async function boot() {
       renderedScale = dynRes.scale;
     }
     prof.time('render', () => pipeline.render());
+    if (shotWanted) {
+      shotWanted = false;
+      saveScreenshot(renderer.domElement).then(
+        (name) => ui.screenshotTaken(name),
+        (err: Error) => ui.addChat({ system: `Screenshot failed: ${err.message}` }),
+      );
+    }
     // Only the avatars carry CSS labels: traversing them alone is much cheaper than the scene.
     if (!off.has('labels')) prof.time('labels', () => labels.render(avatars.group as unknown as Scene, camera));
     stats.frames++;

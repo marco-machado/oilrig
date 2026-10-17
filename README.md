@@ -45,11 +45,14 @@ ELEVENLABS_API_KEY=… pnpm sfx steps-wood drone-loop
 | T or Enter | Chat |
 | Tab (hold) | Who's on board |
 | Esc | Free the cursor and open the menu. The world keeps running; the menu opens **Time & weather**, **Settings** (graphics quality, automatic resolution, FOV, sensitivity, invert look, volume), **Performance** and **Controls**, one at a time beside it, and **Log out** (after a confirmation) returns to the sign-in screen. Click the world or **Back to the world** to look around again. |
+| P | Screenshot: saves the world as you see it (without the HUD) as `ocean-home-<date>-<time>.png` |
 | F3 | Performance overlay |
 
 Flying the drone (pilot's seat): **W A S D** move relative to where you look, the mouse steers (the drone turns to face your view), **Space** climbs, **Shift** or **C** descends. Let go of the stick and it stops and hovers. On the ground it only lifts off once you climb. The instruments show altitude, height above whatever is below, speed, climb rate and heading. Passengers look around freely.
 
-Gamepads work too: left stick moves, right stick looks, A jumps (climbs in the drone, B descends, or use the triggers), X interacts, LB runs.
+**H** (gamepad **Y**) flies it home: the autopilot works the same stick through the same flight model, so it obeys the same limits and colliders. It flies out from under the deck if it is there, climbs to a safe height, crosses to above the helipad, turns nose to the platform and lands; while anyone stands on the landing circle it holds above the pad. Meanwhile the mouse just looks around, and a pill above the instruments shows what it is doing and how far it has to go. Move the stick or press **H** again to take over; it hands back the controls once it has landed, or if something stops it.
+
+Gamepads work too: left stick moves, right stick looks, A jumps (climbs in the drone, B descends, or use the triggers), X interacts, LB runs, Y flies the drone home.
 
 ### Time and weather
 
@@ -187,7 +190,7 @@ packages/shared   One source of truth for client and server:
                   layout (every beam, deck, stair, rail, door and piece of furniture as data),
                   Rapier colliders built from it, the character motor, sun/moon astronomy, the
                   seeded weather model and weather control, the clock, the drone schedule, pose
-                  function and flight model, the elevator timeline, zod protocol
+                  function, flight model and autopilot, the elevator timeline, zod protocol
                   schemas, snapshot interpolation.
 apps/server       Shared world: clock + weather, players and agents, server-side movement
                   validation (Rapier shape casts), doors, chat, drone schedule and crew, elevator,
@@ -197,9 +200,10 @@ apps/server       Shared world: clock + weather, players and agents, server-side
   src/api         REST + SSE (/api/v1), MCP (/mcp), API keys and rate limits.
 apps/client       WebGPU renderer, FFT ocean (TSL compute) with GPU height readback, physical
                   sky with stars and moon, TSL procedural materials, furniture, the drone and its
-                  rotor wash, the elevator, tender, clustered night lights, light-probe GI in the pavilion,
-                  post (GTAO, TRAA, bloom, lens flare; SSR on Ultra), rain, synthesized audio,
-                  first-person controls, avatars, UI.
+                  rotor wash, the elevator, tender, clustered night lights (downlights
+                  and floods lit in cones; the exposure adapts to lamplight as well as daylight),
+                  light-probe GI in the pavilion, post (GTAO, TRAA, bloom, lens flare; SSR on
+                  Ultra), rain, synthesized audio, first-person controls, avatars, UI.
 ```
 
 The client predicts its own movement with the same motor the tests use. The server accepts poses only if they are physically plausible: speed, climb rate, no passing through walls, rails, furniture, closed doors or the parked drone, and no standing inside geometry. People seated in the drone are placed in their seats by the server. Otherwise it sends a correction. Agents are simulated by the server itself with the same motor, so they need no validation.
@@ -216,7 +220,7 @@ These are behaviour tests (Vitest), with no mocks and no snapshot-of-self:
 
 - **Walkability:** the real character controller walks every route: in through each of the five doors and out through the one opposite, pool, helipad, both stairs, a full walkway lap, and down the tower to the swim platform, all with the furniture in place; it is stopped by a lounge sofa, reaches the firepit lounge, and can jump onto a hammock net. It jumps as high at the browser's 120 Hz physics step as at 60 Hz.
 - **Elevator:** the car never overspeeds or jumps and arrives exactly at the stop; calls queue; the doors reopen for someone in the doorway; a person standing in the car rides from the deck to the landing without sinking through the floor and walks out; the shaft stays closed wherever the car is not; a call from far away is refused.
-- **Drone:** a full schedule flown in simulated time lands exactly on the pad, never dips into the deck or skims the sea, never moves faster than it can fly, spins down and up, and climbs straight up clear of the platform before leaving; it holds while the pad is occupied, waves off when someone walks under it, comes in from downwind over the open sea, never leaves with someone aboard, is solid while parked (but you can walk and jump under the ducts), and moves anyone underneath clear at touchdown. The flight model lifts off, flies out, turns to face the view, hovers when the stick is released, lands back on the pad, cannot fly through the pavilion and stays above the sea. Through the server: two people board as pilot and passenger, the pilot's stream reaches the passenger, an impossible jump is ignored, the drone parks where it landed, and when the pilot drops out under the deck it flies out, climbs and lands on the pad.
+- **Drone:** a full schedule flown in simulated time lands exactly on the pad, never dips into the deck or skims the sea, never moves faster than it can fly, spins down and up, and climbs straight up clear of the platform before leaving; it holds while the pad is occupied, waves off when someone walks under it, comes in from downwind over the open sea, never leaves with someone aboard, is solid while parked (but you can walk and jump under the ducts), and moves anyone underneath clear at touchdown. The flight model lifts off, flies out, turns to face the view, hovers when the stick is released, lands back on the pad, cannot fly through the pavilion and stays above the sea. The autopilot brings it home and lands it on the pad, nose to the platform, from out at sea, from under the main deck and from the terrace, without skimming the sea or overspeeding, and holds above the pad until the landing circle is clear. Through the server: two people board as pilot and passenger, the pilot's stream reaches the passenger, an impossible jump is ignored, the drone parks where it landed, and when the pilot drops out under the deck it flies out, climbs and lands on the pad.
 - **Time and weather:** the clock jumps to the asked hour on the same day and runs at the chosen speed (or stands still); a chosen weather eases in without jumps and back to the forecast; a person's change reaches everyone and the agents' perception.
 - **Containment:** random walkers for 4 simulated minutes from 11 starting points (including the hammock nets and the firepit lounge) never fall into the sea.
 - **Agent navigation:** an agent walks navmesh routes from the terrace to all 20 places (stairs, tower and all), opens closed doors on its way, keeps a body's width from furniture, goes around the parked drone, gets as close as it can to an unreachable roof, and is stopped by the helipad's net stop.

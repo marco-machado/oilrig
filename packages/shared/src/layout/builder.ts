@@ -15,6 +15,11 @@ import type {
   ZoneDef,
 } from './types.ts';
 
+const normalize3 = (v: Vec3): Vec3 => {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+};
+
 interface Opts {
   collide?: boolean;
   render?: boolean;
@@ -235,8 +240,9 @@ export class LayoutBuilder {
     });
   }
 
-  light(kind: LightDef['kind'], position: Vec3, color: number, intensity: number, distance: number, casts = true) {
-    this.lights.push({ id: this.nextId(kind), kind, position, color, intensity, distance, casts });
+  light(kind: LightDef['kind'], position: Vec3, color: number, intensity: number, distance: number, casts = true, beam?: { aim: Vec3; cone: number }) {
+    const aim = beam && normalize3(beam.aim);
+    this.lights.push({ id: this.nextId(kind), kind, position, color, intensity, distance, casts, ...(aim ? { aim, cone: beam.cone } : {}) });
   }
 
   /**

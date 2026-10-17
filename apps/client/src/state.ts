@@ -19,6 +19,12 @@ export const U = {
   sunIntensity: uniform(1),
   rain: uniform(0),
   lightning: uniform(0),
+  /**
+   * Radiance of a matte white surface under the sky and sun (or moon), for unlit effects
+   * (rotor spray, blurred rotors) so they are as bright as the world around them.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ambient: uniform(new Color(1, 1, 1)) as any,
   /** Pre-tonemap exposure multiplier applied in the post pipeline. */
   exposure: uniform(1),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

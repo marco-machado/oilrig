@@ -26,6 +26,8 @@ import type { Rect, Vec3 } from './types.ts';
 import { WORLD } from '../config.ts';
 
 const sign = (v: number) => (v < 0 ? -1 : 1);
+/** Lamps under a deck light what is below them, not the deck they hang from. */
+const DOWN = { aim: [0, -1, 0] as Vec3, cone: 0.05 };
 
 /** Jacket: legs, piles, secondary columns and underwater bracing. */
 function jacket(b: LayoutBuilder) {
@@ -146,12 +148,12 @@ function lowerLevel(b: LayoutBuilder) {
   ]);
   // Bulkhead lamps under the main deck along the ring.
   for (let x = -22; x <= 22; x += 11) {
-    b.light('bulkhead', [x, LEG_TOP - 0.2, (outer.z0 + inner.z0) / 2], 0xffedd0, 14, 10);
-    b.light('bulkhead', [x, LEG_TOP - 0.2, (outer.z1 + inner.z1) / 2], 0xffedd0, 14, 10);
+    b.light('bulkhead', [x, LEG_TOP - 0.2, (outer.z0 + inner.z0) / 2], 0xffedd0, 14, 10, true, DOWN);
+    b.light('bulkhead', [x, LEG_TOP - 0.2, (outer.z1 + inner.z1) / 2], 0xffedd0, 14, 10, true, DOWN);
   }
   for (const z of [-8, 8]) {
-    b.light('bulkhead', [(outer.x0 + inner.x0) / 2, LEG_TOP - 0.2, z], 0xffedd0, 14, 10);
-    b.light('bulkhead', [(outer.x1 + inner.x1) / 2, LEG_TOP - 0.2, z], 0xffedd0, 14, 10);
+    b.light('bulkhead', [(outer.x0 + inner.x0) / 2, LEG_TOP - 0.2, z], 0xffedd0, 14, 10, true, DOWN);
+    b.light('bulkhead', [(outer.x1 + inner.x1) / 2, LEG_TOP - 0.2, z], 0xffedd0, 14, 10, true, DOWN);
   }
 }
 
@@ -310,8 +312,8 @@ function waterline(b: LayoutBuilder) {
   for (let x = L.x0 + 1; x <= L.x1 - 0.5; x += 2) b.prop('fender', [x, L.top - 2.1, L.z1 + 0.35]);
   // Boarding ladder down to the tender beside its stern half; the rail above stays closed, like a shut gate.
   b.prop('ladder', [TENDER.x + 1.5, L.top, L.z1 + 0.15], { size: [0.6, L.top + 0.8, 0] });
-  b.light('flood', [L.x0 + 1, L.top + 3.2, L.z1 - 0.3], 0xfff4e0, 60, 18);
-  b.light('flood', [L.x1 - 1, L.top + 3.2, L.z1 - 0.3], 0xfff4e0, 60, 18);
+  b.light('flood', [L.x0 + 1, L.top + 3.2, L.z1 - 0.3], 0xfff4e0, 40, 18, true, { aim: [0.3, -1, -0.4], cone: 0.25 });
+  b.light('flood', [L.x1 - 1, L.top + 3.2, L.z1 - 0.3], 0xfff4e0, 40, 18, true, { aim: [-0.3, -1, -0.4], cone: 0.25 });
 
   // Swim stair down to the platform.
   const zc = (sz.z0 + sz.z1) / 2;
@@ -345,7 +347,7 @@ function waterline(b: LayoutBuilder) {
     [S.x0, S.top, sz.z1],
   ]);
   b.prop('ladder', [(S.ladderX[0] + S.ladderX[1]) / 2, S.top, S.z1 + 0.15], { size: [0.6, 3.2, 0] });
-  b.light('flood', [S.x1 - 0.3, S.top + 2.6, S.z0 + 0.3], 0xfff4e0, 25, 12);
+  b.light('flood', [S.x1 - 0.3, S.top + 2.6, S.z0 + 0.3], 0xfff4e0, 20, 12, true, { aim: [-0.5, -1, 0.5], cone: 0.25 });
 }
 
 /** Glass elevator shaft standing on the boat landing, reaching up past the main deck edge. */
@@ -463,7 +465,9 @@ function helipad(b: LayoutBuilder) {
     [ox0 + 0.3, oz1 - 0.3, Math.PI * 1.75],
   ] as const) {
     b.prop('flood', [x, ny, z], { rotationY: rot });
-    b.light('flood', [x, ny + 0.6, z], 0xfff8ee, 120, 26);
+    // Aimed across the pad: the rails beside the lamp and the deck right under it stay out of the beam.
+    const pc = [(H.x0 + H.x1) / 2, H.top, (H.z0 + H.z1) / 2];
+    b.light('flood', [x, ny + 0.6, z], 0xfff8ee, 60, 26, true, { aim: [pc[0] - x, pc[1] - (ny + 0.6) - 3, pc[2] - z], cone: 0.62 });
   }
   // Windsock on the north-east corner, with an obstruction light on top.
   const ws: Vec3 = [ox1 - 0.2, ny, oz0 + 0.2];

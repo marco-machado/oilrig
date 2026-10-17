@@ -153,10 +153,15 @@
 .oh-chat__log {
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: 4px;
   max-height: 40vh;
   overflow: hidden;
+  /* The newest lines stay in view; the oldest slide out under a soft top edge. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28px);
+  mask-image: linear-gradient(to bottom, transparent, #000 28px);
+  padding-top: 28px;
 }
 
 .oh-chat__line {
@@ -169,8 +174,11 @@
   font-size: 13.5px;
   line-height: 1.4;
   overflow-wrap: anywhere;
-  animation: oh-chat-in var(--dur-3) var(--ease-out) both;
-  transition: opacity 0.8s var(--ease-std);
+  transform-origin: 0 100%;
+  animation: oh-chat-in 460ms var(--ease-spring) backwards;
+  transition:
+    opacity 0.9s var(--ease-std),
+    transform 0.9s var(--ease-std);
 }
 
 .oh-chat__line b {
@@ -187,10 +195,15 @@
 
 .oh-chat__line.is-faded {
   opacity: 0;
+  transform: translateX(-12px);
 }
 
 .oh-chat.is-open .oh-chat__line.is-faded {
   opacity: 1;
+  transform: none;
+  transition-duration: 0.36s;
+  transition-timing-function: var(--ease-out);
+  transition-delay: calc(min(var(--i, 0), 14) * 18ms);
 }
 
 .oh-chatbox {
@@ -435,6 +448,47 @@
 .oh-flight__seat {
   color: var(--oh-ink);
   font-weight: 600;
+}
+
+/* Autopilot: a status pill above the instruments while the drone flies itself home. */
+.oh-autopilot {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 32px;
+  padding: 0 14px 0 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--oh-ink-2);
+  animation: oh-rise var(--dur-3) var(--ease-out) both;
+}
+
+.oh-autopilot b {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--oh-rig);
+}
+
+.oh-autopilot__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--oh-rig);
+  box-shadow: 0 0 0 3px var(--oh-rig-tint);
+  animation: oh-pulse 1.6s var(--ease-std) infinite;
+}
+
+.oh-autopilot__dist {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--oh-ink);
+}
+
+.oh-autopilot.is-leaving {
+  animation: oh-fade-out var(--dur-2) var(--ease-in) forwards;
 }
 
 /* ---------- menu: a rail on the left, one section sheet beside it ---------- */
@@ -962,6 +1016,74 @@
   opacity: 1;
 }
 
+/* ---------- screenshot: a shutter flash and a note ---------- */
+
+.oh-shutter {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.oh-shutter.is-on {
+  animation: oh-shutter 480ms var(--ease-out);
+}
+
+@keyframes oh-shutter {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.oh-toast {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  padding: 0 15px 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--oh-ink);
+  transform: translateX(-50%);
+  animation: oh-toast-in var(--dur-3) var(--ease-spring) both;
+}
+
+.oh-toast .oh-i {
+  width: 17px;
+  height: 17px;
+  color: var(--oh-rig);
+}
+
+.oh-toast__file {
+  font: 500 11.5px/1 var(--font-mono);
+  color: var(--oh-ink-3);
+}
+
+.oh-toast.is-leaving {
+  animation: oh-toast-out 260ms var(--ease-in) forwards;
+}
+
+@keyframes oh-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px) scale(0.96);
+  }
+}
+
+@keyframes oh-toast-out {
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px);
+  }
+}
+
 /* ---------- name tags and speech bubbles over avatars ---------- */
 
 .label {
@@ -1011,6 +1133,36 @@
 
 .bubble[hidden] {
   display: none;
+}
+
+.bubble {
+  transform-origin: 14px 100%;
+  animation: oh-bubble-in 420ms var(--ease-spring) both;
+}
+
+.bubble.is-leaving {
+  animation: oh-bubble-out 240ms var(--ease-in) forwards;
+}
+
+@keyframes oh-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.7);
+  }
+}
+
+@keyframes oh-bubble-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.92);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble,
+  .bubble.is-leaving {
+    animation: none;
+  }
 }
 
 /* ---------- narrow windows ---------- */

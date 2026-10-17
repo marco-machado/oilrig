@@ -116,7 +116,7 @@ export function buildHome(b: LayoutBuilder) {
   // Recessed downlights.
   for (let x = P.x0 + 2; x < P.x1; x += 4) {
     for (const z of [-9.5, -5, -0.5]) {
-      b.light('downlight', [x, ceiling - 0.05, z], 0xffd2a0, 22, 7.5);
+      b.light('downlight', [x, ceiling - 0.05, z], 0xffd2a0, 14, 7.5, true, { aim: [0, -1, 0], cone: 0.62 });
     }
   }
 

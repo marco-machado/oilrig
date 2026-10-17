@@ -6,10 +6,12 @@ import {
   Mesh,
   PointLight,
   SphereGeometry,
+  Vector3,
 } from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Layout, LightDef } from '@ocean-home/shared';
+import type { AimedLight } from '../render/stableClusteredLighting.ts';
 import { U } from '../state.ts';
 import type { MaterialSet } from './materials/index.ts';
 import { emissiveMaterial } from './props.ts';
@@ -39,6 +41,7 @@ export function buildLights(layout: Layout, materials: MaterialSet): NightLights
       const l = new PointLight(def.color, 0, def.distance, 2);
       l.position.set(x, y, z);
       l.castShadow = false;
+      if (def.aim && def.cone !== undefined) Object.assign(l.userData, { aim: new Vector3(...def.aim), cone: def.cone } satisfies AimedLight);
       group.add(l);
       lights.push({ def, light: l });
     }

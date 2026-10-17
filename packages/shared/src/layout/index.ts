@@ -24,7 +24,6 @@ export function getLayout(): Layout {
   b.place('living-room', 'Living room', [-6, floor, -5]);
   b.place('kitchen', 'Kitchen', [3, floor, -6]);
   b.place('bedroom', 'Bedroom', [-15, floor, -9]);
-  b.place('bath', 'Bath', [-21, floor, -9.5]);
   b.place('pool-deck', 'Pool deck', [15, TERRACE.top, -3]);
   b.place('pool', 'Plunge pool', [14, POOL.floor, -8]);
   b.place('helipad', 'Helipad', [(HELIPAD.x0 + HELIPAD.x1) / 2, HELIPAD.top, 0]);

@@ -14,7 +14,6 @@ export type MaterialId =
   | 'glass'
   /** Thin clear glass drawn as a transparent surface (shows the sea behind it). */
   | 'glassThin'
-  | 'glassFrosted'
   | 'helideck'
   | 'rubber'
   | 'poolTile'

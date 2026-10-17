@@ -183,20 +183,11 @@ function plaster() {
   return m;
 }
 
-function glass(frosted: boolean) {
-  const m = new MeshPhysicalNodeMaterial({
-    color: new Color(frosted ? 0xf4f6f6 : 0xf6fbf9),
-    metalness: 0,
-    roughness: frosted ? 0.5 : 0.02,
-    transmission: 1,
-    thickness: 0.02,
-    ior: 1.52,
-  });
-  return m;
-}
-
-/** Clear glass as a plain transparent surface: cheaper than transmission. */
-function thinGlass() {
+/**
+ * Clear glass as a plain transparent surface: cheaper than transmission, which also left a
+ * milky veil over everything seen through the pavilion facades.
+ */
+function glass(opacity: number) {
   return new MeshPhysicalNodeMaterial({
     // Dark body colour: clear glass reflects and tints but has no diffuse of its own; a pale
     // one lit up like a lampshade under the landing light and read milky by day.
@@ -204,7 +195,7 @@ function thinGlass() {
     metalness: 0,
     roughness: 0.03,
     transparent: true,
-    opacity: 0.2,
+    opacity,
     depthWrite: false,
     side: DoubleSide,
   });
@@ -342,9 +333,8 @@ export function createMaterials(): MaterialSet {
     concrete: concrete(),
     plaster: plaster(),
     mullion: simple(0x17181a, 0.38, 0.6),
-    glass: glass(false),
-    glassThin: thinGlass(),
-    glassFrosted: glass(true),
+    glass: glass(0.12),
+    glassThin: glass(0.2),
     helideck: helideck(),
     rubber: simple(0x0f0f0f, 0.88),
     poolTile: poolTile(),

@@ -83,7 +83,7 @@ export class Doors {
       // Two etched bands at the heights the eye and a child's eye fall on.
       const etch = etchMaterial(alongX);
       for (const y of [-h + 1.0, -h + 1.5]) {
-        g.add(new Mesh(box(-len / 2 + f, len / 2 - f, y - 0.06, y + 0.06, sz + 0.004), etch));
+        g.add(new Mesh(box(-len / 2 + f, len / 2 - f, y - 0.06, y + 0.06, (alongX ? sz : sx) + 0.004), etch));
       }
       // Long pull handles on both faces, at the edge that leads the opening.
       const slide = Math.sign(alongX ? def.openOffset[0] : def.openOffset[2]) || 1;

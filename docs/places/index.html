@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ocean Home Places</title>
+<style>
+  :root { --bg: #f6f5f2; --fg: #1d1f22; --muted: #6b6f75; --line: #dcdad4; --card: #fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141619; --fg: #e8e6e1; --muted: #9a9ea4; --line: #2c3035; --card: #1b1e22; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px 64px; background: var(--bg); color: var(--fg);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  p.lede { margin: 0 0 24px; color: var(--muted); max-width: 70ch; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); }
+  th, td { padding: 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  td:last-child { width: 45%; }
+  img { display: block; width: 100%; height: auto; border-radius: 4px; }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .pos { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+  @media (max-width: 700px) {
+    thead { display: none; }
+    tr, td { display: block; width: 100% !important; }
+    td { border-bottom: 0; padding: 6px 12px; }
+    tr { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ocean Home places</h1>
+  <p class="lede">The named places in the layout (<code>packages/shared/src/layout/index.ts</code>). Agents walk to them by id,
+  and perception reports the nearest one as an avatar's area. Positions are [x, y, z] in metres.
+  Screenshots were taken from the live server at night, server time.</p>
+  <table>
+    <thead><tr><th>id</th><th>Name</th><th>Where</th><th>View</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>terrace</code></td>
+        <td>Terrace</td>
+        <td>Main deck, south of the pavilion<br><span class="pos">[-6, 20.05, 7]</span></td>
+        <td><a href="terrace.jpg"><img src="terrace.jpg" alt="Terrace" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>living-room</code></td>
+        <td>Living room</td>
+        <td>Pavilion (open plan)<br><span class="pos">[-6, 20.12, -5]</span></td>
+        <td><a href="living-room.jpg"><img src="living-room.jpg" alt="Living room" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>kitchen</code></td>
+        <td>Kitchen</td>
+        <td>Pavilion (open plan)<br><span class="pos">[3, 20.12, -6]</span></td>
+        <td><a href="kitchen.jpg"><img src="kitchen.jpg" alt="Kitchen" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>bedroom</code></td>
+        <td>Bedroom</td>
+        <td>Pavilion (open plan)<br><span class="pos">[-15, 20.12, -9]</span></td>
+        <td><a href="bedroom.jpg"><img src="bedroom.jpg" alt="Bedroom" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>pool-deck</code></td>
+        <td>Pool deck</td>
+        <td>Main deck, beside the pool<br><span class="pos">[15, 20.05, -3]</span></td>
+        <td><a href="pool-deck.jpg"><img src="pool-deck.jpg" alt="Pool deck" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>pool</code></td>
+        <td>Plunge pool</td>
+        <td>In the pool<br><span class="pos">[14, 18.6, -8]</span></td>
+        <td><a href="pool.jpg"><img src="pool.jpg" alt="Plunge pool" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>helipad</code></td>
+        <td>Helipad</td>
+        <td>Helipad centre<br><span class="pos">[42, 20, 0]</span></td>
+        <td><a href="helipad.jpg"><img src="helipad.jpg" alt="Helipad" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>north-stair-top</code></td>
+        <td>North stair (deck)</td>
+        <td>Top of the north stair<br><span class="pos">[3.7, 20, -18.3]</span></td>
+        <td><a href="north-stair-top.jpg"><img src="north-stair-top.jpg" alt="North stair (deck)" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>walkway-north</code></td>
+        <td>Lower walkway, north</td>
+        <td>Lower deck<br><span class="pos">[-6, 16, -16.3]</span></td>
+        <td><a href="walkway-north.jpg"><img src="walkway-north.jpg" alt="Lower walkway, north" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>walkway-east</code></td>
+        <td>Lower walkway, east</td>
+        <td>Lower deck<br><span class="pos">[24.5, 16, 0]</span></td>
+        <td><a href="walkway-east.jpg"><img src="walkway-east.jpg" alt="Lower walkway, east" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>walkway-south</code></td>
+        <td>Lower walkway, south</td>
+        <td>Lower deck<br><span class="pos">[0, 16, 16.5]</span></td>
+        <td><a href="walkway-south.jpg"><img src="walkway-south.jpg" alt="Lower walkway, south" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>walkway-west</code></td>
+        <td>Lower walkway, west</td>
+        <td>Lower deck<br><span class="pos">[-24.5, 16, 0]</span></td>
+        <td><a href="walkway-west.jpg"><img src="walkway-west.jpg" alt="Lower walkway, west" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>tower-top</code></td>
+        <td>Stair tower, top</td>
+        <td>Lower deck level<br><span class="pos">[-19.4, 16, 17.2]</span></td>
+        <td><a href="tower-top.jpg"><img src="tower-top.jpg" alt="Stair tower, top" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>boat-landing</code></td>
+        <td>Boat landing</td>
+        <td>Landing, near the waterline<br><span class="pos">[-16, 3, 21.8]</span></td>
+        <td><a href="boat-landing.jpg"><img src="boat-landing.jpg" alt="Boat landing" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>swim-platform</code></td>
+        <td>Swim platform</td>
+        <td>Near the waterline<br><span class="pos">[-5, 1.2, 21]</span></td>
+        <td><a href="swim-platform.jpg"><img src="swim-platform.jpg" alt="Swim platform" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>firepit</code></td>
+        <td>Firepit lounge</td>
+        <td>Terrace<br><span class="pos">[-9, 20.05, 9.4]</span></td>
+        <td><a href="firepit.jpg"><img src="firepit.jpg" alt="Firepit lounge" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>hammocks</code></td>
+        <td>Hammock nets</td>
+        <td>Lower walkway, north<br><span class="pos">[-16.5, 16, -16.3]</span></td>
+        <td><a href="hammocks.jpg"><img src="hammocks.jpg" alt="Hammock nets" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>elevator-deck</code></td>
+        <td>Elevator (main deck)</td>
+        <td>Top stop<br><span class="pos">[-12.3, 20, 19.1]</span></td>
+        <td><a href="elevator-deck.jpg"><img src="elevator-deck.jpg" alt="Elevator (main deck)" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+      <tr>
+        <td><code>elevator-landing</code></td>
+        <td>Elevator (boat landing)</td>
+        <td>Bottom stop<br><span class="pos">[-12.3, 3, 19.3]</span></td>
+        <td><a href="elevator-landing.jpg"><img src="elevator-landing.jpg" alt="Elevator (boat landing)" loading="lazy" width="800" height="788"></a></td>
+      </tr>
+    </tbody>
+  </table>
+</main>
+</body>
+</html>

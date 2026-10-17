@@ -113,7 +113,14 @@ export class Atmosphere {
     sky.storm.value = w.storminess;
     this.params.turbidity = 2.2 + 5 * haze;
     sky.turbidity.value = this.params.turbidity;
-    sky.cloudTime.value += dt * (0.6 + w.windSpeed * 0.25) * 25;
+    // Cloud drift at the speed of a real layer: wind aloft (about twice the surface wind) over a
+    // deck ~1.5 km up. The shader's cloud UV is (horizontal / height) * cloudScale / elevation, so
+    // a layer moving at V m/s advances V / 1500 * cloudScale / elevation UV per second; cloudTime
+    // counts that in units of cloudSpeed. A small floor keeps the shapes evolving on calm days.
+    const aloft = 2 * w.windSpeed;
+    const elevation = 1 - 0.9 * sky.cloudElevation.value;
+    const uvPerSecond = ((aloft / 1500) * sky.cloudScale.value) / elevation;
+    sky.cloudTime.value += dt * (0.05 + uvPerSecond / sky.cloudSpeed.value);
 
     // Wind for ocean, clouds, grass, windsock, rain.
     const wd = (w.windDirection * Math.PI) / 180;

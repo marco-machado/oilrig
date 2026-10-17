@@ -29,6 +29,7 @@ import {
   mx_noise_float,
   normalize,
   positionLocal,
+  positionWorld,
   sin,
   smoothstep,
   uniform,
@@ -87,12 +88,13 @@ function bodyMaterial() {
 }
 
 function canopyMaterial() {
+  // Dark tint, like the other clear glass: a pale one lit up in the sun and veiled the pilot's view.
   const m = new MeshPhysicalNodeMaterial({
-    color: 0x9fb7c4,
+    color: 0x1a2423,
     roughness: 0.04,
     metalness: 0,
     transparent: true,
-    opacity: 0.26,
+    opacity: 0.18,
     side: DoubleSide,
     depthWrite: false,
   });
@@ -174,7 +176,9 @@ function deckSpray(count: number) {
   const soft = smoothstep(1, 0.2, c.length());
   const n = mx_noise_float(vec3(c.mul(1.7), life.mul(3))).mul(0.5).add(0.5);
   m.colorNode = mix(color(0xb9c2c6), color(0xeef2f3), n);
-  m.opacityNode = soft.mul(n.mul(0.6).add(0.4)).mul(life.oneMinus()).mul(smoothstep(0, 0.1, life)).mul(strength).mul(0.3);
+  // Puffs fade out close to the camera, so none sweep through the cockpit as a hard-edged veil.
+  const near = smoothstep(2.0, 4.5, positionWorld.sub(cameraPosition).length());
+  m.opacityNode = soft.mul(n.mul(0.6).add(0.4)).mul(life.oneMinus()).mul(smoothstep(0, 0.1, life)).mul(strength).mul(near).mul(0.3);
   const mesh = new Mesh(g, m);
   mesh.frustumCulled = false;
   mesh.renderOrder = 15;
@@ -426,7 +430,9 @@ export class Drone {
     this.landingLight.intensity = low ? 80 * U.nightLights.value : 0;
 
     // Rotor wash: spray on a deck below, flattening on the sea.
-    const deck = ground !== null && ground > 0.5 ? rpm * rpm * Math.max(0, Math.min(1, 1 - height / 10)) : 0;
+    // Idling on the pad (rotor 0.4) moves no air worth seeing; the spray builds towards lift-off.
+    const thrust = Math.max(0, Math.min(1, (rpm - 0.45) / 0.4));
+    const deck = ground !== null && ground > 0.5 ? thrust * thrust * Math.max(0, Math.min(1, 1 - height / 10)) : 0;
     this.spray.center.value.set(x, ground ?? 0, z);
     this.spray.strength.value = deck;
     U.washCenter.value.set(x, z);

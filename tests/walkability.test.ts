@@ -29,9 +29,8 @@ describe('walkability', () => {
     expectArrive(place('terrace'), [[-6.8, 4], [-6.8, 0], [-6, -5]], 'living-room', { minY: 19.9 });
   });
 
-  it('living room → straight across the open floor to the bedroom end → bath', () => {
+  it('living room → straight across the open floor to the bedroom end', () => {
     expectArrive(place('living-room'), [[-15, -9]], 'bedroom', { minY: 19.9 });
-    expectArrive(place('bedroom'), [[-16.5, -7.8], [-20, -7.8], [-21, -9.5]], 'bath', { minY: 19.9 });
   });
 
   it('every side of the pavilion has a door: in through each one and out through the one opposite', () => {

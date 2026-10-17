@@ -5,8 +5,8 @@ import type { World } from '../apps/server/src/world/world.ts';
 import { makeWorld } from './helpers.ts';
 
 // Perception is computed, not rendered: field of view plus Rapier ray casts against the
-// colliders. These cases pin down what blocks sight (walls, frosted glass) and what
-// does not (clear glass), and that bearings point the right way.
+// colliders. These cases pin down what blocks sight (walls) and what does not (clear
+// glass), and that bearings point the right way.
 
 let world: World;
 let ctx: PerceptionContext;
@@ -35,18 +35,6 @@ describe('perception', () => {
     expect(ids(p)).toContain('door-north');
   });
 
-  it('frosted glass hides someone in the bath; from inside the bath they are in plain view', () => {
-    const bather = world.addAgent('Bather', [-21, 20.12, -10], 0);
-    try {
-      const outside = look([-16, 20.12, -10], WEST).avatars.find((a) => a.name === 'Bather')!;
-      expect(outside.visible).toBe(false);
-      const inside = look([-19.5, 20.12, -8], WEST).avatars.find((a) => a.name === 'Bather')!;
-      expect(inside.visible).toBe(true);
-    } finally {
-      world.removeAgent(bather);
-    }
-  });
-
   it('reports only what is within the field of view; turning around reveals what was behind', () => {
     const at: Vec3 = [-9, 20.05, 8.6]; // between the terrace and the firepit lounge
     const facingNorth = ids(look(at, NORTH));
@@ -59,7 +47,6 @@ describe('perception', () => {
 
   it('gives distance, bearing and direction of other avatars, and whether they can be seen', () => {
     const east = world.addAgent('East', [5, 20.05, 8], 0);
-    const behindWall = world.addAgent('Hidden', [-21, 20.12, -10], 0); // in the bath, behind frosted glass
     try {
       const p = look([0, 20.05, 8], NORTH);
       const e = p.avatars.find((a) => a.name === 'East')!;
@@ -71,11 +58,8 @@ describe('perception', () => {
       expect(turned.bearing).toBe(0);
       expect(turned.direction).toBe('ahead');
       expect(turned.visible).toBe(true);
-      const fromLiving = look([-15, 20.12, -10], WEST).avatars.find((a) => a.name === 'Hidden')!;
-      expect(fromLiving.visible).toBe(false);
     } finally {
       world.removeAgent(east);
-      world.removeAgent(behindWall);
     }
   });
 

@@ -177,6 +177,6 @@ export function buildStructure(layout: Layout, materials: MaterialSet): Group {
     }
   }
   return bins.build(materials, {
-    castShadow: (m) => m !== 'glass' && m !== 'glassThin' && m !== 'glassFrosted' && m !== 'net',
+    castShadow: (m) => m !== 'glass' && m !== 'glassThin' && m !== 'net',
   });
 }

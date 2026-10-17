@@ -13,7 +13,6 @@ interface Facade {
   from: number;
   to: number;
   openings: Array<[number, number]>;
-  frosted: Array<[number, number]>;
 }
 
 function facade(b: LayoutBuilder, f: Facade) {
@@ -42,10 +41,7 @@ function facade(b: LayoutBuilder, f: Facade) {
       const u0 = a + i * w;
       const u1 = u0 + w;
       const mid = (u0 + u1) / 2;
-      const frosted = f.frosted.some(([fa, fb]) => mid > fa && mid < fb);
-      b.box(frosted ? 'frosted-glass' : 'glass-wall', at(mid, yc), sizeAlong(w, GLASS_T), frosted ? 'glassFrosted' : 'glass', {
-        surface: 'stone',
-      });
+      b.box('glass-wall', at(mid, yc), sizeAlong(w, GLASS_T), 'glass', { surface: 'stone' });
       mullion(u0);
     }
     mullion(c);
@@ -91,7 +87,7 @@ export function buildHome(b: LayoutBuilder) {
     b.tube('roof-column', [x, TERRACE.top, z], [x, ceiling, z], 0.08, 'mullion', { collide: true });
   }
 
-  // Facades: a sliding door on every side (two on the terrace side); frosted glass at the bath.
+  // Facades: a sliding door on every side (two on the terrace side).
   const southDoors: Array<[number, number]> = [
     [-8, -5.6],
     [2, 4.4],
@@ -99,10 +95,10 @@ export function buildHome(b: LayoutBuilder) {
   const northDoor: [number, number] = [-7.2, -4.8];
   const eastDoor: [number, number] = [-6, -3.6];
   const westDoor: [number, number] = [-5.2, -2.8];
-  facade(b, { axis: 'x', fixed: P.z1, from: P.x0, to: P.x1, openings: southDoors, frosted: [] });
-  facade(b, { axis: 'x', fixed: P.z0, from: P.x0, to: P.x1, openings: [northDoor], frosted: [[P.x0, -18]] });
-  facade(b, { axis: 'z', fixed: P.x0, from: P.z0, to: P.z1, openings: [westDoor], frosted: [[P.z0, -7]] });
-  facade(b, { axis: 'z', fixed: P.x1, from: P.z0, to: P.z1, openings: [eastDoor], frosted: [] });
+  facade(b, { axis: 'x', fixed: P.z1, from: P.x0, to: P.x1, openings: southDoors });
+  facade(b, { axis: 'x', fixed: P.z0, from: P.x0, to: P.x1, openings: [northDoor] });
+  facade(b, { axis: 'z', fixed: P.x0, from: P.z0, to: P.z1, openings: [westDoor] });
+  facade(b, { axis: 'z', fixed: P.x1, from: P.z0, to: P.z1, openings: [eastDoor] });
 
   const doorH = P.height - 0.12;
   const doorY = P.floor + doorH / 2 + 0.02;
@@ -116,13 +112,6 @@ export function buildHome(b: LayoutBuilder) {
   alongX('door-north', 'North sliding door', northDoor, P.z0, -1);
   alongZ('door-east', 'Pool sliding door', eastDoor, P.x1, 1);
   alongZ('door-west', 'West sliding door', westDoor, P.x0, -1);
-
-  // Interior: the frosted bath enclosure.
-  const iy = P.floor + P.height / 2;
-  b.boxMinMax('frosted-glass', [-18 - GLASS_T / 2, P.floor, P.z0], [-18 + GLASS_T / 2, ceiling, -8.6], 'glassFrosted');
-  b.boxMinMax('frosted-glass', [P.x0, P.floor, -7 - GLASS_T / 2], [-18, ceiling, -7 + GLASS_T / 2], 'glassFrosted');
-  b.box('mullion', [-18, iy, -8.6], [0.12, P.height, 0.12], 'mullion', { collide: false });
-  b.box('mullion', [-18, iy, -7], [0.12, P.height, 0.12], 'mullion', { collide: false });
 
   // Recessed downlights.
   for (let x = P.x0 + 2; x < P.x1; x += 4) {

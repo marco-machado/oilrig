@@ -152,7 +152,7 @@ export class OceanSky extends Mesh {
         const d = length(normalize(eq).sub(normalize(center))).mul(scale);
         const present = smoothstep(0.93, 0.97, h.x);
         const mag = pow(h.z, 6.0).mul(2.2).add(0.12);
-        const tw = sqrt(fract(h.y.mul(91.7).add(this.cloudTime.mul(h.y.add(0.5)).mul(3.0)))).mul(0.4).add(0.6);
+        const tw = sqrt(fract(h.y.mul(91.7).add(U.time.mul(h.y.add(0.5)).mul(150.0)))).mul(0.4).add(0.6);
         starAcc.addAssign(present.mul(mag).mul(tw).mul(smoothstep(0.22, 0.0, d)));
       }
       texColor.addAssign(vec3(0.8, 0.86, 1.0).mul(starAcc).mul(0.06).mul(night).mul(horizonFade).mul(float(1).sub(this.haze)));

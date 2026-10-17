@@ -1,0 +1,1415 @@
+<title>Ocean Home UI</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a review page. Live prototype first, then every screen as an artboard, then the
+   foundations and components that build them, then what changes in the code.
+   Everything prefixed .oh- is the game UI and ports to apps/client/src/ui as-is. */
+:root {
+  /* Deep-sea neutrals with a blue-teal bias; rig yellow is the one accent. */
+  --oh-abyss: #03080c;
+  --oh-deep: #07121a;
+  --oh-hull: #0d1b25;
+  --oh-glass: rgba(7, 16, 23, 0.62);
+  --oh-glass-strong: rgba(6, 13, 19, 0.85);
+  --oh-fill: rgba(232, 239, 242, 0.06);
+  --oh-fill-hover: rgba(232, 239, 242, 0.1);
+  --oh-fill-active: rgba(232, 239, 242, 0.14);
+  --oh-well: rgba(0, 0, 0, 0.28);
+  --oh-line: rgba(190, 222, 238, 0.11);
+  --oh-line-strong: rgba(190, 222, 238, 0.2);
+  --oh-ink: #e8eff2;
+  --oh-ink-2: rgba(232, 239, 242, 0.7);
+  --oh-ink-3: rgba(232, 239, 242, 0.46);
+  --oh-rig: #f2b40c;
+  --oh-rig-hi: #ffc83a;
+  --oh-rig-ink: #1d1603;
+  --oh-rig-tint: rgba(242, 180, 12, 0.13);
+  --oh-sea: #7fd8e3;
+  --oh-good: #52d49a;
+  --oh-warn: #ff9f45;
+  --oh-bad: #ff6a5c;
+  --oh-bad-ink: #2a0905;
+
+  --font-display: 'Instrument Serif', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --font-ui: 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow-1: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 30px 80px -20px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --focus: 0 0 0 2px var(--oh-abyss), 0 0 0 4px rgba(242, 180, 12, 0.85);
+  --blur: blur(20px) saturate(1.4);
+
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --dur-4: 520ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-std: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.5, 0.64, 1);
+
+  --sky: linear-gradient(90deg, #0a1430 0%, #141f45 18%, #c9776a 25%, #e9b48a 28%, #7db6df 34%, #5aa7e2 50%, #6eacdc 66%, #f2a457 74%, #c45f4e 78%, #2a2550 84%, #0a1430 100%);
+  color-scheme: dark;
+}
+
+/* ================================================================
+   Ocean Home UI components (the part that ports to the game)
+   ================================================================ */
+
+.oh { position: relative; font: 400 14px/1.45 var(--font-ui); color: var(--oh-ink); -webkit-font-smoothing: antialiased; font-synthesis: none; }
+.oh *, .oh *::before, .oh *::after { box-sizing: border-box; }
+:where(.oh) :where(button, input) { font: inherit; color: inherit; }
+.oh-i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.oh-mark { display: block; flex: none; }
+
+.oh-glass { background: var(--oh-glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--oh-line); box-shadow: var(--edge), var(--shadow-1); }
+.oh-glass--strong { background: var(--oh-glass-strong); box-shadow: var(--edge), var(--shadow-2); }
+
+.oh-eyebrow { font: 500 11px/1.3 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--oh-ink-3); }
+.oh-wordmark { margin: 0; font: 400 88px/0.92 var(--font-display); letter-spacing: -0.02em; color: var(--oh-ink); text-wrap: balance; }
+.oh-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.oh-caption { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--oh-ink-3); }
+
+/* Button */
+.oh-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border: 1px solid transparent; border-radius: var(--r-md); font-size: 14px; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer; user-select: none; transition: background-color var(--dur-1) var(--ease-std), border-color var(--dur-1) var(--ease-std), color var(--dur-1) var(--ease-std), box-shadow var(--dur-2) var(--ease-std), transform var(--dur-1) var(--ease-std), opacity var(--dur-2); }
+.oh-btn .oh-i { width: 16px; height: 16px; }
+.oh-btn:active { transform: scale(0.97); }
+.oh-btn:focus-visible, .oh-icon-btn:focus-visible, .oh-nav__item:focus-visible, .oh-seg button:focus-visible, .oh-tile:focus-visible, .oh-switch:focus-visible { outline: none; box-shadow: var(--focus); }
+.oh-btn--primary { background: var(--oh-rig); color: var(--oh-rig-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 8px 20px -8px rgba(242, 180, 12, 0.6); }
+.oh-btn--primary:hover { background: var(--oh-rig-hi); }
+.oh-btn .trail { transition: transform var(--dur-2) var(--ease-out); }
+.oh-btn:hover .trail { transform: translateX(3px); }
+.oh-btn--secondary { background: var(--oh-fill); border-color: var(--oh-line-strong); color: var(--oh-ink); }
+.oh-btn--secondary:hover { background: var(--oh-fill-hover); }
+.oh-btn--ghost { background: transparent; color: var(--oh-ink-2); }
+.oh-btn--ghost:hover { background: var(--oh-fill); color: var(--oh-ink); }
+.oh-btn--danger { background: var(--oh-bad); color: var(--oh-bad-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 8px 20px -8px rgba(255, 106, 92, 0.55); }
+.oh-btn--danger:hover { background: #ff8075; }
+.oh-btn--quiet-danger { background: transparent; color: var(--oh-ink-2); justify-content: flex-start; padding: 0 12px; }
+.oh-btn--quiet-danger:hover { background: rgba(255, 106, 92, 0.12); color: var(--oh-bad); }
+.oh-btn--sm { height: 32px; padding: 0 12px; font-size: 13px; border-radius: var(--r-sm); }
+.oh-btn--lg { height: 48px; padding: 0 20px; font-size: 15px; border-radius: 12px; }
+.oh-btn--block { width: 100%; }
+.oh-btn:disabled { opacity: 0.6; cursor: default; transform: none; }
+.oh-spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: oh-spin 0.7s linear infinite; }
+
+.oh-icon-btn { display: inline-grid; place-items: center; width: 34px; height: 34px; flex: none; border: 0; border-radius: 10px; background: transparent; color: var(--oh-ink-2); cursor: pointer; transition: background-color var(--dur-1), color var(--dur-1), transform var(--dur-1); }
+.oh-icon-btn:hover { background: var(--oh-fill-hover); color: var(--oh-ink); }
+.oh-icon-btn:active { transform: scale(0.92); }
+
+/* Keycap, badge, pill, dot */
+.oh-kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border: 1px solid var(--oh-line-strong); border-bottom-width: 2px; border-radius: 6px; background: linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)); font: 500 11px/1 var(--font-mono); color: var(--oh-ink); white-space: nowrap; }
+.oh-badge { display: inline-grid; place-items: center; height: 17px; padding: 0 5px; border-radius: 5px; font: 600 9.5px/1 var(--font-mono); letter-spacing: 0.08em; color: #05242b; background: var(--oh-sea); }
+.oh-badge--muted { color: var(--oh-ink-2); background: var(--oh-fill-active); }
+.oh-pill { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 10px; border-radius: 999px; background: var(--oh-fill); border: 1px solid var(--oh-line); font-size: 12.5px; font-weight: 500; color: var(--oh-ink-2); white-space: nowrap; }
+.oh-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--oh-ink-3); }
+.oh-dot--good, .oh-pill--good .oh-dot { background: var(--oh-good); box-shadow: 0 0 0 3px rgba(82, 212, 154, 0.18); }
+.oh-dot--warn, .oh-pill--warn .oh-dot { background: var(--oh-warn); box-shadow: 0 0 0 3px rgba(255, 159, 69, 0.18); }
+.oh-dot--bad, .oh-pill--bad .oh-dot { background: var(--oh-bad); box-shadow: 0 0 0 3px rgba(255, 106, 92, 0.18); }
+.oh-pill--good { color: var(--oh-ink); }
+.oh-pill--checking .oh-dot { animation: oh-pulse 1.2s ease-in-out infinite; }
+
+/* Field */
+.oh-field { display: grid; gap: 8px; }
+.oh-field__label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 500; color: var(--oh-ink-2); }
+.oh-field__hint { font-size: 12px; font-weight: 400; color: var(--oh-ink-3); }
+.oh-field__error { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; color: var(--oh-bad); }
+.oh-field__error .oh-i { width: 15px; height: 15px; }
+.oh-input { width: 100%; height: 46px; padding: 0 14px; border: 1px solid var(--oh-line-strong); border-radius: 12px; background: var(--oh-well); font-size: 15px; color: var(--oh-ink); outline: none; transition: border-color var(--dur-2) var(--ease-std), box-shadow var(--dur-2) var(--ease-std), background-color var(--dur-2) var(--ease-std); }
+.oh-input::placeholder { color: var(--oh-ink-3); }
+.oh-input:hover { border-color: rgba(190, 222, 238, 0.3); }
+.oh-input:focus, .oh-input.is-focus { border-color: rgba(242, 180, 12, 0.9); box-shadow: 0 0 0 4px rgba(242, 180, 12, 0.16); background: rgba(0, 0, 0, 0.38); }
+.oh-input[aria-invalid='true'] { border-color: var(--oh-bad); box-shadow: 0 0 0 4px rgba(255, 106, 92, 0.15); }
+.oh-shake { animation: oh-shake 380ms var(--ease-std); }
+
+/* Switch */
+.oh-switch { -webkit-appearance: none; appearance: none; position: relative; flex: none; width: 42px; height: 26px; margin: 0; border-radius: 999px; background: rgba(232, 239, 242, 0.14); border: 1px solid var(--oh-line-strong); cursor: pointer; transition: background-color var(--dur-2) var(--ease-std), border-color var(--dur-2); }
+.oh-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #d7e1e6; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35); transition: transform var(--dur-3) var(--ease-spring), background-color var(--dur-2); }
+.oh-switch:checked { background: var(--oh-rig); border-color: transparent; }
+.oh-switch:checked::after { transform: translateX(16px); background: #fff; }
+
+/* Segmented control: the thumb slides to the selected option (pure CSS, --i / --n). */
+.oh-seg { --n: 4; --i: 0; position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); padding: 3px; border-radius: 12px; background: var(--oh-well); border: 1px solid var(--oh-line); }
+.oh-seg::before { content: ''; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n)); transform: translateX(calc(var(--i) * 100%)); border-radius: 9px; background: var(--oh-fill-active); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 0 0 1px var(--oh-line-strong), 0 2px 6px rgba(0, 0, 0, 0.3); transition: transform var(--dur-3) var(--ease-out); }
+.oh-seg button { position: relative; z-index: 1; height: 34px; padding: 0 4px; border: 0; border-radius: 9px; background: transparent; color: var(--oh-ink-2); font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: color var(--dur-2) var(--ease-std); }
+.oh-seg button:hover { color: var(--oh-ink); }
+.oh-seg button[aria-pressed='true'] { color: var(--oh-ink); font-weight: 600; }
+
+/* Slider */
+.oh-range { --p: 50%; -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 22px; margin: 0; background: transparent; cursor: pointer; }
+.oh-range:focus-visible { outline: none; }
+.oh-range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--oh-rig) var(--p), rgba(232, 239, 242, 0.14) var(--p)); }
+.oh-range::-moz-range-track { height: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--oh-rig) var(--p), rgba(232, 239, 242, 0.14) var(--p)); }
+.oh-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -7px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.45); transition: transform var(--dur-2) var(--ease-spring), box-shadow var(--dur-2); }
+.oh-range::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.45); }
+.oh-range:hover::-webkit-slider-thumb { transform: scale(1.12); }
+.oh-range:active::-webkit-slider-thumb { transform: scale(1.2); box-shadow: 0 0 0 6px rgba(242, 180, 12, 0.2), 0 2px 6px rgba(0, 0, 0, 0.45); }
+.oh-range:focus-visible::-webkit-slider-thumb { box-shadow: var(--focus); }
+
+/* Sky dial: the 24 h slider drawn as the sky, the thumb is the sun or the moon. */
+.oh-range--sky { height: 30px; }
+.oh-range--sky::-webkit-slider-runnable-track { height: 30px; border-radius: 10px; background: var(--sky); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 -12px 18px -10px rgba(0, 0, 0, 0.35); }
+.oh-range--sky::-moz-range-track { height: 30px; border-radius: 10px; background: var(--sky); }
+.oh-range--sky::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: 4px; background: radial-gradient(circle at 40% 38%, #fff8de, #ffd45e 55%, #f2a90c); box-shadow: 0 0 0 3px rgba(255, 214, 94, 0.28), 0 0 22px 6px rgba(255, 196, 58, 0.55); }
+.oh-range--sky::-moz-range-thumb { width: 22px; height: 22px; background: radial-gradient(circle at 40% 38%, #fff8de, #ffd45e 55%, #f2a90c); box-shadow: 0 0 0 3px rgba(255, 214, 94, 0.28), 0 0 22px 6px rgba(255, 196, 58, 0.55); }
+.oh-range--sky.is-night::-webkit-slider-thumb { background: radial-gradient(circle at 38% 36%, #ffffff, #e3eaf6 60%, #a9b7ce); box-shadow: 0 0 0 3px rgba(220, 230, 245, 0.18), 0 0 16px 3px rgba(200, 215, 240, 0.45); }
+.oh-range--sky:hover::-webkit-slider-thumb { transform: scale(1.08); }
+.oh-ticks { display: flex; justify-content: space-between; padding: 0 2px; font: 500 10.5px/1 var(--font-mono); color: var(--oh-ink-3); letter-spacing: 0.06em; }
+
+/* Grouped rows */
+.oh-group { border-radius: var(--r-lg); background: rgba(232, 239, 242, 0.035); border: 1px solid var(--oh-line); }
+.oh-row { display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 12px 16px; cursor: default; }
+label.oh-row { cursor: pointer; }
+.oh-row + .oh-row { border-top: 1px solid var(--oh-line); }
+.oh-row--stack { display: grid; gap: 10px; }
+.oh-row__head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.oh-row__text { flex: 1; min-width: 0; }
+.oh-row__title { font-size: 14px; font-weight: 500; color: var(--oh-ink); }
+.oh-row__desc { margin-top: 2px; font-size: 12.5px; line-height: 1.45; color: var(--oh-ink-3); }
+.oh-row__desc .oh-kbd { height: 18px; min-width: 18px; font-size: 10px; vertical-align: 1px; }
+.oh-row__value { font: 500 13px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--oh-ink); }
+.oh-row--keys { min-height: 46px; padding: 8px 16px; justify-content: space-between; }
+.oh-keycombo { display: inline-flex; align-items: center; gap: 4px; }
+.oh-or { margin: 0 4px; font-size: 12px; color: var(--oh-ink-3); }
+
+/* Weather tiles */
+.oh-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.oh-tile { display: grid; justify-items: center; gap: 6px; padding: 14px 4px 11px; border-radius: 12px; border: 1px solid var(--oh-line); background: rgba(232, 239, 242, 0.03); color: var(--oh-ink-2); font-size: 13px; font-weight: 500; cursor: pointer; transition: background-color var(--dur-1), border-color var(--dur-2), color var(--dur-1), transform var(--dur-1); }
+.oh-tile .oh-i { width: 24px; height: 24px; transition: transform var(--dur-3) var(--ease-spring), color var(--dur-2); }
+.oh-tile:hover { background: var(--oh-fill); color: var(--oh-ink); }
+.oh-tile:hover .oh-i { transform: translateY(-2px); }
+.oh-tile:active { transform: scale(0.97); }
+.oh-tile[aria-pressed='true'] { border-color: rgba(242, 180, 12, 0.55); background: var(--oh-rig-tint); color: var(--oh-ink); }
+.oh-tile[aria-pressed='true'] .oh-i { color: var(--oh-rig); }
+.oh-tile--wide { grid-template-columns: auto 1fr auto; justify-items: start; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; text-align: left; }
+.oh-tile--wide b { display: block; font-weight: 600; color: var(--oh-ink); }
+.oh-tile--wide small { display: block; font-size: 12px; font-weight: 400; color: var(--oh-ink-3); }
+.oh-tile--wide .oh-check { opacity: 0; color: var(--oh-rig); transform: scale(0.6); transition: opacity var(--dur-2), transform var(--dur-3) var(--ease-spring); }
+.oh-tile--wide[aria-pressed='true'] .oh-check { opacity: 1; transform: none; }
+
+/* Layers: every screen is a stack of absolutely placed layers over the world. */
+.oh-layer, .oh-slot { position: absolute; inset: 0; pointer-events: none; }
+.oh-slot.is-leaving, .oh-slot.is-leaving * { pointer-events: none !important; }
+.oh-bd { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: oh-fade-in 800ms var(--ease-std) both; }
+
+/* HUD */
+.oh-status { position: absolute; top: 16px; left: 16px; display: flex; align-items: center; height: 38px; padding: 0 4px; border-radius: 999px; animation: oh-drop-in var(--dur-4) var(--ease-out) both; }
+.oh-status__seg { display: flex; align-items: center; gap: 7px; height: 18px; padding: 0 12px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.oh-status__seg + .oh-status__seg { border-left: 1px solid var(--oh-line-strong); }
+.oh-status__seg .oh-i { width: 16px; height: 16px; color: var(--oh-ink-2); }
+.oh-status__time { font: 500 13.5px/1 var(--font-mono); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+.oh-presence { position: absolute; top: 16px; right: 16px; display: flex; align-items: center; gap: 9px; height: 38px; padding: 0 15px 0 13px; border-radius: 999px; font-size: 13px; font-weight: 500; animation: oh-drop-in var(--dur-4) var(--ease-out) 60ms both; }
+.oh-presence.is-offline { color: var(--oh-ink-2); }
+.oh-crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255, 255, 255, 0.92); box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.35); animation: oh-fade-in var(--dur-3) both; }
+.oh-prompt { position: absolute; left: 50%; top: calc(50% + 28px); display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 13px 0 6px; border-radius: 999px; font-size: 13.5px; font-weight: 500; white-space: nowrap; transform: translateX(-50%); animation: oh-pop var(--dur-2) var(--ease-out) both; }
+.oh-prompt .oh-kbd { height: 24px; min-width: 24px; }
+
+.oh-chat { position: absolute; left: 16px; bottom: 16px; width: 440px; transition: bottom var(--dur-3) var(--ease-out); }
+.has-chat-input .oh-chat { bottom: 72px; }
+.oh-chat__log { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.oh-chat__line { max-width: 100%; padding: 6px 11px; border-radius: 10px; background: rgba(5, 12, 18, 0.6); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; animation: oh-chat-in var(--dur-3) var(--ease-out) both; transition: opacity 0.8s var(--ease-std); }
+.oh-chat__line b { margin-right: 7px; font-weight: 600; color: var(--c, var(--oh-ink)); }
+.oh-chat__line--sys { background: rgba(5, 12, 18, 0.42); color: var(--oh-ink-2); font-size: 12.5px; }
+.oh-chat__line.is-faded { opacity: 0; }
+.has-chat-input .oh-chat__line.is-faded { opacity: 1; }
+.oh-chatbox { position: absolute; left: 16px; bottom: 16px; width: 440px; pointer-events: auto; animation: oh-rise var(--dur-2) var(--ease-out) both; }
+.oh-chatbox .oh-input { height: 46px; padding-right: 150px; background: var(--oh-glass-strong); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.oh-chatbox__hint { position: absolute; right: 12px; top: 0; bottom: 0; display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--oh-ink-3); pointer-events: none; }
+.oh-chatbox__hint span { display: inline-flex; align-items: center; gap: 5px; }
+.oh-chatbox__hint .oh-kbd { height: 19px; font-size: 10px; }
+
+.oh-hud-right { position: absolute; top: 64px; right: 16px; display: grid; gap: 10px; justify-items: end; }
+.oh-aboard { position: absolute; top: 64px; right: 16px; width: 252px; padding: 12px 10px 8px; border-radius: var(--r-lg); animation: oh-drop-in var(--dur-2) var(--ease-out) both; }
+.oh-aboard .oh-eyebrow { padding: 0 6px; }
+.oh-aboard ul { display: grid; gap: 1px; margin: 8px 0 0; padding: 0; list-style: none; }
+.oh-aboard li { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px; border-radius: 9px; font-size: 13.5px; }
+.oh-aboard li > :last-child { margin-left: auto; }
+.oh-avatar { --c: var(--oh-rig); display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--c); color: rgba(0, 0, 0, 0.72); font-size: 15px; font-weight: 700; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 24%, transparent); }
+.oh-avatar--sm { width: 24px; height: 24px; font-size: 11px; box-shadow: none; }
+
+.oh-perfhud { position: absolute; top: calc(64px + var(--aboard-h, 0px)); right: 16px; width: 252px; display: grid; gap: 8px; padding: 12px 12px 11px; border-radius: var(--r-lg); transition: top var(--dur-3) var(--ease-out); animation: oh-drop-in var(--dur-3) var(--ease-out) both; }
+.has-aboard { --aboard-h: 214px; }
+.oh-perfhud__top { display: flex; align-items: center; justify-content: space-between; }
+.oh-perfhud .oh-fps__n { font-size: 26px; }
+.oh-perfhud .oh-graph { height: 46px; }
+.oh-perfhud .oh-caption { font: 500 11px/1.2 var(--font-mono); letter-spacing: 0.02em; }
+
+.oh-flight { position: absolute; left: 50%; bottom: 20px; display: grid; justify-items: center; gap: 10px; transform: translateX(-50%); animation: oh-rise-x var(--dur-4) var(--ease-out) both; }
+.oh-gauges { display: flex; padding: 12px 6px; border-radius: 16px; border-color: rgba(127, 216, 227, 0.28); }
+.oh-gauge { display: grid; justify-items: center; gap: 6px; min-width: 104px; padding: 0 12px; }
+.oh-gauge + .oh-gauge { border-left: 1px solid var(--oh-line); }
+.oh-gauge__label { font: 500 10px/1 var(--font-mono); letter-spacing: 0.18em; color: var(--oh-sea); }
+.oh-gauge__value { font: 500 21px/1 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.oh-gauge__unit { margin-left: 4px; font-size: 11px; color: var(--oh-ink-3); }
+.oh-flight__hint { display: flex; align-items: center; gap: 16px; height: 36px; padding: 0 16px; border-radius: 999px; font-size: 12.5px; color: var(--oh-ink-2); white-space: nowrap; }
+.oh-flight__hint > span { display: inline-flex; align-items: center; gap: 6px; }
+.oh-flight__hint .oh-kbd { height: 20px; min-width: 20px; font-size: 10px; }
+.oh-flight__seat { color: var(--oh-ink); font-weight: 600; }
+
+/* Menu: a rail on the left and one section sheet beside it. */
+.oh-scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(3, 8, 12, 0.8) 0%, rgba(3, 8, 12, 0.52) 36%, rgba(3, 8, 12, 0.14) 72%, rgba(3, 8, 12, 0.06) 100%); pointer-events: auto; cursor: pointer; animation: oh-fade-in var(--dur-3) var(--ease-std) both; }
+.oh-rail { position: absolute; left: 16px; top: 16px; bottom: 16px; width: 280px; display: flex; flex-direction: column; gap: 18px; padding: 20px 14px 14px; border-radius: var(--r-xl); pointer-events: auto; animation: oh-slide-in var(--dur-3) var(--ease-out) both; }
+.oh-rail > * { animation: oh-rise var(--dur-3) var(--ease-out) both; animation-delay: calc(70ms + var(--i, 0) * 40ms); }
+.oh-brand { display: flex; align-items: center; gap: 12px; padding: 0 6px; }
+.oh-brand__name { font: 400 27px/1 var(--font-display); letter-spacing: -0.01em; }
+.oh-brand__sub { margin-top: 6px; font: 500 10px/1 var(--font-mono); letter-spacing: 0.12em; color: var(--oh-ink-3); text-transform: uppercase; }
+.oh-identity { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--r-lg); background: rgba(232, 239, 242, 0.04); border: 1px solid var(--oh-line); }
+.oh-identity__name { font-size: 15px; font-weight: 600; }
+.oh-identity__meta { display: flex; align-items: center; gap: 7px; margin-top: 2px; font-size: 12.5px; color: var(--oh-ink-3); }
+.oh-identity__meta .oh-dot { width: 6px; height: 6px; box-shadow: none; }
+.oh-rail__resume { display: grid; gap: 8px; }
+.oh-rail__hint { margin: 0; font-size: 12px; color: var(--oh-ink-3); text-align: center; }
+.oh-nav { display: grid; gap: 2px; }
+.oh-nav__item { display: flex; align-items: center; gap: 12px; width: 100%; height: 46px; padding: 0 10px 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--oh-ink-2); font-size: 14.5px; font-weight: 500; text-align: left; cursor: pointer; transition: background-color var(--dur-1) var(--ease-std), color var(--dur-1) var(--ease-std), box-shadow var(--dur-2); }
+.oh-nav__item:hover { background: var(--oh-fill); color: var(--oh-ink); }
+.oh-nav__item[aria-current='true'] { background: var(--oh-fill-active); color: var(--oh-ink); box-shadow: inset 0 0 0 1px var(--oh-line-strong); }
+.oh-nav__item > .oh-i { transition: color var(--dur-2); }
+.oh-nav__item[aria-current='true'] > .oh-i { color: var(--oh-rig); }
+.oh-nav__meta { display: flex; align-items: center; gap: 6px; margin-left: auto; color: var(--oh-ink-3); }
+.oh-nav__meta .oh-i { width: 16px; height: 16px; transition: transform var(--dur-2) var(--ease-out); }
+.oh-nav__item:hover .oh-nav__meta .oh-i, .oh-nav__item[aria-current='true'] .oh-nav__meta .oh-i { transform: translateX(2px); }
+.oh-nav__meta .oh-kbd { height: 20px; font-size: 10px; }
+.oh-rail__foot { display: grid; gap: 6px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--oh-line); }
+.oh-rail__foot .oh-btn { height: 44px; font-weight: 500; font-size: 14.5px; gap: 12px; }
+.oh-rail__foot .oh-btn .oh-i { width: 18px; height: 18px; }
+.oh-rail__version { padding: 2px 12px 0; font-size: 10px; }
+
+.oh-sheet { position: absolute; left: 308px; top: 16px; width: 404px; max-height: calc(100% - 32px); display: flex; flex-direction: column; border-radius: var(--r-xl); pointer-events: auto; overflow: hidden; animation: oh-sheet-in var(--dur-3) var(--ease-out) both; }
+.oh-sheet__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 22px 16px 4px 24px; }
+.oh-sheet__title { margin: 8px 0 0; font: 400 34px/1 var(--font-display); letter-spacing: -0.01em; }
+.oh-sheet__body { display: grid; align-content: start; gap: 22px; padding: 16px 24px 24px; overflow-y: auto; scrollbar-width: thin; }
+.oh-sheet__body > * { animation: oh-rise var(--dur-3) var(--ease-out) both; animation-delay: calc(90ms + var(--i, 0) * 45ms); }
+.oh-sheet__foot { display: flex; align-items: center; gap: 12px; padding: 14px 24px 18px; border-top: 1px solid var(--oh-line); }
+.oh-section { display: grid; gap: 10px; }
+.oh-note { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--oh-ink-3); }
+.oh-note .oh-i { width: 16px; height: 16px; margin-top: 1px; }
+
+.oh-clock { display: flex; align-items: flex-end; justify-content: space-between; }
+.oh-clock__time { font: 400 64px/0.9 var(--font-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.oh-clock__phase { display: flex; align-items: center; gap: 7px; padding-bottom: 6px; font-size: 14px; font-weight: 500; color: var(--oh-ink-2); }
+.oh-clock__phase .oh-i { color: var(--oh-rig); }
+
+.oh-fps { display: flex; align-items: baseline; gap: 6px; }
+.oh-fps__n { font: 500 46px/1 var(--font-mono); letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.oh-fps__u { font: 500 11px/1 var(--font-mono); letter-spacing: 0.14em; color: var(--oh-ink-3); }
+.oh-perf-top { display: flex; align-items: center; justify-content: space-between; }
+.oh-graph { display: block; width: 100%; height: 104px; border-radius: 10px; background: var(--oh-well); border: 1px solid var(--oh-line); }
+.oh-legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--oh-ink-3); }
+.oh-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.oh-legend i { width: 8px; height: 8px; border-radius: 2px; }
+.oh-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.oh-stat { display: grid; gap: 4px; padding: 11px 12px; border-right: 1px solid var(--oh-line); border-bottom: 1px solid var(--oh-line); min-width: 0; }
+.oh-stat:nth-child(3n) { border-right: 0; }
+.oh-stat:nth-last-child(-n + 3) { border-bottom: 0; }
+.oh-stat .oh-eyebrow { font-size: 9.5px; letter-spacing: 0.12em; }
+.oh-stat__value { font: 500 15px/1.1 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oh-stat__unit { margin-left: 3px; font-size: 11px; color: var(--oh-ink-3); }
+.oh-bars { display: grid; grid-template-columns: 88px minmax(0, 1fr) 40px; align-items: center; gap: 7px 10px; font-size: 12.5px; color: var(--oh-ink-2); }
+.oh-bars b { font: 500 12px/1 var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--oh-ink); }
+.oh-bar { height: 6px; border-radius: 999px; background: rgba(232, 239, 242, 0.07); overflow: hidden; }
+.oh-bar > i { display: block; width: var(--w); height: 100%; border-radius: inherit; background: var(--oh-sea); opacity: 0.85; transition: width var(--dur-3) var(--ease-out); }
+
+/* Dialog */
+.oh-dialog-backdrop { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(3, 8, 12, 0.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); pointer-events: auto; animation: oh-fade-in var(--dur-2) var(--ease-std) both; }
+.oh-dialog { display: grid; gap: 14px; width: 424px; padding: 26px 24px 22px; border-radius: var(--r-xl); animation: oh-dialog-in var(--dur-3) var(--ease-out) both; }
+.oh-dialog__icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 13px; background: rgba(255, 106, 92, 0.13); color: var(--oh-bad); }
+.oh-dialog__icon .oh-i { width: 22px; height: 22px; }
+.oh-dialog__title { margin: 4px 0 0; font: 400 32px/1.05 var(--font-display); letter-spacing: -0.01em; }
+.oh-dialog__body { margin: 0; font-size: 14px; line-height: 1.55; color: var(--oh-ink-2); }
+.oh-dialog__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+
+/* Sign-in screen */
+.oh-join { position: absolute; inset: 0; pointer-events: auto; }
+.oh-join__scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(3, 8, 12, 0.88) 0%, rgba(3, 8, 12, 0.66) 32%, rgba(3, 8, 12, 0.14) 66%, rgba(3, 8, 12, 0.04) 100%), linear-gradient(0deg, rgba(3, 8, 12, 0.72), transparent 26%); animation: oh-fade-in var(--dur-4) var(--ease-std) both; }
+.oh-join__col { position: absolute; left: 96px; top: 50%; width: 424px; display: grid; gap: 16px; transform: translateY(-56%); }
+.oh-join__brand { display: flex; align-items: center; gap: 14px; }
+.oh-join .oh-wordmark { font-size: 84px; }
+.oh-join__tagline { margin: -2px 0 10px; max-width: 34ch; font-size: 16px; line-height: 1.5; color: var(--oh-ink-2); }
+.oh-join__card { display: grid; gap: 16px; padding: 22px; border-radius: var(--r-xl); }
+.oh-join__status { margin: -2px 0 0; min-height: 18px; font-size: 13px; line-height: 1.45; color: var(--oh-ink-3); }
+.oh-join__status.is-error { color: var(--oh-bad); }
+.oh-join__status:empty { display: none; }
+.oh-join__foot { position: absolute; left: 96px; right: 40px; bottom: 30px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.oh-keys { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12.5px; color: var(--oh-ink-2); }
+.oh-keys > span { display: inline-flex; align-items: center; gap: 6px; }
+.oh-keys .oh-kbd + .oh-kbd { margin-left: -3px; }
+.oh-enter { animation: oh-rise var(--dur-4) var(--ease-out) both; animation-delay: calc(140ms + var(--i, 0) * 70ms); }
+
+/* Loading screen: the progress runs along the horizon. */
+.oh-loader { position: absolute; inset: 0; pointer-events: auto; background: linear-gradient(180deg, #02060a 0%, #04101a 40%, #0a2333 61.2%, #04111b 61.6%, #02070b 100%); }
+.oh-loader__sea { position: absolute; left: 0; right: 0; top: 61.4%; bottom: 0; width: 100%; height: 38.6%; }
+.oh-loader__glow { position: absolute; left: 0; right: 0; top: 48%; height: 26%; background: radial-gradient(60% 50% at var(--gx, 50%) 52%, rgba(242, 180, 12, 0.1), transparent 70%); }
+.oh-loader__content { position: absolute; left: 120px; bottom: calc(38.6% + 72px); display: grid; gap: 18px; animation: oh-rise var(--dur-4) var(--ease-out) 80ms both; }
+.oh-loader .oh-wordmark { font-size: 112px; }
+.oh-loader__tagline { margin: 0; font-size: 17px; color: var(--oh-ink-2); }
+.oh-horizon { position: absolute; left: 120px; right: 120px; top: calc(61.4% - 1px); animation: oh-fade-in var(--dur-4) var(--ease-std) 200ms both; }
+.oh-horizon__meta { position: absolute; left: 0; right: 0; bottom: 16px; display: flex; justify-content: space-between; align-items: baseline; }
+.oh-horizon__step { font: 500 12px/1 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--oh-ink-2); }
+.oh-horizon__pct { font: 500 12px/1 var(--font-mono); color: var(--oh-ink); font-variant-numeric: tabular-nums; }
+.oh-horizon__line { position: relative; height: 2px; border-radius: 2px; background: rgba(127, 216, 227, 0.16); }
+.oh-horizon__fill { position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--p) * 100%); border-radius: 2px; background: linear-gradient(90deg, rgba(242, 180, 12, 0.15), var(--oh-rig)); box-shadow: 0 0 12px rgba(242, 180, 12, 0.55); transition: width 700ms var(--ease-out); }
+.oh-horizon__fill::after { content: ''; position: absolute; right: -4px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: #ffe390; box-shadow: 0 0 0 4px rgba(242, 180, 12, 0.22), 0 0 18px 5px rgba(242, 180, 12, 0.55); }
+.oh-horizon__hint { position: absolute; left: 0; top: 18px; margin: 0; font-size: 13px; color: var(--oh-ink-3); }
+.oh-veil { position: absolute; inset: 0; background: #02060a; animation: oh-fade-in 320ms var(--ease-std) both; }
+
+/* Exit animations: a leaving slot plays these, then is removed. */
+.oh-slot.is-leaving > * { animation: oh-fade-out var(--dur-2) var(--ease-in) forwards; }
+.oh-slot.is-leaving > .oh-rail { animation: oh-slide-out var(--dur-2) var(--ease-in) forwards; }
+.oh-slot.is-leaving > .oh-sheet { animation: oh-sheet-out var(--dur-2) var(--ease-in) forwards; }
+.oh-slot.is-leaving > .oh-dialog-backdrop { animation: oh-fade-out 200ms var(--ease-in) forwards; }
+.oh-slot.is-leaving .oh-dialog { animation: oh-dialog-out 160ms var(--ease-in) forwards; }
+.oh-slot.is-leaving > .oh-loader { animation: oh-fade-out 700ms var(--ease-std) 120ms forwards; }
+.oh-slot.is-leaving .oh-loader__content, .oh-slot.is-leaving .oh-horizon { animation: oh-lift-out 420ms var(--ease-in) forwards; }
+.oh-slot.is-leaving > .oh-veil { animation: oh-fade-out 600ms var(--ease-std) forwards; }
+.oh-slot.is-leaving > .oh-bd { animation: none; }
+
+@keyframes oh-fade-in { from { opacity: 0; } }
+@keyframes oh-fade-out { to { opacity: 0; } }
+@keyframes oh-rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes oh-rise-x { from { opacity: 0; transform: translateX(-50%) translateY(10px); } }
+@keyframes oh-drop-in { from { opacity: 0; transform: translateY(-6px); } }
+@keyframes oh-pop { from { opacity: 0; transform: translateX(-50%) translateY(4px) scale(0.96); } }
+@keyframes oh-slide-in { from { opacity: 0; transform: translateX(-20px); } }
+@keyframes oh-slide-out { to { opacity: 0; transform: translateX(-20px); } }
+@keyframes oh-sheet-in { from { opacity: 0; transform: translateX(-14px) scale(0.985); } }
+@keyframes oh-sheet-out { to { opacity: 0; transform: translateX(-10px) scale(0.985); } }
+@keyframes oh-dialog-in { from { opacity: 0; transform: translateY(10px) scale(0.96); } }
+@keyframes oh-dialog-out { to { opacity: 0; transform: translateY(6px) scale(0.97); } }
+@keyframes oh-chat-in { from { opacity: 0; transform: translateX(-8px); } }
+@keyframes oh-lift-out { to { opacity: 0; transform: translateY(-14px); } }
+@keyframes oh-spin { to { transform: rotate(360deg); } }
+@keyframes oh-pulse { 50% { opacity: 0.3; } }
+@keyframes oh-shake { 20% { transform: translateX(-6px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+
+.is-static *, .is-static *::before, .is-static *::after { animation: none !important; transition: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .oh *, .oh *::before, .oh *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+  .oh .oh-spinner { animation: oh-spin 1.4s linear infinite !important; }
+}
+
+/* ================================================================
+   Review page
+   ================================================================ */
+
+body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 156, 196, 0.13), transparent 62%), var(--oh-abyss); color: var(--oh-ink); font: 400 15px/1.6 var(--font-ui); -webkit-font-smoothing: antialiased; }
+.doc { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 120px; }
+.doc a { color: inherit; }
+.doc-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 20px; border-bottom: 1px solid var(--oh-line); }
+.doc-top__brand { display: flex; align-items: center; gap: 12px; font: 400 22px/1 var(--font-display); }
+.doc-top nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.doc-top nav a { padding: 6px 12px; border-radius: 999px; font-size: 13.5px; color: var(--oh-ink-2); text-decoration: none; transition: background-color var(--dur-1), color var(--dur-1); }
+.doc-top nav a:hover { background: var(--oh-fill); color: var(--oh-ink); }
+.doc-hero { display: grid; gap: 18px; padding: 64px 0 8px; }
+.doc-hero h1 { margin: 0; font: 400 clamp(52px, 9vw, 112px)/0.92 var(--font-display); letter-spacing: -0.025em; text-wrap: balance; }
+.doc-hero h1 em { color: var(--oh-rig); font-style: italic; }
+.doc-hero p { max-width: 64ch; margin: 0; font-size: 17px; color: var(--oh-ink-2); }
+.doc-meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.doc-section { display: grid; gap: 28px; padding-top: 96px; scroll-margin-top: 16px; }
+.doc-section__head { display: grid; gap: 12px; max-width: 72ch; }
+.doc-section h2 { margin: 0; font: 400 clamp(38px, 5.4vw, 56px)/1 var(--font-display); letter-spacing: -0.015em; text-wrap: balance; }
+.doc-section__head p { margin: 0; color: var(--oh-ink-2); }
+.doc h3 { margin: 0; font-size: 15px; font-weight: 600; }
+
+.frame { position: relative; width: 100%; aspect-ratio: 1440 / 900; overflow: hidden; border-radius: 16px; background: #000; box-shadow: 0 0 0 1px var(--oh-line), 0 40px 100px -30px rgba(0, 0, 0, 0.85); outline: none; }
+.frame:focus-visible { box-shadow: 0 0 0 2px var(--oh-rig), 0 40px 100px -30px rgba(0, 0, 0, 0.85); }
+.stage { position: absolute; left: 0; top: 0; width: 1440px; height: 900px; overflow: hidden; transform-origin: 0 0; transform: scale(var(--s, 1)); }
+
+.proto { display: grid; gap: 16px; }
+.proto-bar { display: flex; flex-wrap: wrap; gap: 6px; }
+.proto-bar button { height: 32px; padding: 0 13px; border: 1px solid var(--oh-line); border-radius: 999px; background: var(--oh-fill); color: var(--oh-ink-2); font: 500 13px/1 var(--font-ui); cursor: pointer; transition: background-color var(--dur-1), color var(--dur-1), border-color var(--dur-1); }
+.proto-bar button:hover { background: var(--oh-fill-hover); color: var(--oh-ink); }
+.proto-bar button[aria-pressed='true'] { background: var(--oh-rig); border-color: transparent; color: var(--oh-rig-ink); font-weight: 600; }
+.proto-bar button:focus-visible { outline: none; box-shadow: var(--focus); }
+.proto-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 13px; color: var(--oh-ink-3); }
+.proto-keys span { display: inline-flex; align-items: center; gap: 6px; }
+
+.before { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.before figure { display: grid; gap: 8px; margin: 0; }
+.before img { display: block; width: 100%; aspect-ratio: 1440 / 900; object-fit: cover; border-radius: 10px; box-shadow: 0 0 0 1px var(--oh-line); filter: saturate(0.85); }
+.before figcaption { font-size: 13px; line-height: 1.45; color: var(--oh-ink-3); }
+.label-today { display: inline-flex; align-items: center; gap: 8px; }
+
+.shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 24px; }
+.shot { display: grid; gap: 14px; margin: 0; }
+.shot .frame { cursor: pointer; transition: transform var(--dur-3) var(--ease-out), box-shadow var(--dur-3); }
+.shot .frame:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px var(--oh-line-strong), 0 50px 110px -30px rgba(0, 0, 0, 0.9); }
+.shot .frame:focus-visible { box-shadow: 0 0 0 2px var(--oh-rig); }
+.shot .frame .stage * { pointer-events: none !important; }
+.shot figcaption { display: grid; gap: 4px; }
+.shot figcaption p { margin: 0; font-size: 14px; color: var(--oh-ink-2); }
+.shot__open { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--oh-ink-3); }
+
+.direction { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--oh-line); border-bottom: 1px solid var(--oh-line); }
+.direction > div { display: grid; gap: 6px; padding: 22px 22px 24px 0; }
+.direction > div + div { padding-left: 22px; border-left: 1px solid var(--oh-line); }
+.direction p { margin: 0; font-size: 14px; color: var(--oh-ink-2); }
+
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 176px), 1fr)); gap: 14px; }
+.swatch { display: grid; gap: 10px; }
+.swatch__chip { height: 76px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.swatch__chip--glass { background-image: url(img/golden-hour.jpg); background-size: cover; background-position: 50% 60%; position: relative; overflow: hidden; }
+.swatch__chip--glass::after { content: ''; position: absolute; inset: 0; background: var(--c); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.swatch b { display: block; font-size: 14px; font-weight: 600; }
+.swatch code { display: block; font: 500 11.5px/1.5 var(--font-mono); color: var(--oh-ink-3); }
+.swatch p { margin: 2px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--oh-ink-2); }
+.subhead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-top: 12px; }
+
+.type-specimens { display: grid; gap: 0; border-top: 1px solid var(--oh-line); }
+.type-row { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: baseline; padding: 22px 0; border-bottom: 1px solid var(--oh-line); }
+.type-row code { font: 500 11.5px/1.6 var(--font-mono); color: var(--oh-ink-3); }
+.type-row .sample { min-width: 0; overflow-wrap: anywhere; }
+
+.scale { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 18px; }
+.scale div { display: grid; gap: 8px; justify-items: start; font: 500 11px/1 var(--font-mono); color: var(--oh-ink-3); }
+.scale i { display: block; background: rgba(127, 216, 227, 0.35); border-radius: 2px; }
+.radii { display: flex; flex-wrap: wrap; gap: 18px; }
+.radii div { display: grid; gap: 8px; justify-items: center; font: 500 11px/1 var(--font-mono); color: var(--oh-ink-3); }
+.radii i { display: block; width: 64px; height: 64px; border: 1.5px solid var(--oh-line-strong); background: var(--oh-fill); }
+
+.surfaces { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 28px; border-radius: 16px; background: url(img/firepit-lounge.jpg) center 60% / cover; overflow: hidden; }
+.surfaces > div { display: grid; gap: 6px; align-content: end; min-height: 150px; padding: 16px; border-radius: var(--r-lg); }
+.surfaces code { font: 500 11px/1.5 var(--font-mono); color: var(--oh-ink-3); }
+
+.motion-table { overflow-x: auto; border: 1px solid var(--oh-line); border-radius: 14px; }
+.motion-table table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13.5px; }
+.motion-table th, .motion-table td { padding: 12px 16px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--oh-line); }
+.motion-table tr:last-child td { border-bottom: 0; }
+.motion-table th { font: 500 10.5px/1.3 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--oh-ink-3); background: rgba(232, 239, 242, 0.03); }
+.motion-table td code { font: 500 12px/1.5 var(--font-mono); color: var(--oh-sea); white-space: nowrap; }
+.motion-table td:first-child { font-weight: 600; white-space: nowrap; }
+.motion-table button { height: 28px; padding: 0 10px; border: 1px solid var(--oh-line-strong); border-radius: 999px; background: var(--oh-fill); color: var(--oh-ink-2); font: 500 12px/1 var(--font-ui); cursor: pointer; white-space: nowrap; }
+.motion-table button:hover { color: var(--oh-ink); background: var(--oh-fill-hover); }
+.curves { display: flex; flex-wrap: wrap; gap: 18px; }
+.curve { display: grid; gap: 8px; justify-items: start; }
+.curve svg { width: 120px; height: 90px; border-radius: 10px; background: rgba(232, 239, 242, 0.03); border: 1px solid var(--oh-line); }
+.curve b { font-size: 13px; }
+.curve code { font: 500 11px/1.4 var(--font-mono); color: var(--oh-ink-3); }
+
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: 16px; }
+.spec { display: grid; align-content: start; gap: 16px; padding: 20px; border-radius: 16px; background: linear-gradient(180deg, rgba(13, 27, 37, 0.85), rgba(7, 18, 26, 0.9)); border: 1px solid var(--oh-line); min-width: 0; }
+.spec--photo { background: linear-gradient(rgba(3, 8, 12, 0.25), rgba(3, 8, 12, 0.45)), url(img/drone-landing.jpg) center / cover; }
+.spec__label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.spec__label h3 { font-size: 14px; }
+.spec__label code { font: 500 11px/1 var(--font-mono); color: var(--oh-ink-3); }
+.spec__row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.spec .oh-dialog { width: 100%; animation: none; }
+.spec .oh-sheet, .spec .oh-rail { position: static; width: 100%; animation: none; }
+
+.changes { display: grid; border-top: 1px solid var(--oh-line); }
+.change { display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1.25fr); gap: 24px; padding: 24px 0; border-bottom: 1px solid var(--oh-line); }
+.change__n { font: 400 40px/1 var(--font-display); color: var(--oh-rig); }
+.change h3 { font-size: 16px; }
+.change__ask { margin: 6px 0 0; font-size: 13.5px; color: var(--oh-ink-3); }
+.change ul { margin: 0; padding-left: 18px; color: var(--oh-ink-2); font-size: 14px; display: grid; gap: 6px; }
+.change code, .decisions code { font: 500 12.5px/1.4 var(--font-mono); color: var(--oh-sea); }
+.decisions { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--oh-line); counter-reset: d; }
+.decisions li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--oh-line); }
+.decisions b { font-weight: 600; }
+.decisions p { margin: 0; font-size: 14px; color: var(--oh-ink-2); }
+
+@media (max-width: 820px) {
+  .shots, .before { grid-template-columns: 1fr; }
+  .direction { grid-template-columns: 1fr; }
+  .direction > div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--oh-line); }
+  .type-row { grid-template-columns: 1fr; gap: 8px; }
+  .surfaces { grid-template-columns: 1fr; }
+  .change { grid-template-columns: 1fr; gap: 10px; }
+  .decisions li { grid-template-columns: 1fr; gap: 6px; }
+}
+</style>
+
+<div class="doc">
+  <header class="doc-top">
+    <div class="doc-top__brand"><span id="top-mark"></span>Ocean Home UI</div>
+    <nav aria-label="Sections">
+      <a href="#prototype">Prototype</a>
+      <a href="#screens">Screens</a>
+      <a href="#foundations">Foundations</a>
+      <a href="#components">Components</a>
+      <a href="#motion">Motion</a>
+      <a href="#changes">What changes</a>
+    </nav>
+  </header>
+
+  <section class="doc-hero">
+    <div class="doc-meta"><span class="oh-pill oh-pill--warn"><span class="oh-dot"></span>Proposal · no game code changed yet</span><span class="oh-pill">16 Oct 2026</span></div>
+    <h1>Industrial bones, <em>glass</em> skin.</h1>
+    <p>A design system and clickable prototype for every screen in Ocean Home: loading, sign in, the HUD, the menu, settings, time and weather, performance, the drone instruments and the new log out. The world behind each screen is a real capture from the game.</p>
+  </section>
+
+  <section class="doc-section" id="prototype">
+    <div class="doc-section__head">
+      <span class="oh-eyebrow">Live prototype</span>
+      <h2>Click through it</h2>
+      <p>It starts on the loading screen. Sign in, then click the frame and use the game's keys. Every control in the menu works, including the time slider, which changes the sky behind it.</p>
+    </div>
+    <div class="proto">
+      <div class="frame" id="live" tabindex="0" aria-label="Ocean Home prototype. Focus it to use the game keys."></div>
+      <div class="proto-bar" id="proto-bar" role="group" aria-label="Jump to a state"></div>
+      <div class="proto-keys">
+        <span><kbd class="oh-kbd">Esc</kbd> menu</span>
+        <span><kbd class="oh-kbd">F3</kbd> performance</span>
+        <span><kbd class="oh-kbd">T</kbd> chat</span>
+        <span>hold <kbd class="oh-kbd">Tab</kbd> who's aboard</span>
+        <span>click the world to close the menu</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="doc-section" id="screens">
+    <div class="doc-section__head">
+      <span class="oh-eyebrow">Screens</span>
+      <h2>Every state, side by side</h2>
+      <p>Click any screen to open it in the prototype above.</p>
+    </div>
+    <div class="before">
+      <figure><img src="img/before-loading.jpg" alt="Current loading screen fading out over the sign-in card"><figcaption><span class="label-today"><span class="oh-badge oh-badge--muted">TODAY</span></span> While the loader fades out, its title and the sign-in card overlap.</figcaption></figure>
+      <figure><img src="img/before-join.jpg" alt="Current sign-in card"><figcaption><span class="oh-badge oh-badge--muted">TODAY</span> Centered card with a long key list; status chips float above it.</figcaption></figure>
+      <figure><img src="img/before-menu.jpg" alt="Current toolbar and panels"><figcaption><span class="oh-badge oh-badge--muted">TODAY</span> The toolbar floats mid-screen; panels stack on the right and run off the bottom.</figcaption></figure>
+    </div>
+    <div class="shots" id="shots"></div>
+  </section>
+
+  <section class="doc-section" id="foundations">
+    <div class="doc-section__head">
+      <span class="oh-eyebrow">Foundations</span>
+      <h2>The Ocean Home design system</h2>
+      <p>Three ideas from the platform itself, applied to every surface.</p>
+    </div>
+    <div class="direction">
+      <div><h3>Rig yellow is the only accent</h3><p>The color of the steel. It marks the one action that matters on each screen, what is switched on, and keyboard focus. Nothing else is yellow.</p></div>
+      <div><h3>Surfaces are frosted glass</h3><p>Like the pavilion's walls: deep-sea tinted, blurred, with a thin bright top edge. The world always shows through.</p></div>
+      <div><h3>Names in serif, numbers in mono</h3><p>The name and screen titles in a quiet serif; times, speeds and frame times in a monospaced face, like instruments on a bridge.</p></div>
+    </div>
+
+    <div class="subhead"><h3>Color</h3><span class="oh-eyebrow">ui/tokens.css</span></div>
+    <div class="swatches" id="swatches"></div>
+
+    <div class="subhead"><h3>Type</h3><span class="oh-eyebrow">Self-hosted woff2</span></div>
+    <div class="type-specimens">
+      <div class="type-row"><code>Display · Instrument Serif<br>112 / 84 / 64 / 34 / 27</code><div class="sample" style="font:400 64px/1 var(--font-display);letter-spacing:-.02em">Ocean Home</div></div>
+      <div class="type-row"><code>Title · Instrument Serif<br>34 / 32</code><div class="sample" style="font:400 34px/1.1 var(--font-display)">Time &amp; weather</div></div>
+      <div class="type-row"><code>UI · Instrument Sans<br>16 / 15 / 14 / 13 / 12.5</code><div class="sample" style="font-size:16px;max-width:52ch;color:var(--oh-ink-2)">Lowers the resolution when frames run late, to hold 60 fps. Each change pauses the game for about a second.</div></div>
+      <div class="type-row"><code>Data · JetBrains Mono<br>46 / 21 / 15 / 13 / 12</code><div class="sample" style="font:500 21px/1.3 var(--font-mono);font-variant-numeric:tabular-nums">17:35 · NE 14 kn · 0.9 m · 58 fps</div></div>
+      <div class="type-row"><code>Label · JetBrains Mono caps<br>11 / 10, tracking .14em</code><div class="sample"><span class="oh-eyebrow" style="font-size:12px">23°36′S · 42°24′W · Deck +20 m</span></div></div>
+    </div>
+
+    <div class="subhead"><h3>Space and radius</h3><span class="oh-eyebrow">4 px grid</span></div>
+    <div class="scale" aria-label="Spacing scale">
+      <div><i style="width:4px;height:4px"></i>4</div><div><i style="width:8px;height:8px"></i>8</div><div><i style="width:12px;height:12px"></i>12</div><div><i style="width:16px;height:16px"></i>16</div><div><i style="width:20px;height:20px"></i>20</div><div><i style="width:24px;height:24px"></i>24</div><div><i style="width:32px;height:32px"></i>32</div><div><i style="width:48px;height:48px"></i>48</div>
+    </div>
+    <div class="radii" aria-label="Radius scale">
+      <div><i style="border-radius:6px"></i>6 keycap</div><div><i style="border-radius:10px"></i>10 control</div><div><i style="border-radius:14px"></i>14 group</div><div><i style="border-radius:20px"></i>20 sheet</div><div><i style="border-radius:999px"></i>pill</div>
+    </div>
+
+    <div class="subhead"><h3>Surfaces</h3><span class="oh-eyebrow">over the live world</span></div>
+    <div class="surfaces oh">
+      <div class="oh-glass"><b>Glass</b><code>HUD: status, presence, prompt, gauges<br>rgba(7,16,23,.62) · blur 20 · sat 1.4</code></div>
+      <div class="oh-glass oh-glass--strong"><b>Glass strong</b><code>Menu rail, sheets, dialogs, sign in<br>rgba(6,13,19,.85) · deeper shadow</code></div>
+      <div style="background:rgba(3,8,12,.5);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border:1px solid var(--oh-line)"><b>Scrim</b><code>Behind dialogs; the menu uses a left-to-right gradient instead</code></div>
+    </div>
+  </section>
+
+  <section class="doc-section" id="components">
+    <div class="doc-section__head">
+      <span class="oh-eyebrow">Components</span>
+      <h2>One set of parts</h2>
+      <p>Every screen above is built from these. In the game they become small DOM builders in <code style="font-family:var(--font-mono);font-size:.9em;color:var(--oh-sea)">ui/components/</code>, each returning its element plus setters, so <code style="font-family:var(--font-mono);font-size:.9em;color:var(--oh-sea)">ui.ts</code> stops hand-building markup.</p>
+    </div>
+    <div class="board oh" id="board"></div>
+  </section>
+
+  <section class="doc-section" id="motion">
+    <div class="doc-section__head">
+      <span class="oh-eyebrow">Motion</span>
+      <h2>Quick in, quicker out</h2>
+      <p>Things enter with a soft deceleration and leave faster than they came. Movement is short (8 to 20 px) and never blocks input. With reduced motion turned on, everything appears at once.</p>
+    </div>
+    <div class="curves" id="curves"></div>
+    <div class="motion-table">
+      <table>
+        <thead><tr><th>Pattern</th><th>Enter</th><th>Exit</th><th>What moves</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Menu rail</td><td><code>320 ms · out</code></td><td><code>200 ms · in</code></td><td>Scrim fades; rail slides 20 px from the left; its groups rise 8 px, 40 ms apart.</td><td><button data-demo="menu">Play</button></td></tr>
+          <tr><td>Section sheet</td><td><code>320 ms · out</code></td><td><code>200 ms · in</code></td><td>Slides 14 px from the rail and scales from 98.5%. Switching sections crossfades the two sheets.</td><td><button data-demo="sheet">Play</button></td></tr>
+          <tr><td>Dialog</td><td><code>320 ms · out</code></td><td><code>160 ms · in</code></td><td>Backdrop blurs in; the dialog rises 10 px and scales from 96%.</td><td><button data-demo="dialog">Play</button></td></tr>
+          <tr><td>Loading to sign in</td><td><code>520 ms · out</code></td><td><code>700 ms · std</code></td><td>Loader text lifts away, the loader dissolves into the world, then the sign-in parts rise in 70 ms apart.</td><td><button data-demo="loading">Play</button></td></tr>
+          <tr><td>Segmented, switch</td><td><code>320 ms · out / spring</code></td><td></td><td>The thumb slides to the new option; the switch knob overshoots slightly.</td><td><button data-demo="settings">Play</button></td></tr>
+          <tr><td>Chat, prompt, HUD</td><td><code>200–520 ms · out</code></td><td><code>800 ms fade</code></td><td>Lines slide in 8 px; the use prompt pops; HUD pieces drop in 6 px once when you enter the world.</td><td><button data-demo="play">Play</button></td></tr>
+          <tr><td>Error</td><td><code>380 ms</code></td><td></td><td>The field shakes once and turns coral when the name is missing.</td><td><button data-demo="error">Play</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="doc-section" id="changes">
+    <div class="doc-section__head">
+      <span class="oh-eyebrow">What changes</span>
+      <h2>Your six points, in the code</h2>
+      <p>Nothing below is built yet. This is the plan once the design is approved.</p>
+    </div>
+    <div class="changes">
+      <div class="change"><div class="change__n">1</div><div><h3>One design system</h3><p class="change__ask">Loading, sign in, menu, settings, time &amp; weather, performance: one direction.</p></div><ul><li>New <code>ui/tokens.css</code> with the color, type, space, radius, glass and motion tokens on this page.</li><li>The loading screen in <code>index.html</code> reads the same tokens instead of its own inline colors.</li><li>Fonts self-hosted from npm (<code>@fontsource</code>), so the game makes no font requests to Google.</li></ul></div>
+      <div class="change"><div class="change__n">2</div><div><h3>Proper components</h3><p class="change__ask">Create proper UI components.</p></div><ul><li><code>ui/components/</code>: button, icon button, field, switch, segmented, slider, sky dial, row group, sheet, dialog, pill, keycap, stat grid, frame graph.</li><li><code>ui.ts</code> composes screens from them; <code>style.css</code> splits into tokens, components and screens.</li></ul></div>
+      <div class="change"><div class="change__n">3</div><div><h3>Log out</h3><p class="change__ask">Add a logout button to the menu.</p></div><ul><li>Log out at the foot of the menu rail, with a confirmation dialog.</li><li>On confirm: fade out, <code>net.disconnect()</code>, clear avatars, players and chat, reset the drone seat and the joined state, show sign in with the name kept.</li><li>The server already treats a closed socket as leaving: it frees the drone seat and tells everyone (<code>world.disconnect</code>).</li></ul></div>
+      <div class="change"><div class="change__n">4</div><div><h3>Tasteful motion</h3><p class="change__ask">Menu, screens, modals.</p></div><ul><li>The patterns in the Motion table, as CSS keyframes driven by the motion tokens.</li><li>Exits play before an element is hidden, so nothing pops away.</li><li><code>prefers-reduced-motion</code> turns all of it off.</li></ul></div>
+      <div class="change"><div class="change__n">5</div><div><h3>A menu that belongs somewhere</h3><p class="change__ask">The menu looks wrongly placed.</p></div><ul><li>The floating toolbar goes. Esc opens a full-height rail on the left; one section opens beside it at a time.</li><li>Performance becomes its own readout in the top-right corner (F3), separate from the menu.</li><li>The status chips become one capsule; presence moves into a matching pill.</li></ul></div>
+      <div class="change"><div class="change__n">6</div><div><h3>Settings, time and performance, redesigned</h3><p class="change__ask">They look designed by a junior designer.</p></div><ul><li>Settings: grouped rows with plain descriptions, a segmented quality control, switches, values shown in mono.</li><li>Time &amp; weather: a large clock, the sky dial, a segmented speed with a caption, and weather as tiles with Forecast set apart.</li><li>Performance: FPS and a health label first, a labelled frame-time graph, a stat grid, CPU by system as bars.</li></ul></div>
+    </div>
+
+    <div class="subhead"><h3>Decisions for you</h3></div>
+    <ul class="decisions">
+      <li><b>Fonts</b><p>Three self-hosted families add roughly 150–200 KB of woff2 to the first load. The alternative is system fonts, which loses the serif and the instrument mono.</p></li>
+      <li><b>Controls gets its own section</b><p>The key list leaves Settings and the sign-in card and becomes Controls in the menu, with the drone keys added. Sign in keeps a single line of essentials.</p></li>
+      <li><b>“Come aboard” replaces “Enter”</b><p>On the sign-in button. Offline it still reads “Explore offline”.</p></li>
+      <li><b>Quality still reloads at once</b><p>Same behavior as today; the row now says it will reload before you pick.</p></li>
+      <li><b>Time-of-day label</b><p>The words under the clock (Morning, Golden hour, Night) would come from the sun's elevation in <code>astronomy.ts</code>; the prototype uses fixed hours.</p></li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ------------------------------------------------------------------ icons
+  const P = {
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/>',
+    moon: '<path d="M19.5 14.6A8 8 0 1 1 9.4 4.5a6.4 6.4 0 0 0 10.1 10.1z"/>',
+    sunrise: '<path d="M3 18.5h18M6.5 15a5.5 5.5 0 0 1 11 0"/><path d="M12 4.5V8M5.3 8.3l1.7 1.7M18.7 8.3 17 10"/>',
+    cloudSun: '<path d="M7.6 3.8v1.1M3.3 7.9h1.1M4.6 4.9l.8.8M10.8 5.6l-.8.8"/><path d="M5.4 11a3.2 3.2 0 0 1 5.4-3.2"/><path d="M8.7 19.5h8.1a3.4 3.4 0 0 0 .3-6.8 4.9 4.9 0 0 0-9.4 1.3 2.8 2.8 0 0 0 1 5.5z"/>',
+    cloud: '<path d="M7.2 18.5h9.9a3.9 3.9 0 0 0 .5-7.8 5.9 5.9 0 0 0-11.4 1.7 3.1 3.1 0 0 0 1 6.1z"/>',
+    rain: '<path d="M7.2 14.5h9.9a3.9 3.9 0 0 0 .5-7.8A5.9 5.9 0 0 0 6.2 8.4a3.1 3.1 0 0 0 1 6.1z"/><path d="m8.5 17.5-1 2.5M12.5 17.5l-1 2.5M16.5 17.5l-1 2.5"/>',
+    storm: '<path d="M7.2 14.5h9.9a3.9 3.9 0 0 0 .5-7.8A5.9 5.9 0 0 0 6.2 8.4a3.1 3.1 0 0 0 1 6.1z"/><path d="m12.8 12.5-2.3 4h3.2l-2.2 4"/>',
+    fog: '<path d="M7.2 11h9.9a3.4 3.4 0 0 0 .3-6.8 5.4 5.4 0 0 0-10.4 1.6"/><path d="M3.5 14.5h17M5.5 18h13M8 21.2h8"/>',
+    compass: '<circle cx="12" cy="12" r="8.5"/><path d="m15.2 8.8-1.9 4.5-4.5 1.9 1.9-4.5z"/>',
+    horizon: '<path d="M3 18.5h18M6.5 15a5.5 5.5 0 0 1 11 0"/><path d="M12 4.5V8M5.3 8.3l1.7 1.7M18.7 8.3 17 10"/>',
+    sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+    gauge: '<path d="M4.3 17.5a8.5 8.5 0 1 1 15.4 0"/><path d="m12 13.5 3.8-4.3"/><circle cx="12" cy="13.5" r="1.3"/>',
+    keyboard: '<rect x="2.8" y="6" width="18.4" height="12" rx="2.2"/><path d="M6.5 9.8h.01M9.5 9.8h.01M12.5 9.8h.01M15.5 9.8h.01M18 9.8h.01M8 14.2h8"/>',
+    logout: '<path d="M14 4h3.6A1.4 1.4 0 0 1 19 5.4v13.2a1.4 1.4 0 0 1-1.4 1.4H14"/><path d="m9.5 8-4 4 4 4M5.5 12H15"/>',
+    play: '<path d="M8 5.6v12.8L18 12z"/>',
+    close: '<path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>',
+    arrow: '<path d="M5 12h14M13.5 6.5 19 12l-5.5 5.5"/>',
+    wind: '<path d="M12 20V4.5M6.5 10 12 4.5 17.5 10"/>',
+    waves: '<path d="M3 9.5c2 0 2-1.6 4.5-1.6S10 9.5 12 9.5s2-1.6 4.5-1.6S19 9.5 21 9.5M3 15.5c2 0 2-1.6 4.5-1.6S10 15.5 12 15.5s2-1.6 4.5-1.6S19 15.5 21 15.5"/>',
+    users: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.2 19.5a5.8 5.8 0 0 1 11.6 0"/><path d="M15.8 5.6a3.2 3.2 0 0 1 0 5.8M17.6 19.5a5.8 5.8 0 0 0-2.3-4.6"/>',
+    copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M5 15.5V6.4A1.4 1.4 0 0 1 6.4 5h9.1"/>',
+    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    chev: '<path d="m9.5 6 6 6-6 6"/>',
+    alert: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.8v5M12 16.2h.01"/>',
+    reload: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/>',
+  };
+  const icon = (n, cls = '', style = '') => `<svg class="oh-i ${cls}" viewBox="0 0 24 24" aria-hidden="true"${style ? ` style="${style}"` : ''}>${P[n]}</svg>`;
+  const MARK = (s = 36) => `<svg class="oh-mark" width="${s}" height="${s}" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#0a1822"/><rect x=".5" y=".5" width="31" height="31" rx="7.5" fill="none" stroke="rgba(190,222,238,.16)"/><rect x="11" y="6.4" width="10" height="5" rx=".8" fill="rgba(127,216,227,.2)" stroke="#7fd8e3" stroke-width="1.3"/><path d="M6 12h20" stroke="#f2b40c" stroke-width="2.2" stroke-linecap="round"/><path d="M9.5 12v12.5M22.5 12v12.5M9.5 15.8l13 5.2M22.5 15.8l-13 5.2" stroke="#f2b40c" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M4.5 24c1.9 0 1.9-1.2 3.8-1.2s1.9 1.2 3.8 1.2 1.9-1.2 3.8-1.2 1.9 1.2 3.8 1.2 1.9-1.2 3.8-1.2 1.9 1.2 3.8 1.2" stroke="#3f9cc4" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>`;
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  document.getElementById('top-mark').innerHTML = MARK(30);
+
+  // ------------------------------------------------------------------ data
+  const WEATHER = [['auto', 'Forecast', 'compass'], ['clear', 'Clear', 'sun'], ['fair', 'Fair', 'cloudSun'], ['overcast', 'Overcast', 'cloud'], ['rain', 'Rain', 'rain'], ['storm', 'Storm', 'storm'], ['fog', 'Fog', 'fog']];
+  const RATES = [[0, 'Paused', 'The clock is stopped.'], [1, 'Real time', 'Follows the real clock off the coast of Brazil.'], [12, '2 h', 'A full day lasts 2 hours.'], [60, '24 min', 'A full day lasts 24 minutes.'], [240, '6 min', 'A full day lasts 6 minutes.']];
+  const QUALITIES = ['low', 'medium', 'high', 'ultra'];
+  const PLAYERS = [{ name: 'Marco', color: '#f2b40c', you: true }, { name: 'Ana', color: '#7fd8e3' }, { name: 'Theo', color: '#c79bff' }, { name: 'Deckhand', color: '#52d49a', ai: true }];
+  const SYSTEMS = [['render', 2.05], ['ocean', 0.52], ['player', 0.1], ['ui', 0.06], ['tender', 0.05], ['elevator', 0.04], ['drone', 0.03], ['audio', 0.02]];
+  const FORMAT = { fov: (v) => `${Math.round(v)}°`, sens: (v) => `${(+v).toFixed(2)}×`, volume: (v) => `${Math.round(v * 100)}%` };
+  const RANGES = { fov: [55, 100, 1], sens: [0.2, 3, 0.05], volume: [0, 1, 0.05], hour: [0, 24, 0.25] };
+  const cap = (s) => s[0].toUpperCase() + s.slice(1);
+
+  const hhmm = (h) => { h = ((h % 24) + 24) % 24; const H = Math.floor(h), M = Math.floor((h - H) * 60); return `${String(H).padStart(2, '0')}:${String(M).padStart(2, '0')}`; };
+  const isNight = (h) => h < 5.75 || h >= 19.25;
+  const phase = (h) => h < 5 ? ['Night', 'moon'] : h < 6.5 ? ['Dawn', 'sunrise'] : h < 11 ? ['Morning', 'sun'] : h < 14 ? ['Midday', 'sun'] : h < 17 ? ['Afternoon', 'sun'] : h < 18.5 ? ['Golden hour', 'sun'] : h < 19.5 ? ['Dusk', 'sunrise'] : ['Night', 'moon'];
+  const pct = (k, v) => { const [a, b] = RANGES[k]; return `${((v - a) / (b - a)) * 100}%`; };
+
+  function backdropFor(s) {
+    if (s.screen !== 'play') return 'golden-hour';
+    if (s.flight) return 'reference-view';
+    if (s.hour >= 17 && s.hour < 19.25) return 'golden-hour';
+    return isNight(s.hour) ? 'firepit-lounge' : 'drone-landing';
+  }
+
+  const base = (o = {}) => ({
+    screen: 'play', server: 'online', players: 3, name: 'Marco', joinStatus: '', joinError: false,
+    loadStep: 'Compiling shaders', loadP: 0.65,
+    menu: false, section: null, dialog: null, veil: false,
+    perfHud: false, aboard: false, chatOpen: false, flight: false,
+    hour: 15.5, rate: 12, weather: 'fair', online: true, by: 'Ana', prompt: 'Board the drone',
+    settings: { quality: 'high', fov: 72, sens: 1, invert: false, volume: 0.8, auto: false, gpu: false },
+    chat: [
+      { sys: 'Welcome aboard, Marco.' },
+      { name: 'Ana', c: '#7fd8e3', text: 'the drone is back on the pad' },
+      { sys: 'Ana changed the weather: fair.' },
+      { name: 'Theo', c: '#c79bff', text: 'race you to the swim platform' },
+    ],
+    ...o,
+  });
+
+  // ------------------------------------------------------------------ perf data
+  function makePerf(seed = 7) {
+    let x = seed;
+    const rnd = () => ((x = (x * 16807) % 2147483647) / 2147483647);
+    const hist = [];
+    const next = () => { const r = rnd(); let v = 16.4 + (rnd() - 0.5) * 2.6; if (r > 0.97) v = 24 + rnd() * 18; else if (r > 0.9) v = 18.5 + rnd() * 4; return v; };
+    for (let i = 0; i < 120; i++) hist.push(next());
+    return { hist, push() { hist.push(next()); if (hist.length > 120) hist.shift(); } };
+  }
+  function report(hist) {
+    const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
+    const sorted = [...hist].sort((a, b) => a - b);
+    const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    const max = sorted[sorted.length - 1];
+    const long = hist.filter((v) => v > 33.4).length;
+    const fps = 1000 / avg;
+    const health = fps >= 55 && p95 < 24 ? ['good', 'Smooth'] : fps >= 40 ? ['warn', 'Uneven'] : ['bad', 'Struggling'];
+    return { avg, p95, max, long, fps, health };
+  }
+  function drawGraph(canvas, hist, compact) {
+    const g = canvas.getContext('2d');
+    if (!g) return;
+    const w = canvas.width, h = canvas.height, k = w / canvas.clientWidth || 2, max = 50;
+    g.clearRect(0, 0, w, h);
+    const y = (ms) => h - (ms / max) * (h - 4 * k);
+    g.setLineDash([3 * k, 4 * k]);
+    g.lineWidth = k;
+    for (const [ms, label] of [[16.7, '60 fps'], [33.3, '30 fps']]) {
+      g.strokeStyle = 'rgba(232,239,242,0.16)';
+      g.beginPath(); g.moveTo(0, y(ms)); g.lineTo(w, y(ms)); g.stroke();
+      if (!compact) { g.fillStyle = 'rgba(232,239,242,0.42)'; g.font = `500 ${10 * k}px "JetBrains Mono", monospace`; g.textAlign = 'right'; g.fillText(`${ms} ms · ${label}`, w - 8 * k, y(ms) - 5 * k); }
+    }
+    g.setLineDash([]);
+    const n = hist.length, bw = w / n;
+    for (let i = 0; i < n; i++) {
+      const v = hist[i], top = Math.max(2 * k, y(Math.min(v, max)));
+      g.fillStyle = v > 33.4 ? '#ff6a5c' : v > 17.5 ? 'rgba(255,159,69,0.9)' : i === n - 1 ? '#7ff0bd' : 'rgba(82,212,154,0.7)';
+      g.fillRect(i * bw + k * 0.5, top, Math.max(k, bw - k), h - top);
+    }
+  }
+
+  // ------------------------------------------------------------------ views
+  const seg = (group, opts, value) => {
+    const i = opts.findIndex((o) => o[0] === value);
+    return `<div class="oh-seg" role="group" data-seg="${group}" style="--n:${opts.length};--i:${Math.max(0, i)}">${opts.map(([v, l]) => `<button type="button" data-act="seg" data-group="${group}" data-value="${v}" aria-pressed="${v === value}">${l}</button>`).join('')}</div>`;
+  };
+  const sw = (key, on, label) => `<input type="checkbox" role="switch" class="oh-switch" data-set="${key}" aria-label="${label}"${on ? ' checked' : ''}>`;
+  const slider = (key, label, v) => { const [a, b, st] = RANGES[key]; return `<div class="oh-row oh-row--stack"><div class="oh-row__head"><span class="oh-row__title">${label}</span><span class="oh-row__value" data-bind="v-${key}">${FORMAT[key](v)}</span></div><input type="range" class="oh-range" min="${a}" max="${b}" step="${st}" value="${v}" style="--p:${pct(key, v)}" data-set="${key}" aria-label="${label}"></div>`; };
+  const kbd = (k) => `<kbd class="oh-kbd">${k}</kbd>`;
+  const weatherOf = (s) => WEATHER.find((w) => w[0] === (s.weather === 'auto' ? 'fair' : s.weather));
+
+  const V = {};
+  V.backdrop = (s) => `<img class="oh-bd" src="img/${backdropFor(s)}.jpg" alt="">`;
+
+  V.loading = (s) => `<div class="oh-loader">
+      <div class="oh-loader__glow" style="--gx:${120 + s.loadP * 1200}px"></div>
+      <canvas class="oh-loader__sea" width="1440" height="348" data-sea></canvas>
+      <div class="oh-loader__content">
+        <div style="display:flex;align-items:center;gap:14px">${MARK(44)}<span class="oh-eyebrow">23°36′S · 42°24′W · Deck +20 m</span></div>
+        <h1 class="oh-wordmark">Ocean Home</h1>
+        <p class="oh-loader__tagline">A glass pavilion on a converted platform, 20 m above the open ocean.</p>
+      </div>
+      <div class="oh-horizon">
+        <div class="oh-horizon__meta"><span class="oh-horizon__step" data-bind="step">${s.loadStep}</span><span class="oh-horizon__pct" data-bind="pct">${Math.round(s.loadP * 100)}%</span></div>
+        <div class="oh-horizon__line"><div class="oh-horizon__fill" data-bind="fill" style="--p:${s.loadP}"></div></div>
+        <p class="oh-horizon__hint">The first visit compiles the ocean and lighting shaders, so it takes a little longer.</p>
+      </div>
+    </div>`;
+
+  const serverPill = (s) => s.server === 'checking' ? `<span class="oh-pill oh-pill--checking"><span class="oh-dot"></span>Checking the server…</span>`
+    : s.server === 'online' ? `<span class="oh-pill oh-pill--good"><span class="oh-dot"></span>Server online · ${s.players} aboard</span>`
+    : `<span class="oh-pill oh-pill--bad"><span class="oh-dot"></span>Server offline</span>`;
+  const joinButton = (s) => s.server === 'offline' ? `Explore offline${icon('arrow', 'trail')}` : `Come aboard${icon('arrow', 'trail')}`;
+  V.join = (s) => {
+    const status = s.server === 'offline' ? 'You can look around on your own. The button switches back when the server returns.' : s.joinStatus;
+    const keys = [['W A S D', 'Move'], ['Shift', 'Run'], ['E', 'Use'], ['T', 'Chat'], ['Esc', 'Menu']];
+    return `<div class="oh-join">
+      <div class="oh-join__scrim"></div>
+      <div class="oh-join__col">
+        <div class="oh-join__brand oh-enter" style="--i:0">${MARK(40)}<span class="oh-eyebrow">23°36′S · 42°24′W</span></div>
+        <h1 class="oh-wordmark oh-enter" style="--i:1">Ocean Home</h1>
+        <p class="oh-join__tagline oh-enter" style="--i:2">A glass pavilion on a converted platform, 20 m above the open ocean.</p>
+        <form class="oh-join__card oh-glass oh-glass--strong oh-enter" style="--i:3" data-form="join" novalidate>
+          <div>${serverPill(s)}</div>
+          <label class="oh-field"><span class="oh-field__label">Name</span><input class="oh-input" id="${s.uid}-name" data-field="name" value="${esc(s.name)}" maxlength="24" autocomplete="nickname" placeholder="Your name"${s.joinError ? ' aria-invalid="true"' : ''}></label>
+          ${s.server === 'offline' ? '' : `<label class="oh-field"><span class="oh-field__label">Host password<span class="oh-field__hint">Only if the host set one</span></span><input class="oh-input" id="${s.uid}-pass" type="password" autocomplete="off" placeholder="Leave empty if none"></label>`}
+          <button type="submit" class="oh-btn oh-btn--primary oh-btn--lg oh-btn--block" data-join-btn>${joinButton(s)}</button>
+          <p class="oh-join__status${s.joinError ? ' is-error' : ''}" role="status" data-bind="join-status">${esc(status)}</p>
+        </form>
+      </div>
+      <div class="oh-join__foot oh-enter" style="--i:5">
+        <div class="oh-keys">${keys.map(([k, l]) => `<span>${k.split(' ').map(kbd).join('')}${l}</span>`).join('')}</div>
+        <span class="oh-eyebrow">${hhmm(17.6)} · Fair · Wind NE 14 kn · Seas 0.9 m</span>
+      </div>
+    </div>`;
+  };
+
+  V.hud = (s) => {
+    const w = weatherOf(s);
+    return `<div class="oh-status oh-glass" aria-label="Conditions">
+        <span class="oh-status__seg oh-status__time" data-bind="time">${hhmm(s.hour)}</span>
+        <span class="oh-status__seg" data-bind="wx">${icon(w[2])}${w[1]}</span>
+        <span class="oh-status__seg" title="Wind from the northeast, 14 knots">${icon('wind', '', 'transform:rotate(225deg)')}NE 14 kn</span>
+        <span class="oh-status__seg" title="Wave height 0.9 m">${icon('waves')}0.9 m</span>
+      </div>`;
+  };
+  V.presence = (s) => {
+    return `${s.online ? `<div class="oh-presence oh-glass"><span class="oh-dot oh-dot--good"></span>${PLAYERS.length} aboard</div>` : `<div class="oh-presence oh-glass is-offline"><span class="oh-dot"></span>Offline</div>`}`;
+  };
+  V.reticle = (s) => `<div class="oh-crosshair"></div>${s.prompt ? `<div class="oh-prompt oh-glass">${kbd('E')}${s.prompt}</div>` : ''}`;
+  const chatLine = (l) => l.sys ? `<div class="oh-chat__line oh-chat__line--sys">${esc(l.sys)}</div>` : `<div class="oh-chat__line" style="--c:${l.c}"><b>${esc(l.name)}</b>${esc(l.text)}</div>`;
+  V.chat = (s) => `<div class="oh-chat"><div class="oh-chat__log" role="log" aria-live="polite">${s.chat.map(chatLine).join('')}</div></div>`;
+  V.chatinput = () => `<div class="oh-chatbox"><input class="oh-input is-focus" data-field="chat" maxlength="280" placeholder="Say something…" aria-label="Chat message"><div class="oh-chatbox__hint"><span>${kbd('Enter')}send</span><span>${kbd('Esc')}cancel</span></div></div>`;
+  V.aboard = () => `<div class="oh-aboard oh-glass oh-glass--strong"><div class="oh-eyebrow">On board · ${PLAYERS.length}</div><ul>${PLAYERS.map((p) => `<li><span class="oh-avatar oh-avatar--sm" style="--c:${p.color}">${p.name[0]}</span>${p.name}${p.ai ? '<span class="oh-badge">AI</span>' : p.you ? '<span class="oh-badge oh-badge--muted">YOU</span>' : '<span></span>'}</li>`).join('')}</ul></div>`;
+  V.perfhud = () => `<div class="oh-perfhud oh-glass oh-glass--strong">
+      <div class="oh-perfhud__top"><div class="oh-fps"><span class="oh-fps__n" data-bind="fps">58</span><span class="oh-fps__u">FPS</span></div><span class="oh-pill oh-pill--good" data-bind="health"><span class="oh-dot"></span>Smooth</span></div>
+      <canvas class="oh-graph" width="456" height="88" data-graph="mini"></canvas>
+      <div class="oh-caption" data-bind="frame">17.3 ms · p95 23.1 · max 34</div>
+    </div>`;
+  V.flight = () => {
+    const g = (l, v, u) => `<div class="oh-gauge"><span class="oh-gauge__label">${l}</span><span class="oh-gauge__value">${v}<span class="oh-gauge__unit">${u}</span></span></div>`;
+    return `<div class="oh-flight">
+        <div class="oh-gauges oh-glass">${g('ALT', '46', 'm')}${g('AGL', '25.8', 'm')}${g('SPD', '62', 'km/h')}${g('V/S', '+1.4', 'm/s')}${g('HDG', '214', '°')}</div>
+        <div class="oh-flight__hint oh-glass"><span class="oh-flight__seat">Pilot · 2 of 4 seats</span><span>${kbd('W')}${kbd('A')}${kbd('S')}${kbd('D')} fly</span><span>Mouse steer</span><span>${kbd('Space')} climb</span><span>${kbd('Shift')}or ${kbd('C')} descend</span></div>
+      </div>`;
+  };
+
+  const NAV = [['env', 'horizon', 'Time & weather'], ['settings', 'sliders', 'Settings'], ['perf', 'gauge', 'Performance'], ['controls', 'keyboard', 'Controls']];
+  V.menu = (s) => `<div class="oh-scrim" data-act="resume" aria-hidden="true"></div>
+    <nav class="oh-rail oh-glass oh-glass--strong" aria-label="Menu" data-act="noop">
+      <div class="oh-brand" style="--i:0">${MARK(38)}<div><div class="oh-brand__name">Ocean Home</div><div class="oh-brand__sub">23°36′S · 42°24′W</div></div></div>
+      <div class="oh-identity" style="--i:1"><span class="oh-avatar" style="--c:#f2b40c">M</span><div><div class="oh-identity__name">${esc(s.name || 'Marco')}</div><div class="oh-identity__meta">${s.online ? `<span class="oh-dot oh-dot--good"></span>Online · ${PLAYERS.length} aboard` : '<span class="oh-dot"></span>Exploring offline'}</div></div></div>
+      <div class="oh-rail__resume" style="--i:2"><button type="button" class="oh-btn oh-btn--primary oh-btn--block oh-btn--lg" data-act="resume">${icon('play')}Back to the world</button><p class="oh-rail__hint">or click anywhere in the world</p></div>
+      <div class="oh-nav" style="--i:3">${NAV.map(([id, ic, label]) => `<button type="button" class="oh-nav__item" data-act="nav" data-section="${id}" aria-current="${s.section === id}">${icon(ic)}${label}<span class="oh-nav__meta">${id === 'perf' ? kbd('F3') : ''}${icon('chev')}</span></button>`).join('')}</div>
+      <div class="oh-rail__foot" style="--i:4"><button type="button" class="oh-btn oh-btn--quiet-danger oh-btn--block" data-act="logout">${icon('logout')}Log out</button><span class="oh-eyebrow oh-rail__version">Ocean Home v3</span></div>
+    </nav>`;
+
+  const sheet = (title, eyebrow, body, foot = '') => `<section class="oh-sheet oh-glass oh-glass--strong" aria-label="${title}" data-act="noop">
+      <header class="oh-sheet__head"><div><div class="oh-eyebrow">${eyebrow}</div><h2 class="oh-sheet__title">${title.replace('&', '&amp;')}</h2></div><button type="button" class="oh-icon-btn" data-act="sheet-close" aria-label="Close ${title}">${icon('close')}</button></header>
+      <div class="oh-sheet__body">${body}</div>${foot ? `<footer class="oh-sheet__foot">${foot}</footer>` : ''}
+    </section>`;
+  const SHEETS = {
+    env(s) {
+      const [ph, pi] = phase(s.hour);
+      const rate = RATES.find((r) => r[0] === s.rate);
+      const tile = ([v, l, ic]) => `<button type="button" class="oh-tile" data-act="weather" data-value="${v}" aria-pressed="${s.weather === v}">${icon(ic)}${l}</button>`;
+      return sheet('Time & weather', s.online ? 'Shared with everyone aboard' : 'Only for you while offline', `
+        <section class="oh-section" style="--i:0">
+          <div class="oh-clock"><div class="oh-clock__time" data-bind="sheet-time">${hhmm(s.hour)}</div><div class="oh-clock__phase" data-bind="phase">${icon(pi)}${ph}</div></div>
+          <input type="range" class="oh-range oh-range--sky${isNight(s.hour) ? ' is-night' : ''}" min="0" max="24" step="0.25" value="${s.hour}" data-set="hour" aria-label="Time of day">
+          <div class="oh-ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+        </section>
+        <section class="oh-section" style="--i:1">
+          <div class="oh-eyebrow">Speed of the day</div>
+          ${seg('rate', RATES.map((r) => [r[0], r[1]]), s.rate)}
+          <p class="oh-caption" data-bind="rate-caption">${rate ? rate[2] : ''}</p>
+        </section>
+        <section class="oh-section" style="--i:2">
+          <div class="oh-eyebrow">Weather</div>
+          <button type="button" class="oh-tile oh-tile--wide" data-act="weather" data-value="auto" aria-pressed="${s.weather === 'auto'}">${icon('compass')}<span><b>Forecast</b><small>Changes on its own through the day</small></span>${icon('check', 'oh-check')}</button>
+          <div class="oh-tiles">${WEATHER.slice(1).map(tile).join('')}</div>
+        </section>`,
+        `<p class="oh-note">${icon('users')}<span data-bind="env-note">${s.online ? `Changes apply to everyone aboard. Last changed by ${s.by}.` : 'Offline: changes are only for you.'}</span></p>`);
+    },
+    settings(s) {
+      const st = s.settings;
+      return sheet('Settings', 'Saved on this device', `
+        <section class="oh-section" style="--i:0">
+          <div class="oh-eyebrow">Graphics</div>
+          <div class="oh-group">
+            <div class="oh-row oh-row--stack"><div class="oh-row__text"><div class="oh-row__title">Quality</div><div class="oh-row__desc">Changing it reloads the world.</div></div>${seg('quality', QUALITIES.map((q) => [q, cap(q)]), st.quality)}</div>
+            <label class="oh-row"><div class="oh-row__text"><div class="oh-row__title">Automatic resolution</div><div class="oh-row__desc">Lowers the resolution when frames run late, to hold 60 fps. Each change pauses the game for about a second.</div></div>${sw('auto', st.auto, 'Automatic resolution')}</label>
+          </div>
+        </section>
+        <section class="oh-section" style="--i:1">
+          <div class="oh-eyebrow">View</div>
+          <div class="oh-group">
+            ${slider('fov', 'Field of view', st.fov)}
+            ${slider('sens', 'Look sensitivity', st.sens)}
+            <label class="oh-row"><div class="oh-row__text"><div class="oh-row__title">Invert look</div><div class="oh-row__desc">Move the mouse up to look down.</div></div>${sw('invert', st.invert, 'Invert look')}</label>
+          </div>
+        </section>
+        <section class="oh-section" style="--i:2">
+          <div class="oh-eyebrow">Sound</div>
+          <div class="oh-group">${slider('volume', 'Volume', st.volume)}</div>
+        </section>`);
+    },
+    perf(s) {
+      const stat = (l, v, u = '') => `<div class="oh-stat"><span class="oh-eyebrow">${l}</span><span class="oh-stat__value">${v}${u ? `<span class="oh-stat__unit">${u}</span>` : ''}</span></div>`;
+      const total = SYSTEMS.reduce((a, b) => a + b[1], 0);
+      return sheet('Performance', `This browser · ${cap(s.settings.quality)} quality`, `
+        <section class="oh-section" style="--i:0">
+          <div class="oh-perf-top"><div class="oh-fps"><span class="oh-fps__n" data-bind="fps">58</span><span class="oh-fps__u">FPS</span></div><span class="oh-pill oh-pill--good" data-bind="health"><span class="oh-dot"></span>Smooth</span></div>
+          <div class="oh-caption oh-num" data-bind="frame" style="font-size:12px">17.3 ms average · p95 23.1 · max 34</div>
+          <canvas class="oh-graph" width="712" height="208" data-graph="full"></canvas>
+          <div class="oh-legend"><span><i style="background:var(--oh-good)"></i>On time</span><span><i style="background:var(--oh-warn)"></i>Late</span><span><i style="background:var(--oh-bad)"></i>Long frame</span></div>
+        </section>
+        <section class="oh-section" style="--i:1">
+          <div class="oh-group oh-stats">
+            ${stat('CPU', '2.74', 'ms')}${stat('GPU', s.settings.gpu ? '3.9' : 'Off', s.settings.gpu ? 'ms' : '')}${stat('Long frames', '2', '/ 240')}
+            ${stat('Draw calls', '194')}${stat('Triangles', '0.54', 'M')}${stat('Compute', '20', 'disp.')}
+            ${stat('Memory', '241', 'MB')}${stat('Textures', '61')}${stat('Canvas', '1440×900')}
+          </div>
+        </section>
+        <section class="oh-section" style="--i:2">
+          <div class="oh-eyebrow">CPU by system · ms per frame</div>
+          <div class="oh-bars">${SYSTEMS.map(([n, ms]) => `<span>${n}</span><span class="oh-bar"><i style="--w:${Math.max(2, (ms / total) * 100)}%"></i></span><b>${ms.toFixed(2)}</b>`).join('')}</div>
+        </section>
+        <section class="oh-section" style="--i:3">
+          <div class="oh-group">
+            <label class="oh-row"><div class="oh-row__text"><div class="oh-row__title">Show while playing</div><div class="oh-row__desc">A compact readout in the corner. ${kbd('F3')} also toggles it.</div></div>${sw('perfHud', s.perfHud, 'Show while playing')}</label>
+            <label class="oh-row"><div class="oh-row__text"><div class="oh-row__title">GPU timing</div><div class="oh-row__desc">Measures render and compute time on the GPU. Reloads the world.</div></div>${sw('gpu', s.settings.gpu, 'GPU timing')}</label>
+          </div>
+        </section>`,
+        `<button type="button" class="oh-btn oh-btn--secondary oh-btn--sm" data-act="copy">${icon('copy')}<span>Copy report</span></button><span class="oh-caption">JSON, for bug reports</span>`);
+    },
+    controls() {
+      const row = (keys, label) => `<div class="oh-row oh-row--keys"><span class="oh-row__title">${label}</span><span class="oh-keycombo">${keys.split(' ').map((k) => (k === '/' ? '<span class="oh-or">or</span>' : kbd(k))).join('')}</span></div>`;
+      return sheet('Controls', 'Keyboard, mouse and gamepad', `
+        <section class="oh-section" style="--i:0"><div class="oh-eyebrow">On foot</div><div class="oh-group">
+          ${row('W A S D', 'Move')}${row('Shift', 'Run')}${row('Space', 'Jump')}${row('E', 'Use doors, elevator, drone')}${row('T / Enter', 'Chat')}${row('Tab', 'Who’s aboard (hold)')}${row('Esc', 'Menu')}${row('F3', 'Performance')}
+        </div></section>
+        <section class="oh-section" style="--i:1"><div class="oh-eyebrow">Flying the drone</div><div class="oh-group">
+          ${row('W A S D', 'Fly')}${row('Space', 'Climb')}${row('Shift / C', 'Descend')}${row('E', 'Climb out once landed')}
+        </div></section>
+        <p class="oh-note" style="--i:2">${icon('alert')}<span>Gamepad: left stick moves, right stick looks, A jumps, X uses, LB runs.</span></p>`);
+    },
+  };
+  V.sheet = (s) => SHEETS[s.section](s);
+  V.dialog = (s) => `<div class="oh-dialog-backdrop" data-act="dialog-cancel">
+      <div class="oh-dialog oh-glass oh-glass--strong" role="alertdialog" aria-modal="true" aria-labelledby="${s.uid}-dt" aria-describedby="${s.uid}-dd" data-act="noop">
+        <div class="oh-dialog__icon">${icon('logout')}</div>
+        <h2 class="oh-dialog__title" id="${s.uid}-dt">Log out of Ocean Home?</h2>
+        <p class="oh-dialog__body" id="${s.uid}-dd">${s.online ? 'You’ll leave the platform and go back to the sign-in screen. Everyone aboard will see that you left.' : 'You’ll go back to the sign-in screen.'}</p>
+        <div class="oh-dialog__actions"><button type="button" class="oh-btn oh-btn--secondary" data-act="dialog-cancel">Stay aboard</button><button type="button" class="oh-btn oh-btn--danger" data-act="dialog-confirm">${icon('logout')}Log out</button></div>
+      </div>
+    </div>`;
+  V.veil = () => `<div class="oh-veil"></div>`;
+
+  // Layer order (bottom to top) and the key that decides when each one is rebuilt.
+  const play = (s) => s.screen === 'play';
+  const KEY = {
+    backdrop: (s) => backdropFor(s),
+    hud: (s) => (play(s) && !s.menu ? 'hud' : ''),
+    presence: (s) => (play(s) ? `p|${s.online}` : ''),
+    reticle: (s) => (play(s) && !s.menu && !s.flight && !s.chatOpen ? `r|${s.prompt}` : ''),
+    chat: (s) => (play(s) ? 'chat' : ''),
+    chatinput: (s) => (play(s) && s.chatOpen ? 'in' : ''),
+    flight: (s) => (play(s) && s.flight && !s.menu ? 'flight' : ''),
+    aboard: (s) => (play(s) && s.aboard && !s.menu ? 'aboard' : ''),
+    perfhud: (s) => (play(s) && s.perfHud && s.section !== 'perf' ? 'perf' : ''),
+    menu: (s) => (play(s) && s.menu ? `menu|${s.online}` : ''),
+    sheet: (s) => (play(s) && s.menu && s.section ? s.section : ''),
+    join: (s) => (s.screen === 'join' ? `join|${s.server}` : ''),
+    loading: (s) => (s.screen === 'loading' ? 'loading' : ''),
+    dialog: (s) => s.dialog || '',
+    veil: (s) => (s.veil ? 'veil' : ''),
+  };
+  const LAYERS = Object.keys(KEY);
+  const LEAVE_MS = { backdrop: 850, loading: 840, veil: 620, dialog: 210 };
+  let uidN = 0;
+
+  // ------------------------------------------------------------------ a screen
+  class Screen {
+    constructor(frame, state, live) {
+      this.frame = frame;
+      this.s = state;
+      this.s.uid = `s${uidN++}`;
+      this.live = live;
+      this.perf = makePerf(live ? 3 : 7 + uidN);
+      this.stage = document.createElement('div');
+      this.stage.className = `stage oh${live ? '' : ' is-static'}`;
+      this.layers = {};
+      this.keys = {};
+      for (const n of LAYERS) {
+        const d = document.createElement('div');
+        d.className = `oh-layer oh-layer--${n}`;
+        this.stage.append(d);
+        this.layers[n] = d;
+      }
+      frame.append(this.stage);
+      new ResizeObserver(() => frame.style.setProperty('--s', String(frame.clientWidth / 1440))).observe(frame);
+      this.update();
+    }
+    update() {
+      for (const n of LAYERS) {
+        const key = KEY[n](this.s);
+        if (key === this.keys[n]) continue;
+        this.keys[n] = key;
+        this.swap(n, key ? V[n](this.s) : '');
+      }
+      this.stage.classList.toggle('has-chat-input', this.s.chatOpen && play(this.s));
+      this.stage.classList.toggle('has-aboard', !!this.keys.aboard);
+      this.paint();
+    }
+    swap(n, html) {
+      const layer = this.layers[n];
+      for (const old of layer.querySelectorAll(':scope > .oh-slot:not(.is-leaving)')) {
+        if (this.live) {
+          old.classList.add('is-leaving');
+          setTimeout(() => old.remove(), LEAVE_MS[n] ?? 230);
+        } else old.remove();
+      }
+      if (!html) return;
+      const slot = document.createElement('div');
+      slot.className = 'oh-slot';
+      slot.innerHTML = html;
+      layer.append(slot);
+    }
+    $(sel) { return this.stage.querySelector(`.oh-slot:not(.is-leaving) ${sel}`); }
+    $$(sel) { return [...this.stage.querySelectorAll(`.oh-slot:not(.is-leaving) ${sel}`)]; }
+    paint() {
+      for (const b of this.$$('.oh-nav__item')) b.setAttribute('aria-current', String(b.dataset.section === this.s.section));
+      const sea = this.$('[data-sea]');
+      if (sea && !sea.dataset.running) { sea.dataset.running = '1'; this.sea(sea); }
+      this.paintPerf();
+    }
+    sea(canvas) {
+      const g = canvas.getContext('2d');
+      const draw = (t) => {
+        const w = canvas.width, h = canvas.height;
+        g.clearRect(0, 0, w, h);
+        for (let i = 0; i < 34; i++) {
+          const d = i / 33, y0 = Math.pow(d, 1.9) * h, amp = 0.5 + d * 4.5, len = 60 + d * 260, ph = t * 0.0004 * (0.5 + d) + i * 1.7;
+          g.strokeStyle = `rgba(127,216,227,${0.035 + d * 0.11 * (1 - d * 0.45)})`;
+          g.lineWidth = 0.8 + d * 1.1;
+          g.beginPath();
+          for (let x = 0; x <= w; x += 8) { const yy = y0 + Math.sin(x / len + ph) * amp + Math.sin(x / (len * 0.37) - ph * 1.3) * amp * 0.35; x ? g.lineTo(x, yy) : g.moveTo(x, yy); }
+          g.stroke();
+        }
+      };
+      if (!this.live || matchMedia('(prefers-reduced-motion: reduce)').matches) { draw(4000); return; }
+      const loop = (t) => { if (!canvas.isConnected) return; draw(t); requestAnimationFrame(loop); };
+      requestAnimationFrame(loop);
+    }
+    paintPerf() {
+      const hist = this.perf.hist;
+      const r = report(hist);
+      for (const c of this.$$('[data-graph]')) drawGraph(c, hist, c.dataset.graph === 'mini');
+      for (const e of this.$$('[data-bind="fps"]')) e.textContent = r.fps.toFixed(0);
+      for (const e of this.$$('[data-bind="health"]')) { e.className = `oh-pill oh-pill--${r.health[0]}`; e.innerHTML = `<span class="oh-dot"></span>${r.health[1]}`; }
+      for (const e of this.$$('[data-bind="frame"]')) e.textContent = e.closest('.oh-perfhud') ? `${r.avg.toFixed(1)} ms · p95 ${r.p95.toFixed(1)} · max ${r.max.toFixed(0)}` : `${r.avg.toFixed(1)} ms average · p95 ${r.p95.toFixed(1)} · max ${r.max.toFixed(0)}`;
+    }
+  }
+
+  // ------------------------------------------------------------------ the live prototype
+  const liveFrame = document.getElementById('live');
+  const live = new Screen(liveFrame, base({ screen: 'loading', loadStep: 'Starting physics', loadP: 0.04, hour: 15.5, chat: [] }), true);
+  const S = live.s;
+  let loadTimer = 0;
+
+  function addChat(line) {
+    S.chat.push(line);
+    const log = live.$('.oh-chat__log');
+    if (!log) return;
+    log.insertAdjacentHTML('beforeend', chatLine(line));
+    const el = log.lastElementChild;
+    while (log.childElementCount > 8) log.firstElementChild.remove();
+    setTimeout(() => el.classList.add('is-faded'), 12000);
+  }
+
+  function runLoading() {
+    clearTimeout(loadTimer);
+    Object.assign(S, { screen: 'loading', menu: false, section: null, dialog: null, chatOpen: false, flight: false, aboard: false, loadStep: 'Starting physics', loadP: 0.04 });
+    live.update();
+    const steps = [['Starting physics', 0.12], ['Building the platform', 0.25], ['Starting WebGPU', 0.35], ['Generating the world', 0.45], ['Compiling shaders', 0.65], ['Warming up the ocean and lighting', 0.9], ['Ready', 1]];
+    let i = 0;
+    const tick = () => {
+      if (S.screen !== 'loading') return;
+      if (i < steps.length) {
+        [S.loadStep, S.loadP] = steps[i++];
+        const step = live.$('[data-bind="step"]');
+        if (step) { step.textContent = S.loadStep; live.$('[data-bind="pct"]').textContent = `${Math.round(S.loadP * 100)}%`; live.$('[data-bind="fill"]').style.setProperty('--p', S.loadP); live.$('.oh-loader__glow').style.setProperty('--gx', `${120 + S.loadP * 1200}px`); }
+        loadTimer = setTimeout(tick, i === steps.length ? 700 : 520);
+      } else {
+        Object.assign(S, { screen: 'join', server: 'online', joinStatus: '', joinError: false });
+        live.update();
+        markPreset('join');
+      }
+    };
+    loadTimer = setTimeout(tick, 400);
+  }
+
+  function enterWorld() {
+    Object.assign(S, { screen: 'play', online: S.server !== 'offline', menu: false, section: null, chat: [], prompt: 'Board the drone' });
+    live.update();
+    setTimeout(() => addChat({ sys: S.online ? `Welcome aboard, ${S.name}.` : 'The server is offline: you are exploring on your own.' }), 450);
+    if (S.online) setTimeout(() => addChat({ name: 'Ana', c: '#7fd8e3', text: 'hey! the drone is back on the pad' }), 1900);
+    liveFrame.focus({ preventScroll: true });
+    markPreset('play');
+  }
+
+  function submitJoin(form) {
+    const input = form.querySelector('[data-field="name"]');
+    const btn = form.querySelector('[data-join-btn]');
+    const status = form.querySelector('[data-bind="join-status"]');
+    S.name = input.value.trim();
+    if (S.server === 'offline') { enterWorld(); return; }
+    if (!S.name) {
+      input.setAttribute('aria-invalid', 'true');
+      status.className = 'oh-join__status is-error';
+      status.textContent = 'Pick a name first.';
+      input.classList.remove('oh-shake'); void input.offsetWidth; input.classList.add('oh-shake');
+      input.focus();
+      return;
+    }
+    input.removeAttribute('aria-invalid');
+    status.className = 'oh-join__status';
+    status.textContent = '';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="oh-spinner"></span>Connecting…';
+    setTimeout(enterWorld, 900);
+  }
+
+  function setHour(h) {
+    const before = backdropFor(S);
+    S.hour = h;
+    for (const e of live.$$('[data-bind="time"], [data-bind="sheet-time"]')) e.textContent = hhmm(h);
+    const [ph, pi] = phase(h);
+    const pe = live.$('[data-bind="phase"]');
+    if (pe) pe.innerHTML = `${icon(pi)}${ph}`;
+    const sky = live.$('.oh-range--sky');
+    if (sky) sky.classList.toggle('is-night', isNight(h));
+    if (backdropFor(S) !== before) live.update();
+  }
+
+  function logout() {
+    S.dialog = null;
+    S.veil = true;
+    live.update();
+    setTimeout(() => {
+      Object.assign(S, { screen: 'join', server: 'online', menu: false, section: null, chatOpen: false, flight: false, aboard: false, perfHud: false, joinStatus: 'You logged out.', joinError: false });
+      live.update();
+      markPreset('join');
+      setTimeout(() => { S.veil = false; live.update(); }, 120);
+    }, 380);
+  }
+
+  liveFrame.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-act]');
+    if (!t || !live.stage.contains(t)) return;
+    const act = t.dataset.act;
+    if (act === 'resume') { S.menu = false; S.section = null; live.update(); markPreset('play'); }
+    else if (act === 'nav') { S.section = S.section === t.dataset.section ? null : t.dataset.section; live.update(); markPreset(S.section || 'menu'); }
+    else if (act === 'sheet-close') { S.section = null; live.update(); markPreset('menu'); }
+    else if (act === 'logout') { S.dialog = 'logout'; live.update(); setTimeout(() => live.$('.oh-dialog [data-act="dialog-cancel"]')?.focus(), 30); markPreset('logout'); }
+    else if (act === 'dialog-cancel') { S.dialog = null; live.update(); markPreset('menu'); }
+    else if (act === 'dialog-confirm') logout();
+    else if (act === 'seg') {
+      const group = t.dataset.group, raw = t.dataset.value, v = group === 'rate' ? Number(raw) : raw;
+      if (group === 'rate') { S.rate = v; const r = RATES.find((x) => x[0] === v); live.$('[data-bind="rate-caption"]').textContent = r[2]; }
+      else S.settings.quality = v;
+      const box = t.parentElement;
+      box.style.setProperty('--i', [...box.children].indexOf(t));
+      for (const b of box.children) b.setAttribute('aria-pressed', String(b === t));
+    } else if (act === 'weather') {
+      S.weather = t.dataset.value;
+      S.by = 'you';
+      for (const b of live.$$('[data-act="weather"]')) b.setAttribute('aria-pressed', String(b.dataset.value === S.weather));
+      const w = weatherOf(S);
+      const wx = live.$('[data-bind="wx"]');
+      if (wx) wx.innerHTML = `${icon(w[2])}${w[1]}`;
+      const note = live.$('[data-bind="env-note"]');
+      if (note && S.online) note.textContent = 'Changes apply to everyone aboard. Last changed by you.';
+    } else if (act === 'copy') {
+      const label = t.querySelector('span');
+      const done = (ok) => { label.textContent = ok ? 'Copied' : 'Couldn’t copy'; t.firstElementChild.outerHTML = icon(ok ? 'check' : 'alert'); setTimeout(() => { label.textContent = 'Copy report'; t.firstElementChild.outerHTML = icon('copy'); }, 1600); };
+      const r = report(live.perf.hist);
+      try { navigator.clipboard.writeText(JSON.stringify({ fps: +r.fps.toFixed(1), frameMs: { avg: +r.avg.toFixed(2), p95: +r.p95.toFixed(2), max: +r.max.toFixed(1) }, quality: S.settings.quality }, null, 2)).then(() => done(true), () => done(false)); } catch { done(false); }
+    }
+  });
+  liveFrame.addEventListener('submit', (e) => { e.preventDefault(); submitJoin(e.target); });
+  liveFrame.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.dataset.field === 'name' && t.getAttribute('aria-invalid')) { t.removeAttribute('aria-invalid'); const st = live.$('[data-bind="join-status"]'); if (st) { st.textContent = ''; st.className = 'oh-join__status'; } }
+    const key = t.dataset.set;
+    if (!key || t.type !== 'range') return;
+    const v = Number(t.value);
+    if (key === 'hour') { setHour(v); return; }
+    S.settings[key] = v;
+    t.style.setProperty('--p', pct(key, v));
+    live.$(`[data-bind="v-${key}"]`).textContent = FORMAT[key](v);
+  });
+  liveFrame.addEventListener('change', (e) => {
+    const t = e.target, key = t.dataset.set;
+    if (!key || t.type !== 'checkbox') return;
+    if (key === 'perfHud') { S.perfHud = t.checked; live.update(); }
+    else S.settings[key] = t.checked;
+  });
+  liveFrame.addEventListener('keydown', (e) => {
+    if (e.target.dataset?.field === 'chat') {
+      e.stopPropagation();
+      if (e.key === 'Enter') { const text = e.target.value.trim(); S.chatOpen = false; live.update(); if (text) addChat({ name: S.name || 'Marco', c: '#f2b40c', text }); liveFrame.focus({ preventScroll: true }); }
+      else if (e.key === 'Escape') { S.chatOpen = false; live.update(); liveFrame.focus({ preventScroll: true }); }
+      return;
+    }
+    if (S.screen !== 'play') return;
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      if (S.dialog) { S.dialog = null; live.update(); markPreset('menu'); }
+      else if (S.menu && S.section) { S.section = null; live.update(); markPreset('menu'); }
+      else if (!S.menu) { Object.assign(S, { menu: true, aboard: false }); live.update(); markPreset('menu'); }
+      return;
+    }
+    if (e.code === 'F3') { e.preventDefault(); S.perfHud = !S.perfHud; live.update(); return; }
+    if (S.menu || e.target !== liveFrame) return;
+    if (e.code === 'KeyT' || e.code === 'Enter') { e.preventDefault(); S.chatOpen = true; live.update(); setTimeout(() => live.$('[data-field="chat"]')?.focus(), 20); }
+    if (e.code === 'Tab' && !S.aboard) { e.preventDefault(); S.aboard = true; live.update(); }
+  });
+  liveFrame.addEventListener('keyup', (e) => { if (e.code === 'Tab' && S.aboard) { S.aboard = false; live.update(); } });
+  liveFrame.addEventListener('blur', () => { if (S.aboard) { S.aboard = false; live.update(); } });
+  setInterval(() => {
+    if (!live.$('[data-graph]')) return;
+    live.perf.push();
+    live.paintPerf();
+  }, 50);
+
+  // Presets: jump straight to a state.
+  const PRESETS = [
+    ['loading', 'Loading'],
+    ['join', 'Sign in'],
+    ['joinOffline', 'Sign in · offline'],
+    ['play', 'In the world'],
+    ['menu', 'Menu'],
+    ['env', 'Time & weather'],
+    ['settings', 'Settings'],
+    ['perf', 'Performance'],
+    ['controls', 'Controls'],
+    ['logout', 'Log out'],
+    ['flight', 'Drone flight'],
+  ];
+  const presetState = {
+    join: { screen: 'join', server: 'online', joinStatus: '' },
+    joinOffline: { screen: 'join', server: 'offline' },
+    play: { screen: 'play' },
+    menu: { screen: 'play', menu: true },
+    env: { screen: 'play', menu: true, section: 'env' },
+    settings: { screen: 'play', menu: true, section: 'settings' },
+    perf: { screen: 'play', menu: true, section: 'perf' },
+    controls: { screen: 'play', menu: true, section: 'controls' },
+    logout: { screen: 'play', menu: true, dialog: 'logout' },
+    flight: { screen: 'play', flight: true, prompt: null },
+  };
+  const bar = document.getElementById('proto-bar');
+  bar.innerHTML = PRESETS.map(([id, l]) => `<button type="button" data-preset="${id}" aria-pressed="false">${l}</button>`).join('');
+  function markPreset(id) { for (const b of bar.children) b.setAttribute('aria-pressed', String(b.dataset.preset === id)); }
+  function goto(id) {
+    clearTimeout(loadTimer);
+    if (id === 'loading') { runLoading(); markPreset('loading'); return; }
+    const fromJoin = S.screen !== 'play';
+    Object.assign(S, { menu: false, section: null, dialog: null, chatOpen: false, flight: false, aboard: false, veil: false, prompt: 'Board the drone', online: true, joinError: false }, presetState[id]);
+    if (S.screen === 'play' && fromJoin && S.chat.length === 0) S.chat = base().chat;
+    live.update();
+    markPreset(id);
+  }
+  bar.addEventListener('click', (e) => { const b = e.target.closest('[data-preset]'); if (b) goto(b.dataset.preset); });
+  runLoading();
+  markPreset('loading');
+
+  // Motion demos replay a pattern in the live prototype.
+  document.querySelector('.motion-table').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-demo]');
+    if (!b) return;
+    liveFrame.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const d = b.dataset.demo;
+    const later = (f, ms) => setTimeout(f, ms);
+    if (d === 'menu') { goto('play'); later(() => goto('menu'), 500); }
+    else if (d === 'sheet') { goto('menu'); later(() => liveFrame.querySelector('[data-section="env"]')?.click(), 500); later(() => liveFrame.querySelector('[data-section="settings"]')?.click(), 1500); }
+    else if (d === 'dialog') { goto('menu'); later(() => liveFrame.querySelector('[data-act="logout"]')?.click(), 500); }
+    else if (d === 'loading') goto('loading');
+    else if (d === 'settings') { goto('settings'); later(() => liveFrame.querySelector('[data-value="ultra"]')?.click(), 700); later(() => { const sw = liveFrame.querySelector('[data-set="auto"]'); if (sw) { sw.checked = true; } }, 1200); later(() => liveFrame.querySelector('[data-value="medium"]')?.click(), 1700); }
+    else if (d === 'play') { goto('join'); later(() => liveFrame.querySelector('[data-form="join"]')?.requestSubmit(), 600); }
+    else if (d === 'error') { goto('join'); later(() => { const i = liveFrame.querySelector('[data-field="name"]'); if (i) { i.value = ''; liveFrame.querySelector('[data-form="join"]').requestSubmit(); } }, 600); }
+  });
+
+  // ------------------------------------------------------------------ artboards
+  const SHOTS = [
+    ['loading', 'Loading', 'Progress runs along the horizon, with the step and percentage set like an instrument readout. The sign-in screen appears only after the loader has gone.', { screen: 'loading', loadStep: 'Compiling shaders', loadP: 0.65 }],
+    ['join', 'Sign in', 'Left-aligned over the live world. Server status sits in the card, the essential keys become one line at the bottom, and today’s conditions sit in the corner.', { screen: 'join', server: 'online' }],
+    ['joinOffline', 'Sign in, server offline', 'The password field hides, the pill turns coral and the button becomes Explore offline. It switches back by itself when the server returns.', { screen: 'join', server: 'offline' }],
+    ['play', 'In the world', 'One capsule for time, weather, wind and seas; presence in a matching pill. The use prompt shows the key it needs.', { screen: 'play', hour: 15.5 }],
+    ['env', 'Menu · Time & weather', 'Esc opens the rail on the left and one section beside it. The time slider is the sky over 24 hours, with the sun as its handle.', { screen: 'play', menu: true, section: 'env', hour: 17.6 }],
+    ['settings', 'Menu · Settings', 'Grouped rows with plain descriptions. Quality is a segmented control, checkboxes become switches, values are in mono.', { screen: 'play', menu: true, section: 'settings', hour: 21 }],
+    ['perf', 'Menu · Performance', 'FPS and a health label first, then the frame-time graph with labelled 60 and 30 fps lines, the details, and CPU by system as bars.', { screen: 'play', menu: true, section: 'perf', hour: 10.5 }],
+    ['controls', 'Menu · Controls', 'The key list leaves Settings and the sign-in card and gets its own section, now with the drone keys.', { screen: 'play', menu: true, section: 'controls', hour: 12 }],
+    ['logout', 'Log out', 'At the foot of the rail, behind a confirmation so a stray click never throws anyone off the platform.', { screen: 'play', menu: true, dialog: 'logout', hour: 17.6 }],
+    ['play', 'Playing with F3 and Tab', 'F3 shows a compact readout in the corner. Holding Tab lists who is aboard above it.', { screen: 'play', perfHud: true, aboard: true, hour: 20.4, prompt: 'Open the door' }],
+    ['flight', 'Flying the drone', 'Instruments in mono with sea-glass labels, and the controls underneath as real keycaps.', { screen: 'play', flight: true, prompt: null, hour: 11 }],
+    ['play', 'Chat', 'T opens the input; older lines that had faded come back while it is open.', { screen: 'play', chatOpen: true, hour: 9.5, prompt: null }],
+  ];
+  const shots = document.getElementById('shots');
+  for (const [preset, title, text, st] of SHOTS) {
+    const fig = document.createElement('figure');
+    fig.className = 'shot';
+    fig.innerHTML = `<div class="frame" tabindex="0" role="button" aria-label="Open ${title} in the prototype"></div><figcaption><h3>${title}</h3><p>${text}</p><span class="shot__open">${icon('arrow')}Open in the prototype</span></figcaption>`;
+    shots.append(fig);
+    const frame = fig.firstElementChild;
+    new Screen(frame, base(st), false);
+    const open = () => {
+      goto(preset);
+      if (st.hour !== undefined) setHour(st.hour);
+      if (st.perfHud) { S.perfHud = true; live.update(); }
+      liveFrame.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    frame.addEventListener('click', open);
+    frame.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  }
+
+  // ------------------------------------------------------------------ foundations
+  const SW = [
+    ['Abyss', '--oh-abyss', '#03080c', 'Page and loader ground'],
+    ['Deep', '--oh-deep', '#07121a', 'Loader sky, solid panels'],
+    ['Hull', '--oh-hull', '#0d1b25', 'Solid fallback for glass'],
+    ['Glass', '--oh-glass', 'rgba(7,16,23,.62)', 'HUD pieces', true],
+    ['Glass strong', '--oh-glass-strong', 'rgba(6,13,19,.85)', 'Rail, sheets, dialogs', true],
+    ['Ink', '--oh-ink', '#e8eff2', 'Primary text'],
+    ['Ink 2', '--oh-ink-2', '70% ink', 'Secondary text'],
+    ['Ink 3', '--oh-ink-3', '46% ink', 'Hints, labels'],
+    ['Line', '--oh-line', 'rgba(190,222,238,.11)', 'Hairlines, borders'],
+    ['Rig yellow', '--oh-rig', '#f2b40c', 'Primary action, on, focus'],
+    ['Sea glass', '--oh-sea', '#7fd8e3', 'Instruments, data bars, AI'],
+    ['Good', '--oh-good', '#52d49a', 'Online, smooth frames'],
+    ['Warn', '--oh-warn', '#ff9f45', 'Late frames'],
+    ['Bad', '--oh-bad', '#ff6a5c', 'Offline, long frames, log out'],
+  ];
+  document.getElementById('swatches').innerHTML = SW.map(([n, t, v, role, glass]) => `<div class="swatch"><div class="swatch__chip${glass ? ' swatch__chip--glass' : ''}" style="${glass ? `--c:var(${t})` : `background:var(${t})`}"></div><div><b>${n}</b><code>${t}<br>${v}</code><p>${role}</p></div></div>`).join('');
+
+  const CURVES = [['Out', 'cubic-bezier(.16,1,.3,1)', [0.16, 1, 0.3, 1], 'Everything that enters'], ['Standard', 'cubic-bezier(.2,0,0,1)', [0.2, 0, 0, 1], 'Color, hover, fades'], ['In', 'cubic-bezier(.4,0,1,1)', [0.4, 0, 1, 1], 'Everything that leaves'], ['Spring', 'cubic-bezier(.34,1.5,.64,1)', [0.34, 1.5, 0.64, 1], 'Switch knob, tile icons']];
+  document.getElementById('curves').innerHTML = CURVES.map(([n, css, [a, b, c, d], use]) => {
+    const X = (v) => 10 + v * 100, Y = (v) => 78 - v * 62;
+    return `<div class="curve"><svg viewBox="0 0 120 90" aria-hidden="true"><path d="M10 78H110M10 16H110" stroke="rgba(190,222,238,.12)" fill="none"/><path d="M${X(0)} ${Y(0)}C${X(a)} ${Y(b)} ${X(c)} ${Y(d)} ${X(1)} ${Y(1)}" stroke="#f2b40c" stroke-width="2" fill="none"/></svg><b>${n}</b><code>${css}</code><code>${use}</code></div>`;
+  }).join('') + `<div class="curve"><b>Durations</b><code>--dur-1 120 ms · press, hover</code><code>--dur-2 200 ms · exits, small moves</code><code>--dur-3 320 ms · rail, sheet, dialog</code><code>--dur-4 520 ms · screens</code></div>`;
+
+  // ------------------------------------------------------------------ component board
+  const spec = (title, cls, html, extra = '') => `<div class="spec ${extra}"><div class="spec__label"><h3>${title}</h3><code>${cls}</code></div>${html}</div>`;
+  document.getElementById('board').innerHTML = [
+    spec('Buttons', '.oh-btn', `<div class="spec__row"><button class="oh-btn oh-btn--primary">Come aboard${icon('arrow', 'trail')}</button><button class="oh-btn oh-btn--secondary">Stay aboard</button><button class="oh-btn oh-btn--ghost">Cancel</button></div>
+      <div class="spec__row"><button class="oh-btn oh-btn--danger">${icon('logout')}Log out</button><button class="oh-btn oh-btn--primary" disabled><span class="oh-spinner"></span>Connecting…</button></div>
+      <div class="spec__row"><button class="oh-btn oh-btn--secondary oh-btn--sm">${icon('copy')}Copy report</button><button class="oh-btn oh-btn--quiet-danger oh-btn--sm">${icon('logout')}Log out</button><button class="oh-icon-btn" aria-label="Close">${icon('close')}</button></div>`),
+    spec('Text field', '.oh-field .oh-input', `<label class="oh-field"><span class="oh-field__label">Name</span><input class="oh-input" value="Marco"></label>
+      <label class="oh-field"><span class="oh-field__label">Host password<span class="oh-field__hint">Only if the host set one</span></span><input class="oh-input is-focus" type="password" value="lighthouse"></label>
+      <label class="oh-field"><span class="oh-field__label">Name</span><input class="oh-input" aria-invalid="true" placeholder="Your name"><p class="oh-field__error">${icon('alert')}Pick a name first.</p></label>`),
+    spec('Switch and segmented', '.oh-switch .oh-seg', `<div class="oh-group"><label class="oh-row"><div class="oh-row__text"><div class="oh-row__title">Invert look</div></div>${sw('x1', false, 'Invert look')}</label><label class="oh-row"><div class="oh-row__text"><div class="oh-row__title">Automatic resolution</div></div>${sw('x2', true, 'Automatic resolution')}</label></div>
+      ${seg('demo', QUALITIES.map((q) => [q, cap(q)]), 'high')}
+      ${seg('demo2', RATES.map((r) => [r[0], r[1]]), 12)}`),
+    spec('Sliders', '.oh-range .oh-range--sky', `<div class="oh-group">${slider('fov', 'Field of view', 72)}${slider('volume', 'Volume', 0.8)}</div>
+      <div class="oh-section"><input type="range" class="oh-range oh-range--sky" min="0" max="24" step="0.25" value="17.6" aria-label="Time of day"><div class="oh-ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>
+      <div class="oh-section"><input type="range" class="oh-range oh-range--sky is-night" min="0" max="24" step="0.25" value="21.5" aria-label="Time of day at night"><div class="oh-ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>`),
+    spec('Pills, badges, keycaps', '.oh-pill .oh-badge .oh-kbd', `<div class="spec__row"><span class="oh-pill oh-pill--good"><span class="oh-dot"></span>Server online · 3 aboard</span><span class="oh-pill oh-pill--checking"><span class="oh-dot"></span>Checking the server…</span><span class="oh-pill oh-pill--bad"><span class="oh-dot"></span>Server offline</span></div>
+      <div class="spec__row"><span class="oh-pill oh-pill--good"><span class="oh-dot"></span>Smooth</span><span class="oh-pill oh-pill--warn"><span class="oh-dot"></span>Uneven</span><span class="oh-pill oh-pill--bad"><span class="oh-dot"></span>Struggling</span></div>
+      <div class="spec__row"><span class="oh-badge">AI</span><span class="oh-badge oh-badge--muted">YOU</span>${kbd('W')}${kbd('Shift')}${kbd('Space')}${kbd('Esc')}${kbd('F3')}</div>`),
+    spec('Weather tiles', '.oh-tile', `<button type="button" class="oh-tile oh-tile--wide" aria-pressed="false">${icon('compass')}<span><b>Forecast</b><small>Changes on its own through the day</small></span>${icon('check', 'oh-check')}</button><div class="oh-tiles">${WEATHER.slice(1).map(([v, l, ic]) => `<button type="button" class="oh-tile" aria-pressed="${v === 'fair'}">${icon(ic)}${l}</button>`).join('')}</div>`),
+    spec('Menu items', '.oh-nav__item', `<div class="oh-nav">${NAV.map(([id, ic, l], i) => `<button type="button" class="oh-nav__item" aria-current="${i === 0}">${icon(ic)}${l}<span class="oh-nav__meta">${id === 'perf' ? kbd('F3') : ''}${icon('chev')}</span></button>`).join('')}</div><div class="oh-rail__foot" style="margin:0"><button type="button" class="oh-btn oh-btn--quiet-danger oh-btn--block">${icon('logout')}Log out</button></div>`),
+    spec('Stats and bars', '.oh-stats .oh-bars', `<div class="oh-group oh-stats"><div class="oh-stat"><span class="oh-eyebrow">CPU</span><span class="oh-stat__value">2.74<span class="oh-stat__unit">ms</span></span></div><div class="oh-stat"><span class="oh-eyebrow">Draw calls</span><span class="oh-stat__value">194</span></div><div class="oh-stat"><span class="oh-eyebrow">Memory</span><span class="oh-stat__value">241<span class="oh-stat__unit">MB</span></span></div></div>
+      <div class="oh-bars">${SYSTEMS.slice(0, 4).map(([n, ms]) => `<span>${n}</span><span class="oh-bar"><i style="--w:${Math.max(2, (ms / 2.87) * 100)}%"></i></span><b>${ms.toFixed(2)}</b>`).join('')}</div>`),
+    spec('Dialog', '.oh-dialog', `<div class="oh-dialog oh-glass oh-glass--strong" role="presentation"><div class="oh-dialog__icon">${icon('logout')}</div><h2 class="oh-dialog__title">Log out of Ocean Home?</h2><p class="oh-dialog__body">You’ll leave the platform and go back to the sign-in screen.</p><div class="oh-dialog__actions"><button class="oh-btn oh-btn--secondary">Stay aboard</button><button class="oh-btn oh-btn--danger">Log out</button></div></div>`, 'spec--photo'),
+    spec('HUD pieces', '.oh-status .oh-prompt .oh-chat__line', `<div class="spec__row"><div class="oh-glass" style="display:flex;align-items:center;height:38px;padding:0 4px;border-radius:999px"><span class="oh-status__seg oh-status__time">15:29</span><span class="oh-status__seg">${icon('cloudSun')}Fair</span><span class="oh-status__seg">${icon('wind', '', 'transform:rotate(225deg)')}NE 14 kn</span></div></div>
+      <div class="spec__row"><div class="oh-glass" style="display:flex;align-items:center;gap:9px;height:34px;padding:0 13px 0 6px;border-radius:999px;font-size:13.5px;font-weight:500">${kbd('E')}Board the drone</div><div class="oh-glass" style="display:flex;align-items:center;gap:9px;height:38px;padding:0 15px 0 13px;border-radius:999px;font-size:13px;font-weight:500"><span class="oh-dot oh-dot--good"></span>4 aboard</div></div>
+      <div class="oh-chat__log">${chatLine({ name: 'Ana', c: '#7fd8e3', text: 'the drone is back on the pad' })}${chatLine({ sys: 'Theo came aboard.' })}</div>`, 'spec--photo'),
+  ].join('');
+})();
+</script>

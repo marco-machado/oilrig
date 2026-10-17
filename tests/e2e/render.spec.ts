@@ -75,19 +75,36 @@ test('a landing drone spins its rotors and kicks up spray on the deck', async ({
   expect(errors).toEqual([]);
 });
 
-test('Esc frees the cursor without pausing: the world keeps running and the panels work', async ({ page }) => {
+test('Esc frees the cursor without pausing: the world keeps running and the menu works', async ({ page }) => {
   await page.goto('/?offline&q=low&hour=12&name=Tester');
   await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 5, undefined, { timeout: 60_000 });
-  await page.click('button:has-text("Enter")');
+  await page.click('button:has-text("Come aboard")');
   await page.waitForTimeout(800);
   await page.evaluate(() => document.exitPointerLock());
-  await expect(page.locator('.toolbar')).toBeVisible();
+  await expect(page.locator('.oh-rail')).toBeVisible();
   const f0 = await page.evaluate(() => (window as any).__oceanHome.stats.frames);
   await page.waitForTimeout(1000);
   expect(await page.evaluate(() => (window as any).__oceanHome.stats.frames)).toBeGreaterThan(f0 + 10);
-  await page.click('.toolbar button:has-text("Time & weather")');
-  await page.click('.panel button:has-text("Fog")');
+  await page.click('.oh-nav__item:has-text("Time & weather")');
+  await page.click('.oh-sheet button:has-text("Fog")');
   expect(await page.evaluate(() => (window as any).__oceanHome.weatherMode())).toBe('fog');
   await page.keyboard.press('F3');
-  await expect(page.locator('.panel.perf')).toBeVisible();
+  await expect(page.locator('.oh-perfhud')).toBeVisible();
+});
+
+test('Log out returns to the sign-in screen, and coming back aboard works', async ({ page }) => {
+  await page.goto('/?offline&q=low&hour=12&name=Tester');
+  await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 5, undefined, { timeout: 60_000 });
+  await page.click('button:has-text("Come aboard")');
+  await page.waitForTimeout(800);
+  await page.evaluate(() => document.exitPointerLock());
+  await page.click('.oh-rail button:has-text("Log out")');
+  await expect(page.locator('.oh-dialog')).toBeVisible();
+  await page.click('.oh-dialog button:has-text("Log out")');
+  await expect(page.locator('.oh-join')).toBeVisible();
+  await expect(page.locator('.oh-join__status')).toHaveText('You logged out.');
+  expect(await page.evaluate(() => (window as any).__oceanHome.ui.joined)).toBe(false);
+  await page.click('button:has-text("Come aboard")');
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(() => (window as any).__oceanHome.ui.joined)).toBe(true);
 });

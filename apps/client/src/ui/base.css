@@ -1,0 +1,303 @@
+/* Ocean Home design system: fonts, tokens and the loading screen. Linked from index.html so
+   the loader is styled before any script runs; components.css and screens.css build on it. */
+
+@import '@fontsource-variable/instrument-sans/wght.css';
+@import '@fontsource/instrument-serif/400.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+
+:root {
+  /* Deep-sea neutrals with a blue-teal bias; rig yellow is the one accent. */
+  --oh-abyss: #03080c;
+  --oh-deep: #07121a;
+  --oh-hull: #0d1b25;
+  --oh-glass: rgba(7, 16, 23, 0.62);
+  --oh-glass-strong: rgba(6, 13, 19, 0.85);
+  --oh-fill: rgba(232, 239, 242, 0.06);
+  --oh-fill-hover: rgba(232, 239, 242, 0.1);
+  --oh-fill-active: rgba(232, 239, 242, 0.14);
+  --oh-well: rgba(0, 0, 0, 0.28);
+  --oh-line: rgba(190, 222, 238, 0.11);
+  --oh-line-strong: rgba(190, 222, 238, 0.2);
+  --oh-ink: #e8eff2;
+  --oh-ink-2: rgba(232, 239, 242, 0.7);
+  --oh-ink-3: rgba(232, 239, 242, 0.46);
+  --oh-rig: #f2b40c;
+  --oh-rig-hi: #ffc83a;
+  --oh-rig-ink: #1d1603;
+  --oh-rig-tint: rgba(242, 180, 12, 0.13);
+  --oh-sea: #7fd8e3;
+  --oh-good: #52d49a;
+  --oh-warn: #ff9f45;
+  --oh-bad: #ff6a5c;
+  --oh-bad-ink: #2a0905;
+
+  --font-display: 'Instrument Serif', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --font-ui: 'Instrument Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow-1: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 30px 80px -20px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --focus: 0 0 0 2px var(--oh-abyss), 0 0 0 4px rgba(242, 180, 12, 0.85);
+  --blur: blur(20px) saturate(1.4);
+
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --dur-4: 520ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-std: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.5, 0.64, 1);
+
+  --sky: linear-gradient(90deg, #0a1430 0%, #141f45 18%, #c9776a 25%, #e9b48a 28%, #7db6df 34%, #5aa7e2 50%, #6eacdc 66%, #f2a457 74%, #c45f4e 78%, #2a2550 84%, #0a1430 100%);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--oh-abyss);
+  color: var(--oh-ink);
+  font: 400 14px/1.45 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
+}
+
+#app canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.fatal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  font: 400 32px/1.25 var(--font-display);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.oh-eyebrow {
+  font: 500 11px/1.3 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--oh-ink-3);
+}
+
+.oh-wordmark {
+  margin: 0;
+  font: 400 88px/0.92 var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--oh-ink);
+  text-wrap: balance;
+}
+
+.oh-mark {
+  display: block;
+  flex: none;
+}
+
+/* ---------- loading screen: the progress runs along the horizon ---------- */
+
+#loader {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  background: linear-gradient(180deg, #02060a 0%, #04101a 40%, #0a2333 61.2%, #04111b 61.6%, #02070b 100%);
+  transition: opacity 700ms var(--ease-std) 120ms;
+}
+
+#loader.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#loader .sea {
+  position: absolute;
+  left: 0;
+  top: 61.4%;
+  width: 200%;
+  height: 38.6%;
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-std);
+  animation: oh-sea-drift 60s linear infinite;
+}
+
+#loader .sea.near {
+  animation-duration: 34s;
+}
+
+#loader .sea.on {
+  opacity: 1;
+}
+
+#loader .glow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 48%;
+  height: 26%;
+  background: radial-gradient(40% 50% at var(--gx, 10%) 52%, rgba(242, 180, 12, 0.1), transparent 70%);
+}
+
+#loader .content {
+  position: absolute;
+  left: clamp(24px, 8vw, 120px);
+  right: 24px;
+  bottom: calc(38.6% + clamp(48px, 8vh, 72px));
+  display: grid;
+  gap: 18px;
+  animation: oh-rise var(--dur-4) var(--ease-out) 80ms both;
+}
+
+#loader .brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+#loader .oh-wordmark {
+  font-size: clamp(56px, 8vw, 112px);
+}
+
+#loader .tagline {
+  margin: 0;
+  font-size: 17px;
+  color: var(--oh-ink-2);
+}
+
+#loader .horizon {
+  position: absolute;
+  left: clamp(24px, 8vw, 120px);
+  right: clamp(24px, 8vw, 120px);
+  top: calc(61.4% - 1px);
+  animation: oh-fade-in var(--dur-4) var(--ease-std) 200ms both;
+}
+
+#loader .meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+#loader .step {
+  font: 500 12px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--oh-ink-2);
+}
+
+#loader .pct {
+  font: 500 12px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+#loader .line {
+  position: relative;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(127, 216, 227, 0.16);
+}
+
+#loader .fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(242, 180, 12, 0.15), var(--oh-rig));
+  box-shadow: 0 0 12px rgba(242, 180, 12, 0.55);
+  transition: width 700ms var(--ease-out);
+}
+
+#loader .fill::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #ffe390;
+  box-shadow: 0 0 0 4px rgba(242, 180, 12, 0.22), 0 0 18px 5px rgba(242, 180, 12, 0.55);
+}
+
+#loader .hint {
+  position: absolute;
+  left: 0;
+  top: 18px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--oh-ink-3);
+}
+
+#loader.done .content,
+#loader.done .horizon {
+  animation: oh-lift-out 420ms var(--ease-in) forwards;
+}
+
+@keyframes oh-sea-drift {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes oh-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes oh-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes oh-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes oh-lift-out {
+  to {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #loader,
+  #loader * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

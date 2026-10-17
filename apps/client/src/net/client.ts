@@ -54,6 +54,16 @@ export class NetClient {
     this.open();
   }
 
+  /** Logging out: the next connect() joins as a new player instead of resuming this one. */
+  endSession() {
+    this.session = null;
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      // storage unavailable
+    }
+  }
+
   /** Stops connecting (and reconnecting) until the next connect(). */
   disconnect() {
     this.closedByUser = true;

@@ -304,6 +304,14 @@ async function boot() {
         setGpuTimingWanted(on);
         location.reload();
       },
+      onLogout() {
+        logout();
+      },
+      sunElevationAt(hour) {
+        const g = gameTime(clock, online ? net.serverNow() : Date.now());
+        const day = Math.floor(g / 86_400_000) * 86_400_000;
+        return celestialAt(day + ((hour - WORLD.longitude / 15 + 24) % 24) * 3_600_000).sunElevation;
+      },
     },
     settings,
     dbg.name,
@@ -445,6 +453,64 @@ async function boot() {
     }
   }
 
+  /** Keeps the sign-in card's server state current until we are aboard. */
+  let checkingServer = false;
+  function startServerCheck() {
+    if (dbg.offline) {
+      ui.setServer('local');
+      return;
+    }
+    if (checkingServer) return;
+    checkingServer = true;
+    const check = async () => {
+      if (joined) {
+        checkingServer = false;
+        return;
+      }
+      const h = await probeServer();
+      if (!joined) ui.setServer(h);
+      window.setTimeout(check, h.online ? 10_000 : 4000);
+    };
+    void check();
+  }
+
+  /** Leaves the world: fade out, drop the connection and its session, back to sign in. */
+  function logout() {
+    ui.setFade(true);
+    window.setTimeout(() => {
+      net.disconnect();
+      net.endSession();
+      // Out of the drone: offline we hand it back to the local schedule; online the server
+      // frees the seat when the socket closes.
+      if (!online && mySeat !== null) {
+        localCrew.leave(LOCAL_ID);
+        if (mySeat === 0 && lastDrone) localDrone.release(Date.now(), lastDrone.position, lastDrone.yaw, lastDrone.grounded);
+      }
+      online = false;
+      joined = false;
+      controls.enabled = false;
+      controls.unlock();
+      selfId = LOCAL_ID;
+      avatars.selfId = LOCAL_ID;
+      avatars.clear();
+      playerList.clear();
+      if (!dbg.drone) setDrone(localDrone.state, [...localCrew.seats], false);
+      serverWeather = null;
+      weatherMode = localWeather.mode;
+      envBy = undefined;
+      calling = null;
+      if (respawnTimer > 0) {
+        respawnTimer = 0;
+        player.teleport(layout.respawn.position, layout.respawn.yaw);
+        player.frozen = false;
+      }
+      ui.setPlayers([], false);
+      ui.loggedOut();
+      startServerCheck();
+      window.setTimeout(() => ui.setFade(false), 150);
+    }, 450);
+  }
+
   function enterWorld() {
     joined = true;
     ui.joined = true;
@@ -460,6 +526,7 @@ async function boot() {
       online = true;
       selfId = w.you.id;
       avatars.selfId = selfId;
+      ui.setSelf(w.you);
       avatars.clear();
       clock = w.clock;
       serverWeather = w.weather as WeatherState;
@@ -624,17 +691,7 @@ async function boot() {
     weatherMode: () => (online ? weatherMode : localWeather.mode),
   };
   ui.showJoin();
-  // Keep the join card's server state current until we are aboard.
-  if (dbg.offline) ui.setServer('local');
-  else {
-    const check = async () => {
-      if (joined) return;
-      const h = await probeServer();
-      if (!joined) ui.setServer(h);
-      window.setTimeout(check, h.online ? 10_000 : 4000);
-    };
-    void check();
-  }
+  startServerCheck();
   if (dbg.camera) ui.hideOverlay();
 
   renderer.setAnimationLoop(() => {

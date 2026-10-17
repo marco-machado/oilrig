@@ -39,3 +39,13 @@ Both are reimplemented in `packages/shared/src/sim/astronomy.ts`.
 ## Sound effects: ElevenLabs
 
 The files in `apps/client/public/sfx` (footsteps on each surface, the drone's rotors, the elevator's motor, chime and doors, the sliding doors) were generated for this project with the ElevenLabs sound-effects API (`eleven_text_to_sound_v2`) by `scripts/sfx.ts`, which also cuts the footstep takes into single steps. Their use is governed by the ElevenLabs terms of service for the account that generated them.
+
+## Fonts: Instrument Sans, Instrument Serif, JetBrains Mono (SIL Open Font License 1.1)
+
+The UI's typefaces are bundled from npm (`@fontsource-variable/instrument-sans`, `@fontsource/instrument-serif`, `@fontsource-variable/jetbrains-mono`) and imported in `apps/client/src/ui/base.css`, so the game requests no fonts from other servers.
+
+- Instrument Sans: Copyright 2022 The Instrument Sans Project Authors (https://github.com/Instrument/instrument-sans)
+- Instrument Serif: Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif)
+- JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
+
+All three are licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org). The full license text ships with each package in its `LICENSE` file.

@@ -44,7 +44,7 @@ ELEVENLABS_API_KEY=… pnpm sfx steps-wood drone-loop
 | E | Use what you're looking at: open or close a door, call the elevator or press its button inside, board the drone; in the drone, climb out (once landed) |
 | T or Enter | Chat |
 | Tab (hold) | Who's on board |
-| Esc | Free the cursor. The world keeps running; a toolbar opens **Settings** (graphics quality, automatic resolution, FOV, sensitivity, invert look, volume), **Time & weather** and **Performance**. Click the world to look around again. |
+| Esc | Free the cursor and open the menu. The world keeps running; the menu opens **Time & weather**, **Settings** (graphics quality, automatic resolution, FOV, sensitivity, invert look, volume), **Performance** and **Controls**, one at a time beside it, and **Log out** (after a confirmation) returns to the sign-in screen. Click the world or **Back to the world** to look around again. |
 | F3 | Performance overlay |
 
 Flying the drone (pilot's seat): **W A S D** move relative to where you look, the mouse steers (the drone turns to face your view), **Space** climbs, **Shift** or **C** descends. Let go of the stick and it stops and hovers. On the ground it only lifts off once you climb. The instruments show altitude, height above whatever is below, speed, climb rate and heading. Passengers look around freely.
@@ -235,7 +235,7 @@ Browser checks use Playwright with the installed Chrome and a temporary profile:
 pnpm test:render
 ```
 
-Every quality preset renders with no console or WebGPU errors. More checks run in the browser: the tender's heave follows the wave heights read back from the GPU, a landing drone spins its rotors and drives the deck spray, and Esc frees the cursor while the world keeps running and the panels work.
+Every quality preset renders with no console or WebGPU errors. More checks run in the browser: the tender's heave follows the wave heights read back from the GPU, a landing drone spins its rotors and drives the deck spray, Esc frees the cursor while the world keeps running and the menu works, and logging out returns to the sign-in screen and lets you come back aboard.
 
 ```bash
 pnpm perf
@@ -245,9 +245,9 @@ Measures frame rate at 2560×1440 on High (`PERF_QUALITY=ultra` for another pres
 
 ### Performance
 
-Press **F3** (or Esc → Performance) for the overlay: frames per second, average/p95/max frame time and a frame-time graph, CPU time of the main loop split by system (player, drone, elevator, ocean, atmosphere, render submission, labels…), draw calls, triangles, compute dispatches, geometries, textures, JS heap, and the canvas size. **Copy report** puts the same numbers on the clipboard as JSON; `window.__oceanHome.perf.report()` returns them too.
+Press **F3** for a compact readout in the corner (frames per second, a frame-time graph, average/p95/max), or Esc → **Performance** for the full sheet: frames per second, average/p95/max frame time and a frame-time graph, CPU time of the main loop split by system (player, drone, elevator, ocean, atmosphere, render submission, labels…), draw calls, triangles, compute dispatches, geometries, textures, JS heap, and the canvas size. **Copy report** puts the same numbers on the clipboard as JSON; `window.__oceanHome.perf.report()` returns them too.
 
-- **GPU time** comes from WebGPU timestamp queries, which must be enabled before the renderer starts: turn them on from the overlay (it reloads) or add `?perf`. On Apple GPUs (Metal) the browser's timestamps are coarse and can read far above the real frame time; there, compare frame times instead.
+- **GPU time** comes from WebGPU timestamp queries, which must be enabled before the renderer starts: turn on **GPU timing** in the Performance sheet (it reloads) or add `?perf`. On Apple GPUs (Metal) the browser's timestamps are coarse and can read far above the real frame time; there, compare frame times instead.
 - **When the GPU is the limit**, the time the CPU spends blocked waiting for it shows up in whichever system submits next (usually `render` or `ocean`), so a large `render` figure with a short real CPU workload means the GPU is the bottleneck.
 - **Finding what costs what:** add `?off=` with features to switch off (`ao`, `bloom`, `traa`, `ssr`, `shadows`, `ocean`, `grass`, `rain`, `labels`, `probes`) and compare frame times. The ocean is the largest single cost, then ambient occlusion.
 - **Automatic resolution** (on by default, Settings): after the first seconds (shader compilation, light-probe baking), if frames run slower than about 54 fps it renders fewer pixels, in coarse steps down to half, and tries more again after a stretch of on-time frames. The pixel ratio is also capped at 2, so Ultra's supersampling no longer renders 9× the window's pixels on a Retina screen.

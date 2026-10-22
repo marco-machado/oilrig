@@ -296,10 +296,9 @@ export function bodyToWorld(origin: Vec3, local: Vec3, att: Attitude): Vec3 {
  * at DRONE.seatedEye, the feet of a sitting avatar at -DRONE.seatedHips). Follows the body's
  * pitch and roll when the pose has them, so the seat stays put inside a banking cabin.
  */
-export function seatPosition(pose: { position: Vec3 } & Attitude, seat: number, dy: number | boolean = 0): Vec3 {
+export function seatPosition(pose: { position: Vec3 } & Attitude, seat: number, dy = 0): Vec3 {
   const [x, y, z] = DRONE.seats[seat];
-  const up = dy === true ? DRONE.seatedEye : dy === false ? 0 : dy;
-  return bodyToWorld(pose.position, [x, y + up, z], pose);
+  return bodyToWorld(pose.position, [x, y + dy, z], pose);
 }
 
 export function padOccupied(positions: Iterable<Vec3>): boolean {
@@ -568,14 +567,14 @@ export class DroneFlight {
   roll = 0;
   rotor = ROTOR_IDLE;
   grounded = true;
-  /** Seconds the skids have been off the ground (0 while landed). */
-  airborne = 0;
   private ax = 0;
   private az = 0;
+  /** Whether the last step asked to climb. */
+  private asking = false;
 
   /** Whether the rotors are still coming up to speed for a lift-off the pilot has asked for. */
   get spooling() {
-    return this.grounded && this.rotor < ROTOR_LIFT && this.rotor > ROTOR_IDLE + 0.02;
+    return this.grounded && this.asking && this.rotor < ROTOR_LIFT;
   }
 
   constructor(sw: StaticWorld, start: Vec3, yaw: number) {
@@ -622,6 +621,7 @@ export class DroneFlight {
     // On the ground it only lifts off, and only once the rotors have spooled up to lift rpm;
     // sideways input waits until it is airborne.
     const asking = up > 0.05;
+    this.asking = asking;
     const lifting = asking && (!this.grounded || this.rotor >= ROTOR_LIFT);
     const flying = !this.grounded || lifting;
     const tx = flying ? ix * DRONE.maxSpeed : 0;
@@ -676,9 +676,6 @@ export class DroneFlight {
     if (this.grounded) {
       this.velocity.x *= Math.max(0, 1 - 6 * dt);
       this.velocity.z *= Math.max(0, 1 - 6 * dt);
-      this.airborne = 0;
-    } else {
-      this.airborne += dt;
     }
     this.sync();
 

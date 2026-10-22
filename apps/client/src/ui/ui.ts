@@ -732,7 +732,7 @@ export class UI {
     setText(vs, `${f.climb >= 0 ? '+' : ''}${f.climb.toFixed(1)}`);
     setText(hdg, String(Math.round(((f.heading % 360) + 360) % 360)).padStart(3, '0'));
     // Horizon: nose up slides the line down; a right bank (roll < 0) tilts it anticlockwise.
-    const rollDeg = (-f.roll * 180) / Math.PI;
+    const rollDeg = (f.roll * 180) / Math.PI;
     const pitchPx = Math.max(-26, Math.min(26, (f.pitch * 180) / Math.PI * 1.6));
     const attitude = `${rollDeg.toFixed(1)}|${pitchPx.toFixed(1)}`;
     if (attitude !== b.attitude) {

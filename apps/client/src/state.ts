@@ -1,4 +1,4 @@
-import { Color, Vector2, Vector3, Vector4 } from 'three/webgpu';
+import { Color, Matrix4, Vector2, Vector3 } from 'three/webgpu';
 import { uniform } from 'three/tsl';
 
 /** Global shader uniforms shared by materials, sky, ocean and weather. */
@@ -33,6 +33,9 @@ export const U = {
   /** Drone rotor wash on the sea: centre (world xz) and strength 0..1. */
   washCenter: uniform(new Vector2(42, 0)),
   washSea: uniform(0),
-  /** The drone's cabin (centre xyz, radius w; w = 0 when not around): rain stays out of it. */
-  droneCabin: uniform(new Vector4(0, -100, 0, 0)),
+  /**
+   * World → the drone's body frame (x right, y up from the skids, nose towards -z): rain stays
+   * out of its cabin. A far-off translation when the drone isn't around.
+   */
+  droneCabin: uniform(new Matrix4().makeTranslation(0, -1e5, 0)),
 };

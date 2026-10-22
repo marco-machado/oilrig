@@ -87,7 +87,7 @@ export const DRONE = {
   pad: [42, 20, 0] as const,
   /**
    * Duct (rotor) centres in the body frame: (±armX, ductY, ±armZ). Nothing on the ducts hangs
-   * below 2.9 (the motors), clear of the top of a jump (1.80 + 0.76): people walk and jump under them.
+   * below 2.7 (the motor caps), clear of the top of a jump (1.80 + 0.76): people walk and jump under them.
    */
   armX: 3.7,
   armZ: 3.45,

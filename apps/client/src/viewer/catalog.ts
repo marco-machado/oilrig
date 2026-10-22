@@ -199,8 +199,9 @@ const avatar: Entry = {
       info = { ...info, ...next };
       avatars.add(info);
     };
-    // A plain block to sit on, as high as a drone seat (0.44 above its cabin floor) and only under the hips.
-    const seat = new Mesh(new BoxGeometry(0.5, 0.44, 0.4).translate(0, 0.22, 0.05), new MeshStandardNodeMaterial({ color: 0x3a3f46, roughness: 0.75 }));
+    // A plain block to sit on, as high as a drone seat above its cabin floor, and only under the hips.
+    const seatH = DIMS.DRONE.seats[0][1] - DIMS.DRONE.body.floor;
+    const seat = new Mesh(new BoxGeometry(0.5, seatH, 0.4).translate(0, seatH / 2, 0.05), new MeshStandardNodeMaterial({ color: 0x3a3f46, roughness: 0.75 }));
     seat.castShadow = seat.receiveShadow = true;
     seat.visible = false;
     root.add(seat);
@@ -211,7 +212,7 @@ const avatar: Entry = {
       update(dt) {
         const now = performance.now();
         avatars.snapshot(now, [{ id: info.id, p: [0, 0, 0], yaw: 0, pitch: 0, speed: speeds[pose], grounded: true }]);
-        const seated = pose === 'seat' ? new Map([[info.id, { position: [0, 0.44 - DIMS.DRONE.seatedHips, 0] as Vec3, yaw: 0 }]]) : undefined;
+        const seated = pose === 'seat' ? new Map([[info.id, { position: [0, seatH - DIMS.DRONE.seatedHips, 0] as Vec3, yaw: 0 }]]) : undefined;
         avatars.update(now + NET.interpolationDelayMs, dt, seated);
         seat.visible = pose === 'seat';
       },

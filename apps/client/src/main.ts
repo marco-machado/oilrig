@@ -142,6 +142,9 @@ async function boot() {
   const scene = new Scene();
   prof.watchLights(scene);
   const camera = new PerspectiveCamera(settings.fov, window.innerWidth / window.innerHeight, 0.1, 30000);
+  /** The field of view from the settings, and the extra at speed in the drone (eased). */
+  let baseFov = settings.fov;
+  let fovKick = 0;
   scene.add(camera);
 
   await setLoading('Generating the world…', 0.45);
@@ -739,9 +742,6 @@ async function boot() {
   const bodyE = new Euler();
   const viewE = new Euler();
   const shakeE = new Euler();
-  let baseFov = settings.fov;
-  /** Extra field of view at speed in the drone, eased. */
-  let fovKick = 0;
   let uiTick = 0;
   const stats = { frames: 0, gpuReady: false };
   const doorTargets: Interactable[] = layout.doors.map((d) => ({ id: d.id, point: d.center, reach: 3.2 }));
@@ -879,7 +879,7 @@ async function boot() {
         // view: strapped in, the pilot sees the horizon tilt. A fraction is left out so the
         // mouse still feels in charge of where the nose points.
         const shown = swayPose(pose, simTime);
-        const eye = seatPosition(shown, mySeat, true);
+        const eye = seatPosition(shown, mySeat, DIMS.DRONE.seatedEye);
         camera.position.set(eye[0], eye[1], eye[2]);
         bodyQ.setFromEuler(bodyE.set(shown.pitch * 0.6, shown.yaw, shown.roll * 0.8, 'YXZ'));
         viewQ.setFromEuler(viewE.set(controls.pitch, viewYaw(pose) - shown.yaw, 0, 'YXZ'));

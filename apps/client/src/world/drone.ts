@@ -975,7 +975,7 @@ export class Drone {
     this.group.visible = pose.visible;
     if (!pose.visible) {
       U.washSea.value = 0;
-      U.droneCabin.value.w = 0;
+      U.droneCabin.value.makeTranslation(0, -1e5, 0);
       this.spray.strength.value = 0;
       this.strobeLight.intensity = 0;
       this.landingLight.intensity = 0;
@@ -992,7 +992,7 @@ export class Drone {
     ] as const) {
       (l.userData as AimedLight).aim!.copy(local).transformDirection(this.group.matrixWorld);
     }
-    U.droneCabin.value.set(x, y + (B.roof + B.floor) / 2, z, 1.6);
+    U.droneCabin.value.copy(this.group.matrixWorld).invert();
 
     // Rotors: blades blur into discs as they speed up.
     const rpm = Math.max(0, pose.rotor);

@@ -24,6 +24,7 @@ import {
   transformNormalToView,
   uniform,
   vec3,
+  vec4,
 } from 'three/tsl';
 import { DIMS } from '@ocean-home/shared';
 import { U } from '../state.ts';
@@ -31,6 +32,10 @@ import { U } from '../state.ts';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const BOX = new Vector3(44, 26, 44);
+/** The drone's fuselage bounds in its body frame: centre and half-extents. */
+const HULL = DIMS.DRONE.body;
+const HULL_MID = new Vector3(0, (HULL.roof + HULL.belly) / 2, (HULL.nose + HULL.tail) / 2);
+const HULL_HALF = new Vector3(HULL.halfWidth, (HULL.roof - HULL.belly) / 2, (HULL.tail - HULL.nose) / 2);
 
 /** Shader-only rain: drops wrap inside a box around the camera; roofs stop them. */
 export function createRain(count: number) {
@@ -68,6 +73,15 @@ export function createRain(count: number) {
   m.fog = false;
   const box = vec3(BOX.x, BOX.y, BOX.z);
   const fall = float(9.5);
+  const hullMid = vec3(HULL_MID.x, HULL_MID.y, HULL_MID.z);
+  const hullHalf = vec3(HULL_HALF.x, HULL_HALF.y, HULL_HALF.z);
+  // Inside the drone: a superellipsoid (exponent 4) round the fuselage's bounds, in its body
+  // frame. It holds the whole shell, nose and tail tips included.
+  const inDrone = (q: any) => {
+    const b = U.droneCabin.mul(vec4(q, 1)).xyz.sub(hullMid).div(hullHalf);
+    const b2 = b.mul(b);
+    return b2.x.mul(b2.x).add(b2.y.mul(b2.y)).add(b2.z.mul(b2.z)).lessThan(1);
+  };
 
   m.positionNode = Fn(() => {
     const sd = attribute('aSeed', 'vec4') as any;
@@ -85,7 +99,10 @@ export function createRain(count: number) {
     p = p.add(select(p.sub(cameraPosition).z.lessThan(box.z.mul(-0.5)), vec3(0, 0, box.z), vec3(0)));
     p = p.add(select(p.sub(cameraPosition).y.greaterThan(box.y.mul(0.5)), vec3(0, box.y.negate(), 0), vec3(0)));
     p = p.add(select(p.sub(cameraPosition).y.lessThan(box.y.mul(-0.5)), vec3(0, box.y, 0), vec3(0)));
-    // Sheltered: under the pavilion roof, the main deck or the helideck; or below sea level.
+    const dir = normalize(vel);
+    const len = float(0.55).add(sd.w.mul(0.4));
+    // Sheltered: under the pavilion roof, the main deck or the helideck; inside the drone (either
+    // end of the streak, so none reaches in through the glass); or below sea level.
     const P = DIMS.PAVILION;
     const inRect = (x0: number, x1: number, z0: number, z1: number, yTop: number) =>
       p.x.greaterThan(x0).and(p.x.lessThan(x1)).and(p.z.greaterThan(z0)).and(p.z.lessThan(z1)).and(p.y.lessThan(yTop));
@@ -93,13 +110,12 @@ export function createRain(count: number) {
       .or(inRect(DIMS.DECK.x0, DIMS.DECK.x1, DIMS.DECK.z0, DIMS.DECK.z1, DIMS.DECK.top - 0.1))
       .or(inRect(DIMS.HELIPAD.x0, DIMS.HELIPAD.x1, DIMS.HELIPAD.z0, DIMS.HELIPAD.z1, DIMS.HELIPAD.top - 0.25))
       .or(inRect(DIMS.ELEVATOR.x0, DIMS.ELEVATOR.x1, DIMS.ELEVATOR.z0, DIMS.ELEVATOR.z1, DIMS.ELEVATOR.head))
-      .or(p.sub(U.droneCabin.xyz).length().lessThan(U.droneCabin.w))
+      .or(inDrone(p))
+      .or(inDrone(p.add(dir.mul(len))))
       .or(p.y.lessThan(0.0));
     const visible = select(sheltered, float(0), active.mul(smoothstep(sd.w, sd.w.add(0.05), U.rain)));
-    const dir = normalize(vel);
     const toCam = normalize(cameraPosition.sub(p));
     const side = normalize(cross(dir, toCam));
-    const len = float(0.55).add(sd.w.mul(0.4));
     return p.add(side.mul(c.x.mul(0.006).mul(visible))).add(dir.mul(c.y.mul(len).mul(visible)));
   })();
   m.colorNode = Fn(() => vec3(U.fogColor).mul(0.9).add(vec3(0.6, 0.65, 0.75).mul(U.lightning.mul(40))))();

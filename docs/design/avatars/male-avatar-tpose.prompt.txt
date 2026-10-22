@@ -1,0 +1,12 @@
+Mode: built-in image_gen
+
+Use case: stylized-concept
+Asset type: male player avatar turnaround reference sheet for Ocean Home, a multiplayer game set in a contemporary glass pavilion on a converted offshore platform off Rio.
+Primary request: one consistent adult male avatar shown in a strict T-pose from the front and back, side by side.
+Subject: approachable adult man about 30, medium tan skin, short dark brown hair, subtle stubble, lean average athletic build, realistic human proportions. Simple coastal casual clothing: muted ocean-blue crewneck short-sleeve T-shirt, sand-colored tailored shorts ending just above knees, clean off-white low-top sneakers. No accessories.
+Style/medium: polished game-ready 3D character concept render, restrained stylization, simplified clean forms and readable material surfaces, natural anatomy, modest texture detail, suitable for a contemporary Three.js social world.
+Scene/backdrop: plain light neutral studio background.
+Composition/framing: wide landscape sheet, exactly two full-body views of the SAME character, front on left and rear on right. Strict orthographic projection without perspective. Both equal scale, matching head height and sole baseline, completely visible with generous margins including all fingertips. Both in exact T-pose: arms straight horizontal at shoulder height, elbows extended, wrists straight, fingers relaxed extended and separated slightly, palms down, legs straight, feet hip-width apart and pointing forward. Back view rotated exactly 180 degrees; do not turn the head.
+Lighting/mood: soft even neutral studio lighting, minimal grounding shadow, clear materials and silhouette.
+Constraints: identical hair, anatomy, garment shapes, colors and footwear across both views. No props, no platform scenery, no logos, no text, no watermark, no dramatic shadows, no cropped body parts.
+Critical layout correction: the two figures must each occupy a separate non-overlapping panel with large clear space between ALL fingertips. Make each figure smaller to fully fit. Both left and right hands must be completely visible on BOTH figures. No merging, fading, erasing or occluding any hand or forearm. Preserve this character design.

@@ -49,6 +49,13 @@ export async function startServer(cfg: ServerConfig): Promise<RunningServer> {
   app.get('/healthz', (c) => c.json({ ok: true, players: world.humanCount, agents: world.agentCount, uptimeSeconds: Math.round((Date.now() - started) / 1000) }));
   if (cfg.staticDir && existsSync(cfg.staticDir)) {
     const root = cfg.staticDir;
+    // Vite's build output: names carry a content hash, so a file there never changes. Not the
+    // index.html fallback for a missing file. (serveStatic's onFound runs after the response
+    // is built, too late to add headers.)
+    app.use('/assets/*', async (c, next) => {
+      await next();
+      if (c.res.ok && !c.res.headers.get('Content-Type')?.startsWith('text/html')) c.res.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    });
     app.use('/*', serveStatic({ root }));
     app.get('*', serveStatic({ root, path: 'index.html' }));
   }

@@ -4,8 +4,9 @@ import { LightProbeGridNode } from 'three/addons/tsl/lighting/LightProbeGridNode
 import { DIMS } from '@ocean-home/shared';
 
 // Each probe renders the scene six times (a cube map), all on the GPU: 15 a frame stalled
-// the next frame about 100 ms. 4 keeps a chunk near 25 ms; the whole grid is still ~34 frames.
-const PER_FRAME = 4;
+// the next frame about 100 ms. In the running game 4 a frame still made frames of 30–110 ms
+// (1440p High); 1 keeps them near 11 ms (at most ~30 ms), and the whole grid takes 135 frames.
+const PER_FRAME = 1;
 const MIN_INTERVAL_MS = 20_000;
 
 /**

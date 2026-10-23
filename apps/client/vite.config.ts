@@ -24,6 +24,13 @@ export default defineConfig({
         main: resolve(import.meta.dirname, 'index.html'),
         viewer: resolve(import.meta.dirname, 'viewer.html'),
       },
+      // Rapier inlines its WASM as ~4 MB of base64: a chunk of its own keeps that cached
+      // across deploys instead of riding along with every change to the game's code.
+      output: {
+        codeSplitting: {
+          groups: [{ name: 'rapier', test: /[\\/]@dimforge[\\/]rapier3d-compat[\\/]/ }],
+        },
+      },
     },
   },
 });

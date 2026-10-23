@@ -74,5 +74,6 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, camera: C
     out = add(out, b).add(flare.mul(0.08));
   }
   pipeline.outputNode = out;
-  return pipeline;
+  // The scene pass too, so its pipelines can be compiled before the first frame.
+  return Object.assign(pipeline, { scenePass });
 }

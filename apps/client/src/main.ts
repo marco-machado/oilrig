@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import { Euler, NeutralToneMapping, PerspectiveCamera, type PointLight, Quaternion, Scene, Timer, Vector3, WebGPURenderer } from 'three/webgpu';
+import { Euler, type Light, NeutralToneMapping, type Object3D, PerspectiveCamera, type PointLight, Quaternion, REVISION, Scene, Timer, Vector3, WebGPURenderer } from 'three/webgpu';
 import { SunLight } from 'three/addons/lights/SunLight.js';
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js';
 import { StableClusteredLighting } from './render/stableClusteredLighting.ts';
@@ -727,8 +727,48 @@ async function boot() {
   });
 
   const pipeline = createPipeline(renderer, scene, camera, q);
+
+  /**
+   * Compiles the pipelines of the first frames behind the loading screen, in the background and
+   * in parallel. Built by the first frames instead, one at a time on the GPU's main thread, they
+   * froze a cold start (shaders new to the GPU) for ~20 s. Needs three r187: r186 compiles one
+   * object at a time and its post-processing pass rebuilds everything anyway.
+   * See docs/startup-shader-compile.md.
+   */
+  async function precompile() {
+    const now = Date.now();
+    const gms = gameNow(now, 0);
+    const celestial = celestialAt(gms);
+    const weather = { ...localWeather.sample(gms, now), ...dbg.weather };
+    // The environment map, sun and lamps as the first frame will have them.
+    atmosphere.update(0, camera.position, celestial, weather);
+    lights.update(0);
+    // Everything, not only what the boot camera sees: the drone, for one, starts hidden.
+    const saved: Array<[Object3D, boolean, boolean]> = [];
+    scene.traverse((o) => {
+      saved.push([o, o.frustumCulled, o.visible]);
+      o.frustumCulled = false;
+      if (!(o as Light).isLight) o.visible = true;
+    });
+    try {
+      if (!off.has('probes')) {
+        await interior.compileAsync();
+        // Once baked, the grid takes part in every lit shader: bake its first probe now, so the
+        // scene compiles against the grid the first frame sees.
+        interior.update(sunDir.set(...celestial.sunDirection), weather.cloudCover);
+      }
+      await pipeline.scenePass.compileAsync(renderer);
+    } finally {
+      for (const [o, culled, visible] of saved) {
+        o.frustumCulled = culled;
+        o.visible = visible;
+      }
+    }
+  }
+
   await setLoading('Compiling shaders…', 0.65);
-  await renderer.compileAsync(scene, camera);
+  if (Number.parseInt(REVISION, 10) >= 187) await precompile();
+  else await renderer.compileAsync(scene, camera);
   await setLoading('Warming up the ocean and lighting…', 0.9);
   const timer = new Timer();
   timer.connect(document);
@@ -787,11 +827,7 @@ async function boot() {
 
     const realNow = online ? net.serverNow() : Date.now();
     const renderT = realNow - 110;
-    let gms = gameTime(clock, realNow);
-    if (dbg.hour !== undefined) {
-      const day = dbg.date ?? Math.floor(gms / 86400000) * 86400000;
-      gms = day + ((dbg.hour - WORLD.longitude / 15 + 24) % 24) * 3600000 + simTime * 1000 * dbg.timeScale;
-    }
+    const gms = gameNow(realNow, simTime);
     // Weather: the server's (eased between its once-a-second updates) or the local one.
     const target = online && serverWeather ? serverWeather : localWeather.sample(gms, Date.now());
     if (!shownWeather) shownWeather = { ...target };
@@ -1035,6 +1071,14 @@ async function boot() {
     prof.endFrame();
     if (stats.frames === 3) hideLoading();
   });
+
+  /** Game time (ms): the shared clock's, or a time of day fixed in the URL. */
+  function gameNow(realNow: number, simTime: number): number {
+    const gms = gameTime(clock, realNow);
+    if (dbg.hour === undefined) return gms;
+    const day = dbg.date ?? Math.floor(gms / 86400000) * 86400000;
+    return day + ((dbg.hour - WORLD.longitude / 15 + 24) % 24) * 3600000 + simTime * 1000 * dbg.timeScale;
+  }
 
   function promptFor(focus: string | null, liftNow: ReturnType<typeof elevatorPose>): string | null {
     if (!focus) return null;

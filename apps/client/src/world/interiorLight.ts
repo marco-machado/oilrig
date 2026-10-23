@@ -1,5 +1,17 @@
-import { type Object3D, type Scene, Vector3, type WebGPURenderer } from 'three/webgpu';
+import {
+  ArrayCamera,
+  HalfFloatType,
+  NearestFilter,
+  type Object3D,
+  PerspectiveCamera,
+  RenderTarget,
+  type Scene,
+  Vector3,
+  Vector4,
+  type WebGPURenderer,
+} from 'three/webgpu';
 import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js';
+import { replaceSunLights, restoreSunLights } from 'three/addons/lighting/LightProbeGridUtils.js';
 import { LightProbeGridNode } from 'three/addons/tsl/lighting/LightProbeGridNode.js';
 import { DIMS } from '@ocean-home/shared';
 
@@ -8,6 +20,15 @@ import { DIMS } from '@ocean-home/shared';
 // (1440p High); 1 keeps them near 11 ms (at most ~30 ms), and the whole grid takes 135 frames.
 const PER_FRAME = 1;
 const MIN_INTERVAL_MS = 20_000;
+const BAKE = { cubemapSize: 16, near: 0.05, far: 80 };
+/** three r187 captures 8 probes per render: 8 × 6 cube faces of one ArrayCamera. */
+const PROBES_PER_CAPTURE = 8;
+
+/** The parts of three's LightProbeGrid the precompile copies (private in r187). */
+interface BakeInternals {
+  _updateBounceGrid(renderer: WebGPURenderer, scene: Scene, pass: number, start: number): void;
+  _bounceGrid: Object3D | null;
+}
 
 /**
  * Bounce light inside the pavilion from a grid of irradiance probes. The grid is
@@ -24,6 +45,7 @@ export class InteriorLight {
   private readonly lastSun = new Vector3(0, -1, 0);
   private lastCloud = -1;
   private lastBake = -Infinity;
+  private compileTarget: RenderTarget | null = null;
 
   constructor(renderer: WebGPURenderer, scene: Scene, hiddenDuringBake: Object3D[]) {
     this.renderer = renderer;
@@ -47,6 +69,50 @@ export class InteriorLight {
     scene.add(this.grid);
   }
 
+  /**
+   * Builds the bake's pipelines in the background, before the first bake. The bake lights the
+   * scene differently (the sun swapped for a directional light, this grid hidden and an unlit
+   * copy of it added for bounce light), so it needs pipelines of its own: built by the first
+   * bake, one at a time, they froze a cold start for ~17 s. This copies three r187's capture
+   * setup (see docs/startup-shader-compile.md); if three changes it, the bake compiles its own
+   * pipelines again, slowly but correctly.
+   */
+  async compileAsync() {
+    const size = BAKE.cubemapSize;
+    this.compileTarget ??= new RenderTarget(6 * size, PROBES_PER_CAPTURE * size, {
+      type: HalfFloatType,
+      minFilter: NearestFilter,
+      magFilter: NearestFilter,
+      generateMipmaps: false,
+    });
+    const faces: PerspectiveCamera[] = [];
+    for (let i = 0; i < PROBES_PER_CAPTURE * 6; i++) {
+      const face = new PerspectiveCamera(90, 1, BAKE.near, BAKE.far);
+      face.viewport = new Vector4((i % 6) * size, Math.floor(i / 6) * size, size, size);
+      face.position.copy(this.grid.position);
+      face.updateMatrixWorld();
+      faces.push(face);
+    }
+    const grid = this.grid as unknown as BakeInternals;
+    const visibility = this.hidden.map((o) => o.visible);
+    for (const o of this.hidden) o.visible = false;
+    const gridVisible = this.grid.visible;
+    this.grid.visible = false;
+    grid._updateBounceGrid(this.renderer, this.scene, 0, 0);
+    const replaced = replaceSunLights(this.scene);
+    const target = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(this.compileTarget);
+    try {
+      await this.renderer.compileAsync(this.scene, new ArrayCamera(faces));
+    } finally {
+      this.renderer.setRenderTarget(target);
+      if (replaced) restoreSunLights(this.scene, replaced);
+      grid._bounceGrid?.removeFromParent();
+      this.grid.visible = gridVisible;
+      this.hidden.forEach((o, i) => (o.visible = visibility[i]));
+    }
+  }
+
   /** Describes the probes baked this frame (range and time), or null when none were. */
   update(sunDir: Vector3, cloudCover: number): string | null {
     const now = performance.now();
@@ -64,7 +130,7 @@ export class InteriorLight {
     for (const o of this.hidden) o.visible = false;
     const t0 = performance.now();
     try {
-      this.grid.bake(this.renderer, this.scene, { start, count, cubemapSize: 16, near: 0.05, far: 80 });
+      this.grid.bake(this.renderer, this.scene, { start, count, ...BAKE });
     } finally {
       this.hidden.forEach((o, i) => (o.visible = visibility[i]));
     }

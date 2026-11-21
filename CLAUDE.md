@@ -1,0 +1,90 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Ocean Home: a first-person multiplayer WebGPU world (a home on an offshore platform). Three.js r187 (`WebGPURenderer` + TSL), Rapier physics, recast-navigation, served by a Cloudflare Worker with Durable Objects. pnpm workspace, Node >= 24, TypeScript 7. The README covers features, controls, the REST/MCP API, accounts and the Worker's variables in detail; read the relevant section there before changing those areas.
+
+## Commands
+
+```bash
+pnpm dev                          # client + Worker (in workerd) on http://localhost:5173
+ALLOW_SIGNUPS=true pnpm dev       # sign-ups are closed by default; open them to make a local account at /signup
+pnpm build && pnpm preview        # production build, served by the built Worker
+pnpm typecheck                    # cf-typegen, then tsc for root, client, server and both test projects
+pnpm test                         # all Vitest projects
+pnpm test:unit                    # Node project (tests/unit)
+pnpm test:workers                 # real Worker + Durable Objects in workerd (tests/workers)
+pnpm test:render                  # Playwright: every quality preset renders with no console/WebGPU errors
+pnpm test:auth                    # Playwright: accounts end to end
+pnpm perf                         # frame times from six viewpoints (PERF_QUALITY=ultra for another preset)
+pnpm screenshots                  # writes PNG captures to docs/screenshots (gitignored; the README uses .webp copies)
+pnpm deploy                       # build + wrangler deploy
+```
+
+A single test file, or a single test by name:
+
+```bash
+pnpm vitest run --project unit tests/unit/weather.test.ts -t "physical bounds"
+pnpm exec playwright test tests/e2e/render.spec.ts -g "tender"
+```
+
+There is no lint script; `pnpm typecheck` is the static check.
+
+- Any Worker variable in `apps/server/wrangler.jsonc` (`vars`) can be overridden from the environment in dev only (`DRONE_STAY_MINUTES=4 pnpm dev`). After editing `wrangler.jsonc`, run `pnpm cf-typegen`: `worker-configuration.d.ts` is gitignored and `tsc -p apps/server` needs it.
+- Wrangler is a dependency of the client package: `pnpm --filter @ocean-home/client exec wrangler …`. Dev Durable Object state lives in `apps/client/.wrangler`.
+- A second dev server beside the first needs its own port, state and inspector port (`CLIENT_PORT`, `CF_STATE`, `CF_INSPECTOR_PORT`); `.claude/launch.json` has `client` (5173) and `client-alt` (5180, sign-ups open) set up.
+- The `workers` Vitest project overrides bindings (`vitest.config.ts`): sign-ups open, weather seed 5, drone away for the whole run.
+- Playwright uses the installed Chrome with WebGPU flags and starts its own dev servers on 5174 (sign-ups open) and 5175 (closed), with empty state. `PW_BASE_URL` points it at another server instead.
+- `scripts/*.ts` run directly under Node (`pnpm bot`, `pnpm sfx`, `pnpm trace:report`).
+
+## Architecture
+
+### `packages/shared` is the single source of truth
+
+Client and server both import `@ocean-home/shared` (source `.ts`, no build step). The world is **data**: `layout/` builds every beam, deck, stair, rail, door, piece of furniture, place and zone once (`getLayout()`), each with a semantic `id`/`kind`. Everything else derives from it:
+
+- `physics/colliders.ts` builds the Rapier world from the layout (`buildStaticWorld`); the server's navmesh is generated from those colliders' triangles; the client's meshes (`apps/client/src/world/structure.ts`) are built from the same elements.
+- `physics/motor.ts` (`CharacterMotor`) is the one character controller: the browser predicts with it, the server simulates agents with it, the tests walk routes with it.
+- `sim/` holds deterministic models evaluated identically on both sides from the shared clock: astronomy, seeded weather, the drone (schedule, flight model, autopilot), the elevator timeline.
+- `protocol/` is the zod schemas for the WebSocket messages (`PROTOCOL_VERSION`) and accounts.
+
+So a change to geometry or movement belongs in `shared`, not in the client or server; dimensions live in `layout/dims.ts`.
+
+### Server (`apps/server`)
+
+- `worker.ts` is a thin Hono front: `/auth/*`, the session check on `/ws` (it passes identity to the World DO in a header that it strips from incoming requests), and forwarding of `/api/*`, `/mcp`, `/healthz`. Static assets are served without running the Worker except on the paths in `run_worker_first`.
+- Three Durable Objects (SQLite): `WorldDO` (one instance, "world": sockets via the Hibernation API, chat, API keys, saved time/weather/doors), `UserDO` (one per account), `DirectoryDO` (one instance: username and display-name registry).
+- `WorldDO` is a shell around `WorldRuntime` (`world/runtime.ts`), which takes Rapier, Recast, config and a store as options and has no Cloudflare dependencies. Unit tests in Node build a `World` with `MemoryWorldStore` (`tests/unit/helpers.ts`); the DO supplies `SqlWorldStore`. Keep world logic in `world/`, `agents/` and `api/`, not in `do/`.
+- The runtime's clocks run only while a person is aboard, an agent is out or an SSE stream is open; a heartbeat alarm keeps the DO in memory meanwhile. `/healthz` must not boot the world.
+- **Authority model:** people send poses, and `world/validation.ts` accepts them only if physically plausible (Rapier shape casts), otherwise it sends a correction. Agents are simulated by the server at 60 Hz with the same motor and need no validation. The drone's pilot runs the flight model in the browser and streams poses; the server rejects impossible jumps.
+- `api/service.ts` (`ApiService`) holds the operations behind both the REST endpoints (`api/rest.ts`, OpenAPI from the zod schemas) and the MCP tools (`api/mcp.ts`). Add behaviour there so both stay alike. An in-process event bus feeds SSE and the agents' inboxes.
+- **WASM in Workers:** Workers cannot compile WASM from bytes. `vite-wasm.ts` resolves `virtual:oh/*.wasm` to `?module` imports (server environment only) and `src/wasm/workerd.ts` hands the precompiled modules to Rapier and Recast. The same plugin is used by the client's Vite config and by the `workers` Vitest project.
+
+### Client (`apps/client`)
+
+Vite app with three entries: the game (`index.html` → `src/main.ts`), the sign-up page and a standalone object viewer (`viewer.html`). The Cloudflare Vite plugin runs the Worker alongside. `main.ts` wires everything and owns the frame loop and the startup precompile; `state.ts` exports `U`, the global TSL uniforms shared by materials, sky, ocean and weather; `render/pipeline.ts` is the post-processing chain; `debug.ts` parses the debug URL parameters.
+
+## Conventions
+
+- Imports carry the `.ts` extension. `erasableSyntaxOnly` is on (no enums, no constructor parameter properties) and so is `verbatimModuleSyntax` (`import type` / inline `type`).
+- Three is imported from `three/webgpu`, `three/tsl` and `three/addons/…`, never bare `three`.
+- No AI attribution anywhere: commit messages, PR titles and bodies, issues, comments and code carry no "Generated with", `Co-Authored-By` or similar line naming an AI tool or model.
+- Tests are behaviour tests with no mocks: they drive the real motor, the real Rapier world and the real Worker. Workers tests go through `SELF.fetch` (`tests/workers/helpers.ts`).
+
+## Rendering rules that are easy to break
+
+From `docs/postmortem-stutter.md` and `docs/startup-shader-compile.md` (both partly describe three r186; check the code before relying on a detail):
+
+- **Never change anything that is part of the lit-shader cache key at run time.** Toggling a light's `visible` or `castShadow` rebuilds every lit material's shader (0.5 to 3 s freezes), and the `castShadow` toggle also corrupted the renderer's MRT state. Lights change `intensity` only; the sun keeps `castShadow = true` and uses `shadow.intensity` / `shadow.autoUpdate`.
+- **Two pieces depend on three's internals and fail silently on upgrade:** `render/stableClusteredLighting.ts` overrides private methods of `ClusteredLightsNode` (a stale override just stops running, and aimed downlights then light the ceiling), and `InteriorLight.compileAsync()` mirrors the internals of `LightProbeGrid.bake()` (a mismatch means a slow cold start, no error). The startup doc has the upgrade checklist.
+- Aimed downlights and floods are clustered **point** lights with `userData.aim` / `userData.cone`, not spot lights.
+- `precompile()` in `main.ts` must see the scene as the first frame will: a new object that starts hidden, or a new render path with its own light set, needs to be covered there or it compiles on the first frame.
+
+## Verifying client changes
+
+- Fixed scenes by URL: `?offline&cam=ref&date=2026-12-21&hour=8.4&weather=storm&q=ultra` (camera, weather and drone-phase names are in `debug.ts` and the README's "Visual debug URLs"). `?perf` enables GPU timing and frame-gap logs; `?off=ao,bloom,traa,ssr,shadows,ocean,grass,rain,labels,probes` switches features off; `fixedres` turns automatic resolution off.
+- `window.__oceanHome` exposes state for checks (`stats.frames`, `perf.report()`, `tender.state`, …); the Playwright specs use it.
+- The desktop app's browser pane refuses pointer lock, so the game cannot be played there: verify with `?offline&cam=…` URLs and `__oceanHome`, or with Playwright.
+- Any edit to a client source file reloads the page; do not edit client files while someone is in a test session.

@@ -1,0 +1,88 @@
+# Cloud environment
+
+How the "Oilrig" cloud environment for Claude Code sessions (claude.ai/code) is set up, what works in it and what does not. The environment itself is stored on claude.ai, not in this repository: its setup script and variables are edited under the project's settings, Cloud environment, the gear beside "Oilrig". This file is the reference copy, so the environment can be rebuilt from it. When the script changes there, update it here too.
+
+## What a session gets
+
+| Step | State in a cloud session |
+| --- | --- |
+| Node | 24 (`node -v`), as `package.json` requires. The image defaults to Node 22 |
+| `pnpm install --frozen-lockfile` | done by the setup script before the session starts |
+| `pnpm typecheck` | passes; `worker-configuration.d.ts` is already generated |
+| `pnpm test` (unit and workers) | passes: 19 files, 126 tests, about a minute |
+| `pnpm build` | passes |
+| `pnpm dev`, `pnpm preview` | start; the world itself needs WebGPU to draw (see below) |
+| `pnpm test:render`, `pnpm perf`, `pnpm trace`, `pnpm screenshots` | do not work: no GPU |
+| `pnpm test:auth` | partly: the account flow passes, the check that waits for the world to load times out |
+| `pnpm deploy` | not set up: the environment holds no Cloudflare credentials, on purpose |
+
+## The Playwright suites need a real GPU
+
+The container has no GPU. Its Chrome (`channel: 'chrome'` resolves to the image's Chrome for Testing) only offers WebGPU through software renderers, and neither is good enough for this world:
+
+- With the flags in `playwright.config.ts`, the adapter is SwiftShader and the device is lost during startup ("WebGPU Device Lost"), so every render test fails on its console-error check.
+- With Mesa's lavapipe as the Vulkan driver (`VK_ICD_FILENAMES=/opt/lavapipe/lvp_icd.json` and `--use-vulkan=native --use-angle=vulkan`), the device survives and there are no errors, but `low` runs at about 200 ms a frame, `high` and `ultra` miss the test's frame budget, the tender's GPU readbacks never arrive and screenshots come out black.
+
+So render, perf, trace and screenshot runs stay on a machine with a GPU (the config's `--use-angle=metal` targets a Mac). In a cloud session, verify client changes with `pnpm typecheck`, the Vitest projects and the build, and say that the Playwright suites were not run. To drive a GPU-backed server from a cloud session, point Playwright at it with `PW_BASE_URL`; the browser still renders in the container, so this does not help the render tests.
+
+## No AI attribution
+
+`CLAUDE.md` forbids attribution lines in commits, PRs, issues, comments and code. Four things enforce it in cloud sessions:
+
+1. `.claude/settings.json` in this repository sets `attribution.commit` and `attribution.pr` to empty strings and `sessionUrl` to `false`, which removes the trailers and footer Claude Code would add. This also covers local sessions.
+2. The setup script writes the same settings to `~/.claude/settings.json`, so they hold even on a branch that predates the repository file.
+3. The setup script installs a global `commit-msg` hook that deletes `Co-Authored-By:` lines naming Claude or Anthropic, `Claude-Session:` lines and "Generated with … Claude" lines from every commit message. Other co-author lines are left alone.
+4. The environment's variables `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` make commits carry the owner's identity instead of the image's default "Claude" author.
+
+The hook cannot see PR titles, PR bodies, issues or review comments: there the settings and the rule in `CLAUDE.md` are what apply.
+
+## Node 24
+
+The image puts `/opt/node22/bin` on `PATH` and also ships Node 24 in `/opt/node24`. `~/.local/bin` comes earlier on `PATH`, so the setup script links `node`, `npm`, `npx` and `corepack` there. pnpm comes from the image and switches itself to the version in `packageManager`. If a future image drops `/opt/node24`, the script skips the links and `node -v` shows 22: install 24 with `nvm install 24` (nvm is in `/opt/nvm`) and update the script.
+
+## Setup script
+
+Runs as root each time a session's container is built fresh, from the directory that holds the checkout. It must not fail, or the session does not start, so the dependency step only prints a message when it goes wrong.
+
+```bash
+#!/bin/bash
+# Cloud environment setup for marco-machado/oilrig. Documented in docs/cloud-environment.md.
+
+# 1. No AI attribution (CLAUDE.md, Conventions): empty attribution lines for commits and PRs.
+mkdir -p ~/.claude
+cat > ~/.claude/settings.json <<'EOF'
+{
+  "attribution": { "commit": "", "pr": "", "sessionUrl": false }
+}
+EOF
+
+# 2. Backstop: strip attribution lines from every commit message.
+mkdir -p ~/.githooks
+cat > ~/.githooks/commit-msg <<'EOF'
+#!/bin/sh
+sed -i -E '/^Co-Authored-By:.*(Claude|Anthropic)/Id; /^Claude-Session:/Id' "$1"
+sed -i -E '/Generated with .*Claude/Id' "$1"
+EOF
+chmod +x ~/.githooks/commit-msg
+git config --global core.hooksPath ~/.githooks
+
+# 3. Node 24 (package.json engines). The image defaults to Node 22 and ships 24 in /opt/node24.
+#    ~/.local/bin comes before the image's Node on PATH, so these links win.
+if [ -x /opt/node24/bin/node ]; then
+  mkdir -p ~/.local/bin
+  for b in node npm npx corepack; do ln -sf /opt/node24/bin/$b ~/.local/bin/$b; done
+fi
+export PATH="$HOME/.local/bin:/opt/node22/bin:$PATH"
+
+# 4. Dependencies and the Worker types that tsc needs. Never fail the session start.
+if [ -d oilrig ]; then
+  (cd oilrig && pnpm install --frozen-lockfile && pnpm cf-typegen) || echo "oilrig: dependency setup failed"
+fi
+exit 0
+```
+
+## Environment settings
+
+- Network access: unrestricted (the npm registry, and Cloudflare's endpoints for `wrangler types`, must be reachable).
+- Variables: the four `GIT_*` identity variables above, and `GITHUB_TOKEN`.
+- Repositories: `marco-machado/oilrig`.

@@ -39,6 +39,14 @@ There is no lint script; `pnpm typecheck` is the static check.
 - Playwright uses the installed Chrome with WebGPU flags and starts its own dev servers on 5174 (sign-ups open) and 5175 (closed), with empty state. `PW_BASE_URL` points it at another server instead.
 - `scripts/*.ts` run directly under Node (`pnpm bot`, `pnpm sfx`, `pnpm trace:report`).
 
+## Cloud sessions
+
+In a Claude Code cloud session (claude.ai/code) the "Oilrig" environment has already put Node 24 on `PATH`, installed dependencies and generated `worker-configuration.d.ts`; `docs/cloud-environment.md` has the setup script and the details.
+
+- `pnpm typecheck`, `pnpm test` and `pnpm build` work there. The Playwright suites (`test:render`, `perf`, `trace`, `screenshots`, most of `test:auth`) do not: the container has no GPU and software WebGPU cannot run this world. Do not report them as run; say they need a machine with a GPU.
+- There are no Cloudflare credentials: `pnpm deploy` is not available.
+- The no-attribution rule under Conventions is enforced by `.claude/settings.json` and a `commit-msg` hook, and commits carry the owner's git identity. PR and issue text is not covered by the hook, so the rule still has to be followed by hand there.
+
 ## Architecture
 
 ### `packages/shared` is the single source of truth

@@ -10,3 +10,6 @@ playwright-report
 .wrangler
 .dev.vars*
 worker-configuration.d.ts
+
+# Verification captures from `pnpm screenshots`; the README uses the committed .webp copies.
+docs/screenshots/*.png

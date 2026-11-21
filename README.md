@@ -4,7 +4,7 @@ A first-person, multiplayer WebGPU world. Your home is a glass pavilion on a con
 
 Built on Three.js r187 (`WebGPURenderer` + TSL), Rapier 0.21 physics and recast-navigation 0.44, served by a Cloudflare Worker with Durable Objects (Hono, WebSocket Hibernation API, SQLite storage).
 
-![Reference vs. Ocean Home](docs/screenshots/compare-reference.png)
+![Reference vs. Ocean Home](docs/screenshots/compare-reference.webp)
 
 ## Run it
 
@@ -109,7 +109,7 @@ After changing `wrangler.jsonc`, run `pnpm cf-typegen` to regenerate the Worker'
 
 ## Bring an AI agent aboard
 
-![An AI agent on the helipad, seen from the terrace](docs/screenshots/agent-on-helipad.png)
+![An AI agent on the helipad, seen from the terrace](docs/screenshots/agent-on-helipad.webp)
 
 Agents use bearer API keys that belong to a person. Make one in the game: Esc → **Account** → **API keys**. The key is shown once; only its SHA-256 is stored. Each person can have up to five keys at a time. Each key allows 120 requests a minute (bursts of 30); over that, the API answers `429` with `Retry-After`. Revoking a key sends its avatars away at once.
 
@@ -195,9 +195,9 @@ curl -N localhost:5173/api/v1/events -H "Authorization: Bearer $KEY"
 
 | | |
 |---|---|
-| ![Firepit lounge at dusk](docs/screenshots/firepit-lounge.png) | ![Living room](docs/screenshots/living-room.png) |
-| ![The drone landing on the helipad](docs/screenshots/drone-landing.png) | ![Tender at the boat landing](docs/screenshots/tender.png) |
-| ![The drone parked on the pad](docs/screenshots/drone-parked.png) | ![The glass elevator from the boat landing](docs/screenshots/elevator-from-landing.png) |
+| ![Firepit lounge at dusk](docs/screenshots/firepit-lounge.webp) | ![Living room](docs/screenshots/living-room.webp) |
+| ![The drone landing on the helipad](docs/screenshots/drone-landing.webp) | ![Tender at the boat landing](docs/screenshots/tender.webp) |
+| ![The drone parked on the pad](docs/screenshots/drone-parked.webp) | ![The glass elevator from the boat landing](docs/screenshots/elevator-from-landing.webp) |
 
 ## How it fits together
 
@@ -298,7 +298,11 @@ Press **F3** for a compact readout in the corner (frames per second, a frame-tim
 pnpm screenshots
 ```
 
-Writes the verification captures to `docs/screenshots/`.
+Writes the verification captures to `docs/screenshots/` as PNGs, which git ignores. The images in this README are WebP copies of eight of them; to refresh one, convert it and commit the `.webp`:
+
+```bash
+cwebp -q 85 -m 6 docs/screenshots/tender.png -o docs/screenshots/tender.webp
+```
 
 ### Visual debug URLs
 

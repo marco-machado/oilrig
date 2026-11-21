@@ -73,7 +73,7 @@ So a change to geometry or movement belongs in `shared`, not in the client or se
 
 ### Client (`apps/client`)
 
-Vite app with three entries: the game (`index.html` → `src/main.ts`), the sign-up page and a standalone object viewer (`viewer.html`). The Cloudflare Vite plugin runs the Worker alongside. `main.ts` wires everything and owns the frame loop and the startup precompile; `state.ts` exports `U`, the global TSL uniforms shared by materials, sky, ocean and weather; `render/pipeline.ts` is the post-processing chain; `debug.ts` parses the debug URL parameters.
+Vite app with three entries: the game (`index.html` → `src/main.ts`), the sign-up page and a standalone object viewer (`viewer.html`). The Cloudflare Vite plugin runs the Worker alongside. `main.ts` only wires the game together; its parts are in `src/game/`: `stage.ts` builds the renderer, the scene and the world, `game.ts` (`Game`) holds the state they share (what the server last said, and the local stand-ins offline), `session.ts` is coming aboard, leaving and the UI's handlers, `messages.ts` the server's messages, `droneSeat.ts` boarding and flying the drone, `interact.ts` the E key, `precompile.ts` the startup precompile and `frame.ts` the frame loop; `state.ts` exports `U`, the global TSL uniforms shared by materials, sky, ocean and weather; `render/pipeline.ts` is the post-processing chain; `debug.ts` parses the debug URL parameters.
 
 ## Conventions
 
@@ -89,7 +89,7 @@ From `docs/postmortem-stutter.md` and `docs/startup-shader-compile.md` (both par
 - **Never change anything that is part of the lit-shader cache key at run time.** Toggling a light's `visible` or `castShadow` rebuilds every lit material's shader (0.5 to 3 s freezes), and the `castShadow` toggle also corrupted the renderer's MRT state. Lights change `intensity` only; the sun keeps `castShadow = true` and uses `shadow.intensity` / `shadow.autoUpdate`.
 - **Two pieces depend on three's internals and fail silently on upgrade:** `render/stableClusteredLighting.ts` overrides private methods of `ClusteredLightsNode` (a stale override just stops running, and aimed downlights then light the ceiling), and `InteriorLight.compileAsync()` mirrors the internals of `LightProbeGrid.bake()` (a mismatch means a slow cold start, no error). The startup doc has the upgrade checklist.
 - Aimed downlights and floods are clustered **point** lights with `userData.aim` / `userData.cone`, not spot lights.
-- `precompile()` in `main.ts` must see the scene as the first frame will: a new object that starts hidden, or a new render path with its own light set, needs to be covered there or it compiles on the first frame.
+- `precompile()` in `game/precompile.ts` must see the scene as the first frame will: a new object that starts hidden, or a new render path with its own light set, needs to be covered there or it compiles on the first frame.
 
 ## Verifying client changes
 

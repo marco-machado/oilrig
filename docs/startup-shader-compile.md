@@ -44,7 +44,7 @@ Still open, and not needed here: [#35168](https://github.com/mrdoob/three.js/pul
 
 ## The fix
 
-`precompile()` in `main.ts` runs during "Compiling shaders", when three is r187 or later. Each step fixes one of the mismatches above:
+`precompile()` in `game/precompile.ts` runs during "Compiling shaders", when three is r187 or later. Each step fixes one of the mismatches above:
 
 1. It updates the atmosphere and lights once, so the environment map, sun and lamps are as the first frame will have them.
 2. It makes every object visible and turns frustum culling off, so the hidden drone and objects outside the boot camera are compiled too.

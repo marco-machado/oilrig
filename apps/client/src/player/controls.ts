@@ -7,7 +7,15 @@ export interface ControlSettings {
   invertY: boolean;
 }
 
-/** Keyboard, mouse (pointer lock) and gamepad input for first-person movement. */
+export type TouchAction = 'jump' | 'interact' | 'home';
+
+/**
+ * Keyboard, mouse (pointer lock), gamepad and touch input for first-person movement.
+ *
+ * On a touch screen there is no pointer lock: `touch` makes `lock()` and `unlock()` switch a
+ * flag instead, so the rest of the game (menu, chat) follows the same "locked" state, and
+ * TouchControls (touch.ts) feeds the stick, the look drags and the buttons in here.
+ */
 export class Controls {
   yaw = 0;
   pitch = 0;
@@ -20,6 +28,11 @@ export class Controls {
   private padPrev = { jump: false, interact: false, home: false };
   private readonly element: HTMLElement;
   onPointerLockChange: ((locked: boolean) => void) | null = null;
+  /** A touch screen: no pointer lock, input comes from the on-screen controls. */
+  touch = false;
+  private touchLocked = false;
+  private readonly stick = { forward: 0, right: 0, run: false };
+  private touchClimb = 0;
 
   constructor(element: HTMLElement) {
     this.element = element;
@@ -37,11 +50,8 @@ export class Controls {
     document.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
     document.addEventListener('mousemove', (e) => {
-      if (!this.locked) return;
-      const s = 0.0022 * this.settings.sensitivity;
-      this.yaw -= e.movementX * s;
-      this.pitch -= e.movementY * s * (this.settings.invertY ? -1 : 1);
-      this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
+      if (this.touch || !this.locked) return;
+      this.look(e.movementX * 0.0022, e.movementY * 0.0022);
     });
     document.addEventListener('pointerlockchange', () => {
       if (!this.locked) this.keys.clear();
@@ -50,10 +60,53 @@ export class Controls {
   }
 
   get locked() {
-    return document.pointerLockElement === this.element;
+    return this.touch ? this.touchLocked : document.pointerLockElement === this.element;
+  }
+
+  /** Turns the view by an angle in radians (before the sensitivity setting). */
+  look(dx: number, dy: number) {
+    const s = this.settings.sensitivity;
+    this.yaw -= dx * s;
+    this.pitch -= dy * s * (this.settings.invertY ? -1 : 1);
+    this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
+  }
+
+  /** The on-screen stick: forward and right in -1..1. */
+  setStick(forward: number, right: number, run: boolean) {
+    this.stick.forward = forward;
+    this.stick.right = right;
+    this.stick.run = run;
+  }
+
+  /** The on-screen climb and descend buttons of the drone: -1, 0 or 1. */
+  setClimb(up: number) {
+    this.touchClimb = up;
+  }
+
+  /** An on-screen button, as one press of its key. */
+  press(action: TouchAction) {
+    if (!this.enabled) return;
+    if (action === 'jump') this.jumpQueued = true;
+    else if (action === 'interact') this.interactQueued = true;
+    else this.homeQueued = true;
+  }
+
+  private setTouchLocked(locked: boolean) {
+    if (this.touchLocked === locked) return;
+    this.touchLocked = locked;
+    if (!locked) {
+      this.keys.clear();
+      this.setStick(0, 0, false);
+      this.touchClimb = 0;
+    }
+    this.onPointerLockChange?.(locked);
   }
 
   lock() {
+    if (this.touch) {
+      this.setTouchLocked(true);
+      return;
+    }
     // Pointer lock can be refused (no recent user gesture, document not focused); the
     // next click on the canvas tries again, so failures are ignored here.
     const attempt = (opts?: object) => {
@@ -69,7 +122,8 @@ export class Controls {
   }
 
   unlock() {
-    if (this.locked) document.exitPointerLock();
+    if (this.touch) this.setTouchLocked(false);
+    else if (this.locked) document.exitPointerLock();
   }
 
   private gamepad(): Gamepad | null {
@@ -86,6 +140,7 @@ export class Controls {
     if (this.enabled) {
       if (k.has('Space')) up += 1;
       if (k.has('ShiftLeft') || k.has('ShiftRight') || k.has('KeyC')) up -= 1;
+      up += this.touchClimb;
       const pad = this.gamepad();
       if (pad) up += (pad.buttons[7]?.value ?? 0) - (pad.buttons[6]?.value ?? 0) + (pad.buttons[0]?.pressed ? 1 : 0) - (pad.buttons[1]?.pressed ? 1 : 0);
     }
@@ -102,8 +157,10 @@ export class Controls {
       if (k.has('KeyS') || k.has('ArrowDown')) forward -= 1;
       if (k.has('KeyD') || k.has('ArrowRight')) right += 1;
       if (k.has('KeyA') || k.has('ArrowLeft')) right -= 1;
+      forward += this.stick.forward;
+      right += this.stick.right;
     }
-    let run = k.has('ShiftLeft') || k.has('ShiftRight');
+    let run = k.has('ShiftLeft') || k.has('ShiftRight') || this.stick.run;
     let jump = this.jumpQueued;
     let interact = this.interactQueued;
     let home = this.homeQueued;

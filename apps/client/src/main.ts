@@ -50,6 +50,7 @@ import { AuthError, auth } from './net/auth.ts';
 import { NetClient, probeServer } from './net/client.ts';
 import { DronePoses } from './net/dronePoses.ts';
 import { Controls } from './player/controls.ts';
+import { TouchControls, wantsTouchControls } from './player/touch.ts';
 import { type Interactable, Player } from './player/player.ts';
 import { createPipeline } from './render/pipeline.ts';
 import { QUALITY, loadQualityName, saveQualityName } from './render/quality.ts';
@@ -90,11 +91,16 @@ const RING: Array<[number, number]> = [
   [0, -2.5],
 ];
 
+/** Shown where the browser has no WebGPU at all; phones need a recent system for it. */
+const NO_WEBGPU = /Android|iPhone|iPad|iPod/.test(navigator.userAgent)
+  ? 'Ocean Home needs WebGPU.<br/><small>On iPhone and iPad that is iOS 26 or later, in any browser. On Android it is a current Chrome on Android 12 or later.</small>'
+  : 'Ocean Home needs WebGPU.<br/>Use a current Chrome or Edge, or Safari 26+.';
+
 async function boot() {
   const app = document.getElementById('app')!;
   if (!('gpu' in navigator)) {
     hideLoading();
-    app.innerHTML = `<div class="fatal">Ocean Home needs WebGPU.<br/>Use a current Chrome or Edge, or Safari 26+.</div>`;
+    app.innerHTML = `<div class="fatal">${NO_WEBGPU}</div>`;
     return;
   }
   const dbg = debugParams();
@@ -116,7 +122,7 @@ async function boot() {
   await renderer.init();
   if (!(renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend) {
     hideLoading();
-    app.innerHTML = `<div class="fatal">WebGPU could not be initialised on this device.</div>`;
+    app.innerHTML = `<div class="fatal">WebGPU could not be started on this device.<br/><small>Its graphics chip or its system may be too old, or the browser has switched WebGPU off for it.</small></div>`;
     return;
   }
   SunLight.registerNode(SunLightNode);
@@ -744,8 +750,21 @@ async function boot() {
   /** P: save the next frame as a picture. */
   let shotWanted = false;
 
+  const openChat = () => {
+    ui.openChat();
+    ui.setCursorFree(false);
+    controls.unlock();
+  };
+  // A touch screen: on-screen stick and buttons, and no pointer lock (see Controls.touch).
+  const touch = wantsTouchControls() ? new TouchControls(controls, renderer.domElement, { onMenu: () => controls.unlock(), onChat: openChat }) : null;
+  controls.touch = touch !== null;
+  if (touch) ui.touchUse = () => controls.press('interact');
+
   // Esc frees the cursor without pausing anything: the toolbar and panels become usable.
-  controls.onPointerLockChange = (locked) => ui.setCursorFree(!locked && joined && !ui.chatOpen);
+  controls.onPointerLockChange = (locked) => {
+    ui.setCursorFree(!locked && joined && !ui.chatOpen);
+    touch?.setActive(locked && joined);
+  };
   renderer.domElement.addEventListener('click', () => {
     if (joined && !ui.overlayVisible) controls.lock();
   });
@@ -754,9 +773,7 @@ async function boot() {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     if (e.code === 'KeyT' || e.code === 'Enter') {
       e.preventDefault();
-      ui.openChat();
-      ui.setCursorFree(false);
-      controls.unlock();
+      openChat();
     }
     if (e.code === 'Tab') {
       e.preventDefault();
@@ -1025,6 +1042,7 @@ async function boot() {
     }
     drone.update(shownPose, dt, under, crew.some((c) => c !== null));
     sound.setDrone(dpose, player.seated ? Math.hypot(dpose.velocity[0], dpose.velocity[1], dpose.velocity[2]) : 0);
+    touch?.setFlying(player.seated);
     ui.setFlight(
       player.seated && mySeat !== null
         ? {

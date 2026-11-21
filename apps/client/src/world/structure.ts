@@ -9,7 +9,7 @@ import {
   Vector3,
 } from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { type BoxElement, DIMS, type Element, type Layout, type MaterialId, type RailElement, type StairElement, type Vec3 } from '@ocean-home/shared';
+import { type BoxElement, DIMS, type Element, type Layout, type MaterialId, type RailElement, type StairElement, type Vec3 } from '@oilrig/shared';
 import type { MaterialSet } from './materials/index.ts';
 
 const UP = new Vector3(0, 1, 0);

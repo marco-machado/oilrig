@@ -5,7 +5,7 @@ import {
   PROTOCOL_VERSION,
   ServerMessage,
   type WelcomeMessage,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 
 type Msg = ServerMessage;
 

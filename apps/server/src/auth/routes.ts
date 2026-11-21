@@ -8,7 +8,7 @@ import {
   RenameRequest,
   SignInRequest,
   SignUpRequest,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import { signupsOpen } from '../config.ts';
 import type { SessionCheck } from '../do/user.ts';
 

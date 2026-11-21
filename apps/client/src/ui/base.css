@@ -1,4 +1,4 @@
-/* Ocean Home design system: fonts, tokens and the loading screen. Linked from index.html so
+/* Oilrig design system: fonts, tokens and the loading screen. Linked from index.html so
    the loader is styled before any script runs; components.css and screens.css build on it. */
 
 @import '@fontsource-variable/instrument-sans/wght.css';

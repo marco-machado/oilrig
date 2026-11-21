@@ -1,6 +1,6 @@
 import { NavMeshQuery, type NavMesh, type Obstacle, type TileCache, init as initRecast } from '@recast-navigation/core';
 import { generateTileCache } from '@recast-navigation/generators';
-import { PLAYER, type StaticWorld, type Vec3, droneBodyBoxes, staticTriangles } from '@ocean-home/shared';
+import { PLAYER, type StaticWorld, type Vec3, droneBodyBoxes, staticTriangles } from '@oilrig/shared';
 
 // Navigation mesh for AI agents, generated from the same colliders the character
 // controller collides with. Doorways are left open (agents open doors as they reach

@@ -1,4 +1,4 @@
-import { MAX_KEYS_PER_USER } from '@ocean-home/shared';
+import { MAX_KEYS_PER_USER } from '@oilrig/shared';
 import { AgentError } from '../agents/manager.ts';
 
 // API keys look like `ohk_<id>_<secret>` and belong to a user. Only a SHA-256 of the whole

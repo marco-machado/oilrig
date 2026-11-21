@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { DIMS, type Vec3 } from '@ocean-home/shared';
+import { DIMS, type Vec3 } from '@oilrig/shared';
 import { type PerceptionContext, Sight, perceivables, perceive } from '../../apps/server/src/agents/perception.ts';
 import type { World } from '../../apps/server/src/world/world.ts';
 import { makeWorld } from './helpers.ts';

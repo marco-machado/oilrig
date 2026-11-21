@@ -1,12 +1,12 @@
 {
-  "name": "@ocean-home/server",
+  "name": "@oilrig/server",
   "private": true,
   "type": "module",
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
     "@hono/zod-openapi": "1.6.3",
     "@modelcontextprotocol/server": "2.4.0",
-    "@ocean-home/shared": "workspace:*",
+    "@oilrig/shared": "workspace:*",
     "@recast-navigation/core": "0.44.0",
     "@recast-navigation/generators": "0.44.0",
     "@recast-navigation/wasm": "0.44.0",

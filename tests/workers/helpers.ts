@@ -1,5 +1,5 @@
 import { SELF } from 'cloudflare:test';
-import { type Account, PROTOCOL_VERSION, type ServerMessage, type WelcomeMessage } from '@ocean-home/shared';
+import { type Account, PROTOCOL_VERSION, type ServerMessage, type WelcomeMessage } from '@oilrig/shared';
 
 // Requests go through the real Worker (SELF): routing, cookies, the Durable Objects.
 

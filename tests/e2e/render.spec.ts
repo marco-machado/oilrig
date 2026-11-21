@@ -14,12 +14,12 @@ for (const q of PRESETS) {
     });
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto(`/?offline&cam=aerial&hour=11&weather=fair&q=${q}`);
-    await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 20, undefined, { timeout: 60_000 });
+    await page.waitForFunction(() => (window as any).__oilrig?.stats.frames > 20, undefined, { timeout: 60_000 });
     expect(await page.locator('.fatal').count()).toBe(0);
-    const f0 = await page.evaluate(() => (window as any).__oceanHome.stats.frames);
+    const f0 = await page.evaluate(() => (window as any).__oilrig.stats.frames);
     const t0 = Date.now();
     await page.waitForTimeout(4000);
-    const f1 = await page.evaluate(() => (window as any).__oceanHome.stats.frames);
+    const f1 = await page.evaluate(() => (window as any).__oilrig.stats.frames);
     const msPerFrame = (Date.now() - t0) / Math.max(1, f1 - f0);
     console.log(`${q}: ${(f1 - f0)} frames in 4 s → ${msPerFrame.toFixed(1)} ms/frame`);
     expect(f1 - f0).toBeGreaterThan(8);
@@ -34,10 +34,10 @@ test('the tender rides the wave heights read back from the GPU', async ({ page }
     if (m.type() === 'error') errors.push(m.text());
   });
   await page.goto('/?offline&cam=tender&hour=11&weather=rain&q=medium');
-  await page.waitForFunction(() => (window as any).__oceanHome?.tender.state.readbacks > 30, undefined, { timeout: 60_000 });
+  await page.waitForFunction(() => (window as any).__oilrig?.tender.state.readbacks > 30, undefined, { timeout: 60_000 });
   const samples: Array<{ heave: number; heights: number[]; readbacks: number }> = [];
   for (let i = 0; i < 24; i++) {
-    samples.push(await page.evaluate(() => (window as any).__oceanHome.tender.state));
+    samples.push(await page.evaluate(() => (window as any).__oilrig.tender.state));
     await page.waitForTimeout(250);
   }
   // Fresh heights keep arriving.
@@ -63,9 +63,9 @@ test('a landing drone spins its rotors and kicks up spray on the deck', async ({
     if (m.type() === 'error') errors.push(m.text());
   });
   await page.goto('/?offline&cam=pad&hour=16&weather=fair&q=medium&drone=descend&droneT=18');
-  await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 20, undefined, { timeout: 60_000 });
+  await page.waitForFunction(() => (window as any).__oilrig?.stats.frames > 20, undefined, { timeout: 60_000 });
   const s = await page.evaluate(() => {
-    const o = (window as any).__oceanHome;
+    const o = (window as any).__oilrig;
     return { visible: o.drone.group.visible, rotor: o.drone.pose.rotor, spray: o.drone.spray.strength.value, alt: o.drone.pose.altitude };
   });
   expect(s.visible).toBe(true);
@@ -77,24 +77,24 @@ test('a landing drone spins its rotors and kicks up spray on the deck', async ({
 
 test('Esc frees the cursor without pausing: the world keeps running and the menu works', async ({ page }) => {
   await page.goto('/?offline&q=low&hour=12&name=Tester');
-  await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 5, undefined, { timeout: 60_000 });
+  await page.waitForFunction(() => (window as any).__oilrig?.stats.frames > 5, undefined, { timeout: 60_000 });
   await page.click('button:has-text("Come aboard")');
   await page.waitForTimeout(800);
   await page.evaluate(() => document.exitPointerLock());
   await expect(page.locator('.oh-rail')).toBeVisible();
-  const f0 = await page.evaluate(() => (window as any).__oceanHome.stats.frames);
+  const f0 = await page.evaluate(() => (window as any).__oilrig.stats.frames);
   await page.waitForTimeout(1000);
-  expect(await page.evaluate(() => (window as any).__oceanHome.stats.frames)).toBeGreaterThan(f0 + 10);
+  expect(await page.evaluate(() => (window as any).__oilrig.stats.frames)).toBeGreaterThan(f0 + 10);
   await page.click('.oh-nav__item:has-text("Time & weather")');
   await page.click('.oh-sheet button:has-text("Fog")');
-  expect(await page.evaluate(() => (window as any).__oceanHome.weatherMode())).toBe('fog');
+  expect(await page.evaluate(() => (window as any).__oilrig.weatherMode())).toBe('fog');
   await page.keyboard.press('F3');
   await expect(page.locator('.oh-perfhud')).toBeVisible();
 });
 
 test('Leave returns to the start screen, and coming back aboard works', async ({ page }) => {
   await page.goto('/?offline&q=low&hour=12&name=Tester');
-  await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 5, undefined, { timeout: 60_000 });
+  await page.waitForFunction(() => (window as any).__oilrig?.stats.frames > 5, undefined, { timeout: 60_000 });
   await page.click('button:has-text("Come aboard")');
   await page.waitForTimeout(800);
   await page.evaluate(() => document.exitPointerLock());
@@ -103,8 +103,8 @@ test('Leave returns to the start screen, and coming back aboard works', async ({
   await page.click('.oh-dialog button:has-text("Leave")');
   await expect(page.locator('.oh-join')).toBeVisible();
   await expect(page.locator('.oh-join__status')).toHaveText('You left the platform.');
-  expect(await page.evaluate(() => (window as any).__oceanHome.ui.joined)).toBe(false);
+  expect(await page.evaluate(() => (window as any).__oilrig.ui.joined)).toBe(false);
   await page.click('button:has-text("Come aboard")');
   await page.waitForTimeout(800);
-  expect(await page.evaluate(() => (window as any).__oceanHome.ui.joined)).toBe(true);
+  expect(await page.evaluate(() => (window as any).__oilrig.ui.joined)).toBe(true);
 });

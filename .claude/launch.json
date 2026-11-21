@@ -4,7 +4,7 @@
     {
       "name": "client",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@ocean-home/client", "dev"],
+      "runtimeArgs": ["--filter", "@oilrig/client", "dev"],
       "port": 5173
     },
     {
@@ -19,7 +19,7 @@
         "DRONE_AWAY_MINUTES=1",
         "pnpm",
         "--filter",
-        "@ocean-home/client",
+        "@oilrig/client",
         "exec",
         "vite",
         "--strictPort"

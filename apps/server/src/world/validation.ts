@@ -1,4 +1,4 @@
-import { PLAYER, type StaticWorld, type Vec3 } from '@ocean-home/shared';
+import { PLAYER, type StaticWorld, type Vec3 } from '@oilrig/shared';
 
 export interface AcceptedPose {
   p: Vec3;

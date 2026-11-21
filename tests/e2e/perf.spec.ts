@@ -11,10 +11,10 @@ const QUALITY = process.env.PERF_QUALITY ?? 'high';
 for (const cam of ['refn', 'deck', 'interior', 'aerial', 'swim', 'pad']) {
   test(`${QUALITY} @1440p from ${cam}`, async ({ page }) => {
     await page.goto(`/?offline&perf&cam=${cam}&hour=11&weather=fair&q=${QUALITY}`);
-    await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 30, undefined, { timeout: 60_000 });
+    await page.waitForFunction(() => (window as any).__oilrig?.stats.frames > 30, undefined, { timeout: 60_000 });
     // Let shader compilation and the light probes settle, then measure a fresh window.
     await page.waitForTimeout(6000);
-    const r = await page.evaluate(() => (window as any).__oceanHome.perf.report());
+    const r = await page.evaluate(() => (window as any).__oilrig.perf.report());
     const sections = r.sections.slice(0, 6).map((s: { name: string; ms: number }) => `${s.name} ${s.ms.toFixed(2)}`).join(', ');
     console.log(
       `PERF ${cam}: ${r.fps.toFixed(1)} fps · frame ${r.frameMs.avg} ms (p95 ${r.frameMs.p95}) · GPU ≥${r.gpu.renderMs ?? '?'} ms render, ≥${r.gpu.computeMs ?? '?'} ms compute · CPU ${r.cpuMs} ms [${sections}] · ${r.renderer.drawCalls} draws, ${(r.renderer.triangles / 1e6).toFixed(2)} M tris`,

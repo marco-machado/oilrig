@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { type StaticWorld, type Vec3, findPlace } from '@ocean-home/shared';
+import { type StaticWorld, type Vec3, findPlace } from '@oilrig/shared';
 import { MovementValidator } from '../../apps/server/src/world/validation.ts';
 import { DT, motor, world } from './helpers.ts';
 

@@ -1,4 +1,4 @@
-import type { MoveInput } from '@ocean-home/shared';
+import type { MoveInput } from '@oilrig/shared';
 
 const PITCH_LIMIT = Math.PI / 2 - 0.01;
 

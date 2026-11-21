@@ -1,7 +1,7 @@
 import { BoxGeometry, type BufferGeometry, Group, Mesh, MeshStandardNodeMaterial } from 'three/webgpu';
 import { color, fract, positionLocal, smoothstep, uniform, vec2 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { DoorDef, Layout, StaticWorld } from '@ocean-home/shared';
+import type { DoorDef, Layout, StaticWorld } from '@oilrig/shared';
 import { U } from '../state.ts';
 import type { MaterialSet } from './materials/index.ts';
 import { tubeGeometry } from './structure.ts';

@@ -11,7 +11,7 @@ import {
 } from 'three/webgpu';
 import { Fn, cameraPosition, exp, float, fog, length, positionWorld, vec3 } from 'three/tsl';
 import { SunLight } from 'three/addons/lights/SunLight.js';
-import type { Celestial, WeatherState } from '@ocean-home/shared';
+import type { Celestial, WeatherState } from '@oilrig/shared';
 import { U } from '../state.ts';
 import { OceanSky, type SkyParams, skyRadiance, sunTransmittance } from './sky.ts';
 

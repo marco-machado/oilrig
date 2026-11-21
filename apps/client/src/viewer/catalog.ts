@@ -17,7 +17,7 @@ import {
   type PropKind,
   type Vec3,
   getLayout,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import { Avatars } from '../net/avatars.ts';
 import { QUALITY, type QualityName } from '../render/quality.ts';
 import { U } from '../state.ts';

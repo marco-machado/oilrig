@@ -1,4 +1,4 @@
-import { type Account, CLOCK_RATES, type ChatEntry, type PlayerInfo, WEATHER_KINDS, type WeatherKind, type WeatherMode, type WeatherState } from '@ocean-home/shared';
+import { type Account, CLOCK_RATES, type ChatEntry, type PlayerInfo, WEATHER_KINDS, type WeatherKind, type WeatherMode, type WeatherState } from '@oilrig/shared';
 import { whenLoaded } from '../loading.ts';
 import { buildAccount } from './account.ts';
 import { COORDS } from './coords.ts';
@@ -409,7 +409,7 @@ export class UI {
         'div',
         { class: 'oh-join__col' },
         el('div', { class: 'oh-join__brand oh-enter', style: '--i: 0' }, brandMark(40), el('span', { class: 'oh-eyebrow' }, COORDS)),
-        el('h1', { class: 'oh-wordmark oh-enter', style: '--i: 1' }, 'Ocean Home'),
+        el('h1', { class: 'oh-wordmark oh-enter', style: '--i: 1' }, 'Oilrig'),
         el('p', { class: 'oh-join__tagline oh-enter', style: '--i: 2' }, 'A glass pavilion on a converted platform, 20 m above the open ocean.'),
         form,
       ),
@@ -851,7 +851,7 @@ export class UI {
     const rail = el(
       'nav',
       { class: 'oh-rail oh-glass oh-glass--strong', 'aria-label': 'Menu' },
-      el('div', { class: 'oh-brand' }, brandMark(38), el('div', {}, el('div', { class: 'oh-brand__name' }, 'Ocean Home'), el('div', { class: 'oh-brand__sub' }, COORDS))),
+      el('div', { class: 'oh-brand' }, brandMark(38), el('div', {}, el('div', { class: 'oh-brand__name' }, 'Oilrig'), el('div', { class: 'oh-brand__sub' }, COORDS))),
       el('div', { class: 'oh-identity' }, this.identityAvatar, el('div', {}, this.identityName, el('div', { class: 'oh-identity__meta' }, this.identityDot, this.identityMeta))),
       el(
         'div',

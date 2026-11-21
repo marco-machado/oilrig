@@ -40,7 +40,7 @@ import {
   makeClock,
   padOccupied,
   seatPosition,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import { Atmosphere } from './env/atmosphere.ts';
 import { SoundEngine } from './env/audio.ts';
 import { Ocean } from './env/ocean/ocean.ts';
@@ -94,7 +94,7 @@ async function boot() {
   const app = document.getElementById('app')!;
   if (!('gpu' in navigator)) {
     hideLoading();
-    app.innerHTML = `<div class="fatal">Ocean Home needs WebGPU.<br/>Use a current Chrome or Edge, or Safari 26+.</div>`;
+    app.innerHTML = `<div class="fatal">Oilrig needs WebGPU.<br/>Use a current Chrome or Edge, or Safari 26+.</div>`;
     return;
   }
   const dbg = debugParams();
@@ -838,7 +838,7 @@ async function boot() {
   const stats = { frames: 0, gpuReady: false };
   const doorTargets: Interactable[] = layout.doors.map((d) => ({ id: d.id, point: d.center, reach: 3.2 }));
   const liftTargets: Interactable[] = elevatorPanels().map((p) => ({ id: `lift-call-${p.stop}`, point: p.position, reach: 2.6, facing: 0.6 }));
-  (window as unknown as Record<string, unknown>).__oceanHome = {
+  (window as unknown as Record<string, unknown>).__oilrig = {
     stats,
     perf: prof,
     camera,

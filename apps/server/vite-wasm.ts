@@ -18,7 +18,7 @@ const FILES: Record<string, () => string> = {
 /** Resolves the Worker's WASM imports. Only the Worker (server) environment sees them. */
 export function workerWasm(): Plugin {
   return {
-    name: 'ocean-home:worker-wasm',
+    name: 'oilrig:worker-wasm',
     enforce: 'pre',
     applyToEnvironment: (env) => env.config.consumer === 'server',
     resolveId(id) {

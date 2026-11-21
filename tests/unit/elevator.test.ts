@@ -9,7 +9,7 @@ import {
   gateOpen,
   inCar,
   travelMs,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import { DT, idle, makeWorld, motor, walk, world as staticWorld, who } from './helpers.ts';
 
 // The elevator is a state plus a pure timeline. These tests ride it the way a person would:

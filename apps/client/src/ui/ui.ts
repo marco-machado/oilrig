@@ -3,7 +3,7 @@ import { whenLoaded } from '../loading.ts';
 import { buildAccount } from './account.ts';
 import { COORDS } from './coords.ts';
 import type { PerfReport } from '../perf.ts';
-import { QUALITY, type QualityName } from '../render/quality.ts';
+import { QUALITY, type QualityName, isPhone } from '../render/quality.ts';
 import {
   type IconName,
   badge,
@@ -56,8 +56,9 @@ export interface Settings {
 
 const SETTINGS_KEY = 'ocean-home.settings';
 
+/** Saved settings over the defaults; a phone starts with automatic resolution on. */
 export function loadSettings(defaultQuality: QualityName): Settings {
-  const base: Settings = { quality: defaultQuality, fov: 72, sensitivity: 1, invertY: false, volume: 0.8, autoResolution: false };
+  const base: Settings = { quality: defaultQuality, fov: 72, sensitivity: 1, invertY: false, volume: 0.8, autoResolution: isPhone() };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...base, ...JSON.parse(raw) };

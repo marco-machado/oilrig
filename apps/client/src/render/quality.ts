@@ -93,7 +93,20 @@ export function loadQualityName(): QualityName {
   } catch {
     // storage unavailable
   }
-  return 'high';
+  return defaultQualityName();
+}
+
+/**
+ * The preset of a first visit: High, or Low on a phone or tablet (main pointer a finger),
+ * whose GPU and memory are a fraction of a desktop's. The Settings sheet changes it as usual.
+ */
+export function defaultQualityName(): QualityName {
+  return isPhone() ? 'low' : 'high';
+}
+
+/** A phone or tablet: a touch screen whose main pointer is a finger. */
+export function isPhone(): boolean {
+  return typeof matchMedia === 'function' && navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches;
 }
 
 export function saveQualityName(q: QualityName) {

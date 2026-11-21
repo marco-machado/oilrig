@@ -5,16 +5,14 @@ import { WEATHER_KINDS } from '../sim/weather.ts';
 const finite = z.number().finite();
 const vec3 = z.tuple([finite, finite, finite]).readonly();
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 // ---------- client -> server ----------
 
+/** First message on a socket. Who it is comes from the sign-in cookie, not from here. */
 export const HelloMsg = z.object({
   type: z.literal('hello'),
   version: z.literal(PROTOCOL_VERSION),
-  name: z.string().trim().min(1).max(NET.nameMaxLength),
-  password: z.string().max(200).optional(),
-  session: z.string().max(100).optional(),
 });
 
 export const PoseMsg = z.object({
@@ -148,7 +146,6 @@ export type ChatEntry = z.infer<typeof ChatEntry>;
 export const WelcomeMsg = z.object({
   type: z.literal('welcome'),
   you: PlayerInfo,
-  session: z.string(),
   pose: z.object({ p: vec3, yaw: finite }),
   serverTime: finite,
   clock: ClockSchema,
@@ -171,6 +168,8 @@ export const SnapshotMsg = z.object({
 });
 export const JoinMsg = z.object({ type: z.literal('join'), player: PlayerInfo });
 export const LeaveMsg = z.object({ type: z.literal('leave'), id: z.string() });
+/** Someone's details changed (a new display name). */
+export const PlayerMsg = z.object({ type: z.literal('player'), player: PlayerInfo });
 export const EnvMsg = z.object({ type: z.literal('env'), t: finite, weather: WeatherStateSchema });
 export const ChatOutMsg = z.object({ type: z.literal('chat'), entry: ChatEntry });
 export const DoorOutMsg = z.object({ type: z.literal('door'), id: z.string(), open: z.boolean(), by: z.string() });
@@ -187,6 +186,7 @@ export const ServerMessage = z.discriminatedUnion('type', [
   SnapshotMsg,
   JoinMsg,
   LeaveMsg,
+  PlayerMsg,
   EnvMsg,
   ChatOutMsg,
   DoorOutMsg,

@@ -1,44 +1,50 @@
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
+import type { DroneScheduleOptions } from '@ocean-home/shared';
+import type { AgentLimits } from './agents/manager.ts';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-
-export interface ServerConfig {
-  port: number;
-  host: string;
-  joinPassword: string | null;
+/** World settings, from the Worker's environment variables (wrangler.jsonc `vars`). */
+export interface WorldConfig {
   dayLengthMinutes: number;
   realTime: boolean;
   timeOffsetHours: number;
   weatherSeed: number;
-  dbPath: string;
-  staticDir: string | null;
-  drone?: Partial<{ intervalMs: number; stayMs: number; firstArrivalMs: number; seed: number; startLanded: boolean }>;
-  agents?: Partial<{ perKey: number; total: number; idleMs: number }>;
+  drone: Partial<DroneScheduleOptions>;
+  agents: Partial<AgentLimits>;
 }
+
+type VarName =
+  | 'ALLOW_SIGNUPS'
+  | 'DAY_LENGTH_MINUTES'
+  | 'REAL_TIME'
+  | 'TIME_OFFSET_HOURS'
+  | 'WEATHER_SEED'
+  | 'DRONE_AWAY_MINUTES'
+  | 'DRONE_STAY_MINUTES'
+  | 'DRONE_FIRST_ARRIVAL_MINUTES'
+  | 'DRONE_START_AWAY'
+  | 'AGENTS_PER_KEY'
+  | 'MAX_AGENTS'
+  | 'AGENT_IDLE_MINUTES';
+
+type Vars = Partial<Record<VarName, string>>;
 
 function num(v: string | undefined, fallback: number) {
   const n = Number(v);
   return v !== undefined && v !== '' && Number.isFinite(n) ? n : fallback;
 }
 
-export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServerConfig {
-  const dataDir = env.DATA_DIR ?? path.resolve(here, '../data');
+const flag = (v: string | undefined) => v === 'true' || v === '1';
+
+export function worldConfig(env: Vars): WorldConfig {
   return {
-    port: num(env.PORT, 8787),
-    host: env.HOST ?? '0.0.0.0',
-    joinPassword: env.JOIN_PASSWORD ? env.JOIN_PASSWORD : null,
     dayLengthMinutes: Math.max(1, num(env.DAY_LENGTH_MINUTES, 120)),
-    realTime: env.REAL_TIME === 'true' || env.REAL_TIME === '1',
+    realTime: flag(env.REAL_TIME),
     timeOffsetHours: num(env.TIME_OFFSET_HOURS, 0),
     weatherSeed: Math.trunc(num(env.WEATHER_SEED, 1337)),
-    dbPath: env.DB_PATH ?? path.join(dataDir, 'ocean-home.db'),
-    staticDir: env.STATIC_DIR ?? path.resolve(here, '../../client/dist'),
     drone: {
       intervalMs: Math.max(0.5, num(env.DRONE_AWAY_MINUTES, 3)) * 60_000,
       stayMs: Math.max(0.5, num(env.DRONE_STAY_MINUTES, 12)) * 60_000,
       firstArrivalMs: Math.max(0, num(env.DRONE_FIRST_ARRIVAL_MINUTES, 1)) * 60_000,
-      startLanded: env.DRONE_START_AWAY !== 'true' && env.DRONE_START_AWAY !== '1',
+      startLanded: !flag(env.DRONE_START_AWAY),
     },
     agents: {
       perKey: Math.max(1, Math.trunc(num(env.AGENTS_PER_KEY, 3))),
@@ -47,3 +53,6 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServerConfi
     },
   };
 }
+
+/** Sign-ups are open only when ALLOW_SIGNUPS is exactly "true". */
+export const signupsOpen = (env: Vars) => env.ALLOW_SIGNUPS === 'true';

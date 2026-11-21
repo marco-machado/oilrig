@@ -1,6 +1,0 @@
-{$DOMAIN} {
-	# Event streams (SSE and MCP) must not be buffered by compression.
-	@compressible not path /api/v1/events /mcp
-	encode @compressible zstd gzip
-	reverse_proxy app:8787
-}

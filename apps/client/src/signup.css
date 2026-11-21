@@ -1,0 +1,55 @@
+/* The sign-up page: the start screen's column and card over a still, dark sea. */
+
+body.oh-page {
+  overflow: auto;
+  background:
+    radial-gradient(120% 70% at 75% 110%, rgba(63, 156, 196, 0.22), transparent 60%),
+    radial-gradient(90% 60% at 10% -10%, rgba(127, 216, 227, 0.08), transparent 55%),
+    linear-gradient(180deg, var(--oh-deep), var(--oh-abyss));
+}
+
+.oh-signup {
+  width: min(424px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: clamp(32px, 10vh, 96px) 0 48px;
+  display: grid;
+  gap: 16px;
+}
+
+.oh-signup .oh-wordmark {
+  font-size: clamp(52px, 12vw, 76px);
+}
+
+.oh-signup__brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.oh-signup__tagline {
+  margin: -2px 0 10px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--oh-ink-2);
+}
+
+.oh-signup__card {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-radius: var(--r-xl);
+}
+
+.oh-signup__note {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--oh-ink-2);
+}
+
+.oh-signup__foot {
+  margin: 0;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--oh-ink-3);
+}

@@ -261,6 +261,12 @@ export class WeatherControl {
     this.mode = mode;
   }
 
+  /** Picks up a saved mode at start-up, without easing into it. */
+  restore(mode: WeatherMode) {
+    this.mode = mode;
+    this.from = null;
+  }
+
   sample(gameMs: number, realNow: number): WeatherState {
     let target: WeatherState;
     if (this.mode === 'auto') target = this.model.sample(gameMs);

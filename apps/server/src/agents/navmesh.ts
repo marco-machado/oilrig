@@ -23,6 +23,8 @@ export interface PathResult {
   length: number;
 }
 
+export type RecastImpl = Parameters<typeof initRecast>[0];
+
 let recastReady: Promise<void> | null = null;
 
 export class NavigationMesh {
@@ -37,8 +39,9 @@ export class NavigationMesh {
     this.query = new NavMeshQuery(navMesh);
   }
 
-  static async build(sw: StaticWorld): Promise<NavigationMesh> {
-    recastReady ??= initRecast();
+  /** `impl`: the Recast WASM module factory (Workers pass a precompiled one; default: the inline build). */
+  static async build(sw: StaticWorld, impl?: RecastImpl): Promise<NavigationMesh> {
+    recastReady ??= initRecast(impl);
     await recastReady;
     const soup = staticTriangles(sw, (info) => !info.doorId && info.kind !== 'drone' && info.kind !== 'elevator-car');
     const result = generateTileCache(soup.positions, soup.indices, {

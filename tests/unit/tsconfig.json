@@ -1,0 +1,9 @@
+{
+  // Tests that run in Node (vitest project "unit").
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["."]
+}

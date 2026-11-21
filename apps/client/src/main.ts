@@ -46,6 +46,7 @@ import { SoundEngine } from './env/audio.ts';
 import { Ocean } from './env/ocean/ocean.ts';
 import { createPoolWater, createRain } from './env/rain.ts';
 import { Avatars } from './net/avatars.ts';
+import { AuthError, auth } from './net/auth.ts';
 import { NetClient, probeServer } from './net/client.ts';
 import { DronePoses } from './net/dronePoses.ts';
 import { Controls } from './player/controls.ts';
@@ -118,7 +119,7 @@ async function boot() {
     app.innerHTML = `<div class="fatal">WebGPU could not be initialised on this device.</div>`;
     return;
   }
-  renderer.library.addLight(SunLightNode, SunLight);
+  SunLight.registerNode(SunLightNode);
   renderer.lighting = new StableClusteredLighting();
   renderer.toneMapping = NeutralToneMapping;
   renderer.shadowMap.enabled = !off.has('shadows');
@@ -290,13 +291,37 @@ async function boot() {
 
   const ui = new UI(
     {
-      onJoin(name, password) {
+      async onSignIn(username, password) {
+        try {
+          const { user } = await auth.signIn(username, password);
+          ui.setAccount(user);
+        } catch (err) {
+          ui.signInFailed(err instanceof AuthError ? err.message : 'Could not sign in.');
+          return;
+        }
+        // Signed in: straight aboard.
+        sound.start();
+        net.connect();
+      },
+      onJoin() {
         sound.start();
         if (dbg.offline) {
           enterWorld();
           return;
         }
-        net.connect(name, password);
+        net.connect();
+      },
+      async onSignOut() {
+        try {
+          await auth.signOut();
+        } catch {
+          // the cookie is cleared on the next successful request anyway
+        }
+        ui.setAccount(null);
+        ui.setStatus('Signed out.');
+      },
+      onAccountChanged() {
+        // The world tells everyone (this browser included) about the new name.
       },
       onExploreOffline() {
         sound.start();
@@ -342,8 +367,8 @@ async function boot() {
         setGpuTimingWanted(on);
         location.reload();
       },
-      onLogout() {
-        logout();
+      onLeave() {
+        leave();
       },
       sunElevationAt(hour) {
         const g = gameTime(clock, online ? net.serverNow() : Date.now());
@@ -524,6 +549,17 @@ async function boot() {
 
   /** Keeps the sign-in card's server state current until we are aboard. */
   let checkingServer = false;
+  /** Whether this browser's account (signed in or not) is known since the server was last up. */
+  let accountChecked = false;
+  async function checkAccount() {
+    accountChecked = true;
+    try {
+      const me = await auth.me();
+      ui.setAccount(me.user, me.signups);
+    } catch {
+      accountChecked = false;
+    }
+  }
   function startServerCheck() {
     if (dbg.offline) {
       ui.setServer('local');
@@ -538,17 +574,18 @@ async function boot() {
       }
       const h = await probeServer();
       if (!joined) ui.setServer(h);
+      if (!h.online) accountChecked = false;
+      else if (!accountChecked) await checkAccount();
       window.setTimeout(check, h.online ? 10_000 : 4000);
     };
     void check();
   }
 
-  /** Leaves the world: fade out, drop the connection and its session, back to sign in. */
-  function logout() {
+  /** Leaves the world: fade out, drop the connection, back to the start screen. */
+  function leave(message?: string, error = false) {
     ui.setFade(true);
     window.setTimeout(() => {
       net.disconnect();
-      net.endSession();
       // Out of the drone: offline we hand it back to the local schedule; online the server
       // frees the seat when the socket closes.
       if (!online && mySeat !== null) {
@@ -574,7 +611,7 @@ async function boot() {
         player.frozen = false;
       }
       ui.setPlayers([], false);
-      ui.loggedOut();
+      ui.left(message, error);
       startServerCheck();
       window.setTimeout(() => ui.setFade(false), 150);
     }, 450);
@@ -630,6 +667,12 @@ async function boot() {
           ui.addChat({ system: `${m.player.name} came aboard.` });
           ui.setPlayers([...playerList.values()], true);
           break;
+        case 'player':
+          playerList.set(m.player.id, m.player);
+          avatars.rename(m.player.id, m.player.name);
+          if (m.player.id === selfId) ui.setSelf(m.player);
+          ui.setPlayers([...playerList.values()], true);
+          break;
         case 'leave': {
           const p = playerList.get(m.id);
           playerList.delete(m.id);
@@ -676,6 +719,15 @@ async function boot() {
         default:
           break;
       }
+    },
+    onEnded(why, message) {
+      online = false;
+      if (why === 'signed-out') ui.setAccount(null);
+      if (!joined) {
+        ui.joinFailed(message);
+        return;
+      }
+      leave(why === 'replaced' ? 'Signed in elsewhere: this tab left the platform.' : message, true);
     },
     onClose(reason, _willRetry, unreachable) {
       online = false;

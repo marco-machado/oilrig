@@ -1,0 +1,36 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "ocean-home",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-15",
+  "observability": { "enabled": true },
+  // Static files (the built client) are served without running the Worker, except on these
+  // paths. Unknown paths fall back to index.html.
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/ws", "/healthz", "/auth/*", "/api/*", "/mcp"]
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "WORLD", "class_name": "WorldDO" },
+      { "name": "USERS", "class_name": "UserDO" },
+      { "name": "DIRECTORY", "class_name": "DirectoryDO" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorldDO", "UserDO", "DirectoryDO"] }],
+  "vars": {
+    // Set to "true" to let people create accounts at /signup.
+    "ALLOW_SIGNUPS": "false",
+    "DAY_LENGTH_MINUTES": "120",
+    "REAL_TIME": "false",
+    "TIME_OFFSET_HOURS": "0",
+    "WEATHER_SEED": "1337",
+    "DRONE_AWAY_MINUTES": "3",
+    "DRONE_STAY_MINUTES": "12",
+    "DRONE_FIRST_ARRIVAL_MINUTES": "1",
+    "DRONE_START_AWAY": "false",
+    "AGENTS_PER_KEY": "3",
+    "MAX_AGENTS": "24",
+    "AGENT_IDLE_MINUTES": "30"
+  }
+}

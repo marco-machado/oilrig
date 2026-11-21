@@ -2,7 +2,7 @@
 
 A first-person, multiplayer WebGPU world. Your home is a glass pavilion on a converted single-deck offshore platform, 20 m above the open ocean, with a helipad, a lower walkway, a stair tower and a glass elevator down to a boat landing, and a swim platform. A four-seat electric air taxi lives on the helipad: anyone can fly it, with friends aboard, and now and then it flies off on its own and comes back. A tender is moored at the landing. Anyone aboard can set the time of day, the speed of the day and the weather for everyone. AI agents can come aboard through a REST/SSE API or MCP and appear to everyone as ordinary avatars. Geometry, materials, sky and ocean are procedural; footsteps, the drone, the elevator and the doors use sound effects generated with ElevenLabs (`scripts/sfx.ts`), and the ambience is synthesized.
 
-Built on Three.js r186 (`WebGPURenderer` + TSL), Rapier 0.21 physics, recast-navigation 0.43, Hono + `ws` on Node 24.
+Built on Three.js r187 (`WebGPURenderer` + TSL), Rapier 0.21 physics and recast-navigation 0.44, served by a Cloudflare Worker with Durable Objects (Hono, WebSocket Hibernation API, SQLite storage).
 
 ![Reference vs. Ocean Home](docs/screenshots/compare-reference.png)
 
@@ -16,17 +16,21 @@ pnpm install
 pnpm dev
 ```
 
-Open http://localhost:5173. The client (Vite, port 5173) proxies `/ws`, `/api` and `/mcp` to the world server (port 8787). You need a WebGPU browser: current Chrome or Edge, or Safari 26+.
+Open http://localhost:5173. Vite serves the client and, through the Cloudflare Vite plugin, runs the Worker and its Durable Objects in `workerd` on the same port; their data persists in `apps/client/.wrangler`. You need a WebGPU browser: current Chrome or Edge, or Safari 26+.
 
-To run a second copy next to the first, set the ports: `PORT=8790 node apps/server/src/index.ts` and `CLIENT_PORT=5180 SERVER_URL=http://localhost:8790 pnpm --filter @ocean-home/client exec vite`.
-
-Production (the server also serves the built client):
+Everyone signs in. Sign-ups are closed by default, so to make an account locally start the dev server with them open, then visit http://localhost:5173/signup:
 
 ```bash
-pnpm build && pnpm start
+ALLOW_SIGNUPS=true pnpm dev
 ```
 
-Then open http://localhost:8787.
+In dev, any of the Worker's variables (see Configuration) can be overridden from the environment like this. To run a second copy next to the first, give it its own port, state and inspector port: `CLIENT_PORT=5180 CF_STATE=.wrangler/state-alt CF_INSPECTOR_PORT=9230 pnpm --filter @ocean-home/client exec vite` (`CF_STATE=off` keeps nothing between runs).
+
+To try the production build locally (`vite preview` runs the built Worker):
+
+```bash
+pnpm build && pnpm preview
+```
 
 The sound effects in `apps/client/public/sfx` are committed. To generate them again (all, or by name prefix):
 
@@ -44,7 +48,7 @@ ELEVENLABS_API_KEY=… pnpm sfx steps-wood drone-loop
 | E | Use what you're looking at: open or close a door, call the elevator or press its button inside, board the drone; in the drone, climb out (once landed) |
 | T or Enter | Chat |
 | Tab (hold) | Who's on board |
-| Esc | Free the cursor and open the menu. The world keeps running; the menu opens **Time & weather**, **Settings** (graphics quality, automatic resolution, FOV, sensitivity, invert look, volume), **Performance** and **Controls**, one at a time beside it, and **Log out** (after a confirmation) returns to the sign-in screen. Click the world or **Back to the world** to look around again. |
+| Esc | Free the cursor and open the menu. The world keeps running; the menu opens **Time & weather**, **Settings** (graphics quality, automatic resolution, FOV, sensitivity, invert look, volume), **Performance** and **Controls**, one at a time beside it, and **Account** (change your display name and password, and make API keys for AI agents). **Leave** (after a confirmation) returns to the start screen, still signed in; **Sign out** there ends the session. Click the world or **Back to the world** to look around again. |
 | P | Screenshot: saves the world as you see it (without the HUD) as `ocean-home-<date>-<time>.png` |
 | F3 | Performance overlay |
 
@@ -58,18 +62,28 @@ Gamepads work too: left stick moves, right stick looks, A jumps (climbs in the d
 
 Esc → **Time & weather**: drag the time of day, pick the speed of the day (paused, real time, a 2-hour day, a 24-minute day, a 6-minute day), and pick the weather (or **Forecast** for the seeded weather model). Online, changes apply to everyone and show up in the chat; a change of weather eases in over about 25 seconds. Offline they are only for you.
 
-## Configuration (server environment)
+## Accounts
+
+Joining needs an account. Sign-ups at `/signup` (username, display name and password) are open only while `ALLOW_SIGNUPS` is `"true"`; otherwise the page says sign-ups are closed and the API refuses. To add people to a deployment, turn it on for a while and off again. There are no admin tools or password resets.
+
+- **Usernames** are 3 to 24 of `a-z`, `0-9`, `_` and `-`, typed in any case. **Display names** (shown above avatars and in chat) are 1 to 24 characters; no two people can have the same one, ignoring case, spacing and invisible characters, and an AI agent cannot take one either.
+- **Passwords** are at least 8 characters, hashed with PBKDF2-SHA256 (600,000 iterations, the count stored with each hash).
+- **Sessions** are an HttpOnly, SameSite=Lax cookie (Secure over HTTPS) that lasts 30 days and is renewed as you use it. Signing out ends it on the server. Changing your password ends your other sessions.
+- **Five wrong passwords** in a row lock the account's sign-in for a minute.
+- **One place at a time:** if the same account comes aboard from another tab or device, that one takes over and the older one is told it was signed in elsewhere.
+- Changing your display name updates it for everyone aboard at once; earlier chat lines keep the name they were said under.
+
+## Configuration
+
+The Worker's variables are in `apps/server/wrangler.jsonc` (`vars`); change them there, or per deployment in the Cloudflare dashboard.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PORT` / `HOST` | `8787` / `0.0.0.0` | Listen address |
-| `JOIN_PASSWORD` | unset | If set, players must enter it to join |
+| `ALLOW_SIGNUPS` | `false` | `true` opens `/signup` |
 | `DAY_LENGTH_MINUTES` | `120` | Real minutes per in-game day |
 | `REAL_TIME` | `false` | Use the real clock at the platform's location (off Rio de Janeiro) |
 | `TIME_OFFSET_HOURS` | `0` | Shift the in-game clock |
 | `WEATHER_SEED` | `1337` | Seed of the deterministic weather sequence |
-| `DATA_DIR` / `DB_PATH` | `apps/server/data` | SQLite file holding chat history and player colours |
-| `STATIC_DIR` | `apps/client/dist` | Built client to serve |
 | `DRONE_STAY_MINUTES` | `12` | How long the drone stays after landing before it flies off on its own (never with anyone aboard) |
 | `DRONE_AWAY_MINUTES` | `3` | How long it is away on each trip |
 | `DRONE_START_AWAY` | `false` | Start with the drone away instead of parked on the pad |
@@ -79,33 +93,35 @@ Esc → **Time & weather**: drag the time of day, pick the speed of the day (pau
 
 ## Deploy
 
-`docker/` has a Dockerfile, a compose file and a Caddyfile. Caddy is included because WebGPU only runs in a secure context (HTTPS), except on localhost.
+Ocean Home runs on Cloudflare Workers with Durable Objects. It needs the **Workers Paid** plan: the world simulation runs continuously while people are aboard, and booting it takes far more CPU than the Free plan's 10 ms per invocation.
 
 ```bash
-DOMAIN=home.example.com JOIN_PASSWORD=change-me docker compose -f docker/compose.yaml up -d --build
+pnpm --filter @ocean-home/client exec wrangler login
 ```
+
+```bash
+pnpm deploy
+```
+
+That builds the client and the Worker with Vite and uploads both (the client as static assets). Workers serve over HTTPS, which WebGPU needs. To open sign-ups on the deployed Worker, set `ALLOW_SIGNUPS` to `true` in the dashboard (Settings → Variables) or in `wrangler.jsonc` and deploy again.
+
+After changing `wrangler.jsonc`, run `pnpm cf-typegen` to regenerate the Worker's types (`pnpm typecheck` does it too).
 
 ## Bring an AI agent aboard
 
 ![An AI agent on the helipad, seen from the terrace](docs/screenshots/agent-on-helipad.png)
 
-Agents use bearer API keys. Keys are stored as SHA-256 hashes in the server's SQLite file; the key itself is printed once.
-
-```bash
-pnpm keys create my-agent --rate 120
-```
-
-`pnpm keys list` shows them and `pnpm keys revoke <id>` disables one. Each key has its own rate limit (requests per minute, with bursts of a quarter of that); over it, the API answers `429` with `Retry-After`. In Docker: `docker compose -f docker/compose.yaml exec app node apps/server/src/cli/keys.ts create my-agent`.
+Agents use bearer API keys that belong to a person. Make one in the game: Esc → **Account** → **API keys**. The key is shown once; only its SHA-256 is stored. Each person can have up to five keys at a time. Each key allows 120 requests a minute (bursts of 30); over that, the API answers `429` with `Retry-After`. Revoking a key sends its avatars away at once.
 
 ### MCP (Claude and other MCP clients)
 
 The server speaks MCP over Streamable HTTP at `/mcp` (`@modelcontextprotocol/server` 2.x, stateless per request). To add it to Claude Code:
 
 ```bash
-claude mcp add --transport http ocean-home http://localhost:8787/mcp --header "Authorization: Bearer ohk_…"
+claude mcp add --transport http ocean-home https://<your-worker>/mcp --header "Authorization: Bearer ohk_…"
 ```
 
-Then ask Claude to join, walk somewhere and say hello. The avatar belongs to the key, so the tools need no session.
+(Locally, the URL is http://localhost:5173/mcp.) Then ask Claude to join, walk somewhere and say hello. The avatar belongs to the key, so the tools need no session.
 
 | Tool | What it does |
 |---|---|
@@ -138,15 +154,15 @@ Everything is under `/api/v1`, described by an OpenAPI 3.1 document at `/api/v1/
 | `GET /events` | Server-Sent Events: `join`, `leave`, `chat`, `door`, `weather`, `drone`, `elevator`. Send `Last-Event-ID` to replay what you missed. |
 
 ```bash
-curl -s -X POST localhost:8787/api/v1/avatars -H "Authorization: Bearer $KEY" -H 'content-type: application/json' -d '{"name":"Scout"}'
+curl -s -X POST localhost:5173/api/v1/avatars -H "Authorization: Bearer $KEY" -H 'content-type: application/json' -d '{"name":"Scout"}'
 ```
 
 ```bash
-curl -s -X POST localhost:8787/api/v1/avatars/$ID/actions -H "Authorization: Bearer $KEY" -H 'content-type: application/json' -d '{"action":{"type":"move_to","place":"helipad"}}'
+curl -s -X POST localhost:5173/api/v1/avatars/$ID/actions -H "Authorization: Bearer $KEY" -H 'content-type: application/json' -d '{"action":{"type":"move_to","place":"helipad"}}'
 ```
 
 ```bash
-curl -N localhost:8787/api/v1/events -H "Authorization: Bearer $KEY"
+curl -N localhost:5173/api/v1/events -H "Authorization: Bearer $KEY"
 ```
 
 ### How agents work
@@ -192,18 +208,31 @@ packages/shared   One source of truth for client and server:
                   seeded weather model and weather control, the clock, the drone schedule, pose
                   function, flight model and autopilot, the elevator timeline, zod protocol
                   schemas, snapshot interpolation.
-apps/server       Shared world: clock + weather, players and agents, server-side movement
-                  validation (Rapier shape casts), doors, chat, drone schedule and crew, elevator,
-                  time and weather control, SQLite.
-                  WebSocket at /ws, /healthz.
+apps/server       The Cloudflare Worker (wrangler.jsonc) and its Durable Objects:
+  src/worker.ts   The Worker in front: /auth (sign-up, sign-in, the Account panel), checks
+                  who opens a game socket (/ws), passes /api, /mcp and /healthz to the world.
+                  Static files (the built client) are served without running it.
+  src/do          WorldDO ("world", one instance): the server. Players over hibernatable
+                  WebSockets, agents, the REST/SSE/MCP API, chat, API keys; SQLite for chat,
+                  keys, saved time/weather and doors. Its clocks run only while someone is
+                  aboard, an agent is out or an event stream is open, with a heartbeat alarm.
+                  UserDO (one per account): profile, password hash, sessions, sign-in throttle.
+                  DirectoryDO ("directory", one instance): the registry of usernames and
+                  display names.
+  src/world       Shared world: clock + weather, players and agents, server-side movement
+                  validation (Rapier shape casts), doors, chat, drone schedule and crew,
+                  elevator, time and weather control.
   src/agents      Navmesh (recast tile cache), agent bodies and tasks, perception.
   src/api         REST + SSE (/api/v1), MCP (/mcp), API keys and rate limits.
+  src/wasm        Rapier and Recast load precompiled WASM modules (Workers cannot compile
+                  WASM from bytes at run time); vite-wasm.ts resolves the files.
 apps/client       WebGPU renderer, FFT ocean (TSL compute) with GPU height readback, physical
                   sky with stars and moon, TSL procedural materials, furniture, the drone and its
                   rotor wash, the elevator, tender, clustered night lights (downlights
                   and floods lit in cones; the exposure adapts to lamplight as well as daylight),
                   light-probe GI in the pavilion, post (GTAO, TRAA, bloom, lens flare; SSR on
-                  Ultra), rain, synthesized audio, first-person controls, avatars, UI.
+                  Ultra), rain, synthesized audio, first-person controls, avatars, UI, and the
+                  sign-up page (signup.html).
 ```
 
 The client predicts its own movement with the same motor the tests use. The server accepts poses only if they are physically plausible: speed, climb rate, no passing through walls, rails, furniture, closed doors or the parked drone, and no standing inside geometry. People seated in the drone are placed in their seats by the server. Otherwise it sends a correction. Agents are simulated by the server itself with the same motor, so they need no validation.
@@ -216,7 +245,7 @@ Every layout element, place and zone has a semantic `id`/`kind`; the server's in
 pnpm test
 ```
 
-These are behaviour tests (Vitest), with no mocks and no snapshot-of-self:
+These are behaviour tests (Vitest), with no mocks and no snapshot-of-self. The `unit` project runs in Node; the `workers` project runs the real Worker and Durable Objects inside `workerd` (`@cloudflare/vitest-plugin`), with sign-ups open and the drone away:
 
 - **Walkability:** the real character controller walks every route: in through each of the five doors and out through the one opposite, pool, helipad, both stairs, a full walkway lap, and down the tower to the swim platform, all with the furniture in place; it is stopped by a lounge sofa, reaches the firepit lounge, and can jump onto a hammock net. It jumps as high at the browser's 120 Hz physics step as at 60 Hz.
 - **Elevator:** the car never overspeeds or jumps and arrives exactly at the stop; calls queue; the doors reopen for someone in the doorway; a person standing in the car rides from the deck to the landing without sinking through the floor and walks out; the shaft stays closed wherever the car is not; a call from far away is refused.
@@ -225,13 +254,15 @@ These are behaviour tests (Vitest), with no mocks and no snapshot-of-self:
 - **Containment:** random walkers for 4 simulated minutes from 11 starting points (including the hammock nets and the firepit lounge) never fall into the sea.
 - **Agent navigation:** an agent walks navmesh routes from the terrace to all 20 places (stairs, tower and all), opens closed doors on its way, keeps a body's width from furniture, goes around the parked drone, gets as close as it can to an unreachable roof, and is stopped by the helipad's net stop.
 - **Perception:** clear glass does not block sight (it sees right through the pavilion); objects outside the field of view are not reported; bearings and distances of other avatars are right; zone, area, time and weather are reported.
-- **REST and SSE API:** missing, malformed and revoked keys are refused; keys are never stored in plain text; rate limits are per key; a spawned avatar is seen by a WebSocket player, walks to a place and chats; events stream in order and replay with `Last-Event-ID`; avatars are private to their key; the keys CLI creates, lists and revokes keys a running server honours.
+- **Accounts:** sign-up sets the cookie and stores usernames lower-case; usernames and display names stay unique (case, spacing and invisible characters ignored); bad input is refused; sign-ups are refused unless `ALLOW_SIGNUPS` is `true`; wrong passwords are refused alike for unknown users; signing out ends the session on the server; five wrong passwords lock sign-in for a minute; tampered cookies are rejected; sessions renew at most once a day; changing the password ends the other sessions; cross-site requests are refused; keys: five at most, never listed with their secret, revocable only by their owner. Validators, password hashing and key encoding are also checked in Node.
+- **REST and SSE API:** missing, malformed and revoked keys are refused; keys are never stored in plain text; rate limits are per key; a spawned avatar is seen by a WebSocket player, walks to a place and chats; events stream in order and replay with `Last-Event-ID`; avatars are private to their key; an agent cannot take a registered person's name; revoking a key sends its avatars away.
 - **MCP:** over Streamable HTTP with the official client: the eleven tools are listed; join → move_to the helipad → say hello is seen and heard by a WebSocket player; `read_messages` hears a reply once; `interact` refuses doors out of reach and opens one in reach; `leave_world` is seen.
 - **Sun position:** checked against independent references: solstice and equinox geometry, and NOAA solar-noon times.
 - **Weather:** values stay in physical bounds, nothing jumps between samples, every weather kind is reached, and the sequence is deterministic.
 - **Movement validation:** honest runs, stair climbs and jumps are accepted; teleports, speed hacks, flying, and clipping through doors or rails are rejected.
 - **Interpolation:** snapshots under jitter and out-of-order delivery still produce smooth motion.
-- **Server:** protocol fuzzing, two-player sync (movement, chat, doors), and session restore.
+- **World socket:** signed-out and cross-site sockets are refused; protocol fuzzing; two-player sync (movement, chat, doors) and coming back to the same place; the newest connection of an account wins; a new display name reaches everyone while old chat lines keep the old one.
+- **Durable Object life:** `/healthz` does not boot the world; it runs while someone is aboard or an agent is out and stops when nobody needs it; time, weather, doors and chat survive an eviction.
 
 Browser checks use Playwright with the installed Chrome and a temporary profile:
 
@@ -239,7 +270,13 @@ Browser checks use Playwright with the installed Chrome and a temporary profile:
 pnpm test:render
 ```
 
-Every quality preset renders with no console or WebGPU errors. More checks run in the browser: the tender's heave follows the wave heights read back from the GPU, a landing drone spins its rotors and drives the deck spray, Esc frees the cursor while the world keeps running and the menu works, and logging out returns to the sign-in screen and lets you come back aboard.
+Every quality preset renders with no console or WebGPU errors. More checks run in the browser: the tender's heave follows the wave heights read back from the GPU, a landing drone spins its rotors and drives the deck spray, Esc frees the cursor while the world keeps running and the menu works, and Leave returns to the start screen and lets you come back aboard.
+
+```bash
+pnpm test:auth
+```
+
+Accounts end to end against two dev Workers (sign-ups open on one, closed on the other): the closed sign-up page, then sign up, come aboard, leave, lose the seat to a second tab, sign out, a wrong password, and sign back in.
 
 ```bash
 pnpm perf

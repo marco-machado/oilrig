@@ -7,29 +7,33 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel --filter './apps/*' run dev",
+    "dev": "pnpm --filter @ocean-home/client dev",
     "build": "pnpm --filter @ocean-home/client build",
-    "start": "pnpm --filter @ocean-home/server start",
+    "preview": "pnpm --filter @ocean-home/client preview",
+    "deploy": "pnpm build && pnpm --filter @ocean-home/client exec wrangler deploy",
+    "cf-typegen": "pnpm --filter @ocean-home/client exec wrangler types -c ../server/wrangler.jsonc --strict-vars=false ../server/worker-configuration.d.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "vitest run --project unit",
+    "test:workers": "vitest run --project workers",
+    "typecheck": "pnpm cf-typegen && tsc -p tsconfig.json && tsc -p apps/client && tsc -p apps/server && tsc -p tests/unit && tsc -p tests/workers",
     "test:render": "playwright test tests/e2e/render.spec.ts",
+    "test:auth": "playwright test tests/e2e/auth.spec.ts",
     "perf": "PERF=1 playwright test tests/e2e/perf.spec.ts",
     "trace": "TRACE=1 playwright test tests/e2e/trace.spec.ts",
     "trace:report": "node scripts/trace-report.ts",
     "screenshots": "SHOTS=1 playwright test tests/e2e/screenshots.spec.ts",
     "bot": "node scripts/bot.ts",
-    "keys": "node apps/server/src/cli/keys.ts",
     "sfx": "node scripts/sfx.ts"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.8.5",
     "@dimforge/rapier3d-compat": "0.21.0",
-    "@modelcontextprotocol/client": "2.3.1",
+    "@modelcontextprotocol/client": "2.4.0",
     "@ocean-home/shared": "workspace:*",
-    "@playwright/test": "1.64.1",
-    "@types/node": "^26.6.5",
-    "@types/ws": "^8.18.2",
+    "@playwright/test": "1.65.1",
+    "@types/node": "^26.6.6",
     "typescript": "7.0.2",
-    "vitest": "5.0.5",
-    "ws": "8.22.0"
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
   }
 }

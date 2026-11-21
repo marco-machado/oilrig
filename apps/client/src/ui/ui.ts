@@ -1,5 +1,7 @@
-import { CLOCK_RATES, type ChatEntry, type PlayerInfo, WEATHER_KINDS, WORLD, type WeatherKind, type WeatherMode, type WeatherState } from '@ocean-home/shared';
+import { type Account, CLOCK_RATES, type ChatEntry, type PlayerInfo, WEATHER_KINDS, type WeatherKind, type WeatherMode, type WeatherState } from '@ocean-home/shared';
 import { whenLoaded } from '../loading.ts';
+import { buildAccount } from './account.ts';
+import { COORDS } from './coords.ts';
 import type { PerfReport } from '../perf.ts';
 import { QUALITY, type QualityName } from '../render/quality.ts';
 import {
@@ -38,12 +40,6 @@ const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const compass = (deg: number) => COMPASS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
-function coordinate(v: number, pos: string, neg: string) {
-  const a = Math.abs(v);
-  const d = Math.floor(a);
-  return `${d}°${String(Math.round((a - d) * 60)).padStart(2, '0')}′${v < 0 ? neg : pos}`;
-}
-const COORDS = `${coordinate(WORLD.latitude, 'N', 'S')} · ${coordinate(WORLD.longitude, 'E', 'W')}`;
 
 export interface Settings {
   quality: QualityName;
@@ -86,7 +82,13 @@ export interface EnvChange {
 }
 
 export interface UIHandlers {
-  onJoin(name: string, password: string): void;
+  onSignIn(username: string, password: string): void;
+  /** Come aboard as the signed-in account (or locally, offline). */
+  onJoin(): void;
+  /** End the account's session (from the start screen). */
+  onSignOut(): void;
+  /** The display name changed in the Account section. */
+  onAccountChanged(a: Account): void;
   /** Look around alone, without the server. */
   onExploreOffline(): void;
   onResume(): void;
@@ -94,8 +96,8 @@ export interface UIHandlers {
   onSettings(s: Settings, qualityChanged: boolean): void;
   onEnv(change: EnvChange): void;
   onGpuTiming(on: boolean): void;
-  /** Leave the world and go back to the sign-in screen (confirmed in a dialog first). */
-  onLogout(): void;
+  /** Leave the world and go back to the start screen, still signed in (confirmed in a dialog first). */
+  onLeave(): void;
   /** The sun's elevation in degrees at a local hour today, for the words under the clock. */
   sunElevationAt(hour: number): number;
 }
@@ -122,9 +124,10 @@ export interface FlightHud {
   atPad: boolean;
 }
 
-type Section = 'env' | 'settings' | 'perf' | 'controls';
+type Section = 'account' | 'env' | 'settings' | 'perf' | 'controls';
 
 const NAV: Array<[Section, IconName, string]> = [
+  ['account', 'user', 'Account'],
   ['env', 'horizon', 'Time & weather'],
   ['settings', 'sliders', 'Settings'],
   ['perf', 'gauge', 'Performance'],
@@ -286,11 +289,20 @@ export class UI {
   private readonly join = el('div', { class: 'oh-join' });
   private readonly serverPill = pill('checking', 'Checking the server…');
   private readonly serverLine = el('div', {}, this.serverPill.el);
-  private readonly nameInput = input({ type: 'text', id: 'oh-name', maxlength: '24', autocomplete: 'nickname', placeholder: 'Your name' });
-  private readonly passInput = input({ type: 'password', id: 'oh-pass', autocomplete: 'off', placeholder: 'Leave empty if none' });
-  private readonly passField = field('Host password', this.passInput, 'Only if the host set one');
+  private readonly userInput = input({ type: 'text', id: 'oh-user', maxlength: '64', autocomplete: 'username', autocapitalize: 'none', spellcheck: 'false', placeholder: 'Your username' });
+  private readonly passInput = input({ type: 'password', id: 'oh-pass', maxlength: '256', autocomplete: 'current-password', placeholder: 'Your password' });
+  private readonly credentials = el('div', { class: 'oh-join__fields' }, field('Username', this.userInput), field('Password', this.passInput));
+  private readonly whoLine = el('p', { class: 'oh-join__who' });
+  private readonly signUpLink = el('a', { class: 'oh-link', href: '/signup' }, 'Create an account');
+  private readonly signOutLink = el('button', { type: 'button', class: 'oh-link' }, 'Sign out');
+  private readonly joinLinks = el('p', { class: 'oh-join__links' }, this.signUpLink, this.signOutLink);
   private readonly joinBtn = button({ label: 'Come aboard', variant: 'primary', size: 'lg', block: true, trail: 'arrow', type: 'submit' });
   private readonly joinStatus = el('p', { class: 'oh-join__status', role: 'status' });
+  /** The signed-in account; `undefined` until the server has said. */
+  private account: Account | null | undefined = undefined;
+  private signups = false;
+  private readonly localName: string;
+  private accountSheet!: ReturnType<typeof buildAccount>;
   private readonly conditions = el('span', { class: 'oh-eyebrow' });
   /** 'local': ?offline, no server expected. */
   private server: 'checking' | 'online' | 'offline' | 'local' = 'checking';
@@ -298,23 +310,31 @@ export class UI {
 
   private readonly veil = el('div', { class: 'oh-veil', 'aria-hidden': 'true' });
 
-  constructor(handlers: UIHandlers, settings: Settings, defaultName = '') {
+  constructor(handlers: UIHandlers, settings: Settings, localName = '') {
     this.handlers = handlers;
     this.settings = settings;
+    this.localName = localName;
     this.sheets = {
+      account: sheet('Account', () => this.openSection(null)),
       env: sheet('Time & weather', () => this.openSection(null)),
       settings: sheet('Settings', () => this.openSection(null)),
       perf: sheet('Performance', () => this.openSection(null)),
       controls: sheet('Controls', () => this.openSection(null)),
     };
     this.buildHud();
-    this.buildJoin(defaultName);
+    this.buildJoin();
+    this.accountSheet = buildAccount(this.sheets.account, (a) => {
+      this.account = a;
+      this.refreshAccount();
+      this.handlers.onAccountChanged(a);
+    });
     this.buildEnv();
     this.buildSettings();
     this.buildPerf();
     this.buildControls();
     this.buildDialog();
     this.buildMenu();
+    this.refreshAccount();
     this.root.append(this.hud, this.veil, this.menu, this.join);
     document.body.appendChild(this.root);
 
@@ -353,29 +373,24 @@ export class UI {
 
   // ---------------------------------------------------------------- sign in
 
-  private storedName() {
-    try {
-      return localStorage.getItem('ocean-home.name') ?? '';
-    } catch {
-      return '';
+  private buildJoin() {
+    for (const i of [this.userInput, this.passInput]) {
+      i.addEventListener('input', () => {
+        if (!i.hasAttribute('aria-invalid')) return;
+        i.removeAttribute('aria-invalid');
+        this.setStatus('');
+      });
     }
-  }
-
-  private buildJoin(defaultName: string) {
-    this.nameInput.value = defaultName || this.storedName();
-    this.nameInput.addEventListener('input', () => {
-      if (!this.nameInput.hasAttribute('aria-invalid')) return;
-      this.nameInput.removeAttribute('aria-invalid');
-      this.setStatus('');
-    });
+    this.signOutLink.addEventListener('click', () => this.handlers.onSignOut());
     const form = el(
       'form',
       { class: 'oh-join__card oh-glass oh-glass--strong oh-enter', style: '--i: 3', novalidate: '' },
       this.serverLine,
-      field('Name', this.nameInput),
-      this.passField,
+      this.whoLine,
+      this.credentials,
       this.joinBtn,
       this.joinStatus,
+      this.joinLinks,
     );
     form.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -401,6 +416,32 @@ export class UI {
       el('div', { class: 'oh-join__foot oh-enter', style: '--i: 5' }, el('div', { class: 'oh-keys' }, ...essentials.map(([k, l]) => el('span', {}, keys(k), l))), this.conditions),
     );
     this.join.hidden = true;
+    this.refreshAccount();
+  }
+
+  /** Who is signed in, and whether people can sign up (from the server). `null`: nobody. */
+  setAccount(a: Account | null, signups = this.signups) {
+    this.account = a;
+    this.signups = signups;
+    this.accountSheet.setAccount(a);
+    this.refreshAccount();
+    this.refreshIdentity();
+  }
+
+  /** The sign-in card follows the server and the account: offline, signed out, or signed in. */
+  private refreshAccount() {
+    const online = this.server === 'online' || this.server === 'checking';
+    const signedIn = !!this.account;
+    this.credentials.hidden = !online || signedIn || this.account === undefined;
+    this.whoLine.hidden = !online || !signedIn;
+    if (this.account) {
+      this.whoLine.replaceChildren('Signed in as ', el('b', {}, this.account.displayName), ` (@${this.account.username})`);
+    }
+    this.signUpLink.hidden = !online || signedIn || !this.signups || this.account === undefined;
+    this.signOutLink.hidden = !online || !signedIn;
+    this.joinLinks.hidden = this.signUpLink.hidden && this.signOutLink.hidden;
+    this.navItems.get('account')?.toggleAttribute('hidden', !signedIn || this.server === 'local');
+    if (!this.connecting) this.updateJoinButton();
   }
 
   private submitJoin() {
@@ -409,29 +450,47 @@ export class UI {
       this.handlers.onExploreOffline();
       return;
     }
-    const name = this.nameInput.value.trim();
-    if (!name) {
-      this.setStatus('Pick a name first.', true);
-      this.nameInput.setAttribute('aria-invalid', 'true');
-      this.nameInput.classList.remove('oh-shake');
-      void this.nameInput.offsetWidth;
-      this.nameInput.classList.add('oh-shake');
-      this.nameInput.focus();
+    if (this.server === 'local' || this.account) {
+      this.connecting = true;
+      setButton(this.joinBtn, 'Connecting…', { busy: true });
+      this.setStatus('');
+      this.handlers.onJoin();
       return;
     }
-    try {
-      localStorage.setItem('ocean-home.name', name);
-    } catch {
-      // storage unavailable
+    if (this.account === undefined) return;
+    const username = this.userInput.value.trim();
+    const missing = !username ? this.userInput : !this.passInput.value ? this.passInput : null;
+    if (missing) {
+      this.setStatus(missing === this.userInput ? 'Type your username.' : 'Type your password.', true);
+      this.shake(missing);
+      return;
     }
     this.connecting = true;
-    setButton(this.joinBtn, 'Connecting…', { busy: true });
+    setButton(this.joinBtn, 'Signing in…', { busy: true });
     this.setStatus('');
-    this.handlers.onJoin(name, this.passInput.value);
+    this.handlers.onSignIn(username, this.passInput.value);
+  }
+
+  private shake(i: HTMLInputElement) {
+    i.setAttribute('aria-invalid', 'true');
+    i.classList.remove('oh-shake');
+    void i.offsetWidth;
+    i.classList.add('oh-shake');
+    i.focus();
+  }
+
+  /** A sign-in that did not work: say why, keep the username. */
+  signInFailed(message: string) {
+    this.connecting = false;
+    this.updateJoinButton();
+    this.setStatus(message, true);
+    this.passInput.value = '';
+    this.passInput.focus();
   }
 
   private updateJoinButton() {
-    setButton(this.joinBtn, this.server === 'offline' ? 'Explore offline' : 'Come aboard', { trail: 'arrow' });
+    const label = this.server === 'offline' ? 'Explore offline' : this.server === 'local' || this.account ? 'Come aboard' : 'Sign in';
+    setButton(this.joinBtn, label, { trail: 'arrow' });
   }
 
   /** A join that did not get in. `serverOffline`: the server could not be reached at all. */
@@ -452,7 +511,7 @@ export class UI {
       const n = typeof s === 'object' ? s.players : undefined;
       this.serverPill.set('good', n === undefined ? 'Server online' : `Server online · ${n === 0 ? 'nobody' : n} aboard`);
     } else if (this.server === 'offline') this.serverPill.set('bad', 'Server offline');
-    this.passField.hidden = this.server === 'offline';
+    this.refreshAccount();
     if (this.connecting) return;
     this.updateJoinButton();
     if (this.server === 'offline') this.setStatus('You can look around on your own. The button switches back when the server returns.');
@@ -468,7 +527,7 @@ export class UI {
     reveal(this.join, true);
     whenLoaded(() => {
       this.join.classList.add('is-ready');
-      if (!this.joined) this.nameInput.focus();
+      if (!this.joined && !this.credentials.hidden) (this.userInput.value ? this.passInput : this.userInput).focus();
     });
   }
 
@@ -480,8 +539,8 @@ export class UI {
     return shown(this.join);
   }
 
-  /** After logging out: back to the sign-in screen, the name kept. */
-  loggedOut() {
+  /** After leaving (or being sent off): back to the start screen, with a word on why. */
+  left(message = 'You left the platform.', error = false) {
     this.joined = false;
     this.setCursorFree(false);
     this.chatOpen = false;
@@ -495,7 +554,7 @@ export class UI {
     this.colors.clear();
     this.connecting = false;
     this.updateJoinButton();
-    this.setStatus('You logged out.');
+    this.setStatus(message, error);
     this.showJoin();
   }
 
@@ -801,14 +860,14 @@ export class UI {
         el('p', { class: 'oh-rail__hint' }, 'or click anywhere in the world'),
       ),
       nav,
-      el('div', { class: 'oh-rail__foot' }, button({ label: 'Log out', variant: 'quiet-danger', block: true, icon: 'logout', onClick: () => this.openDialog() })),
+      el('div', { class: 'oh-rail__foot' }, button({ label: 'Leave', variant: 'quiet-danger', block: true, icon: 'logout', onClick: () => this.openDialog() })),
     );
     this.menu.append(scrim, rail, ...Object.values(this.sheets).map((s) => s.el), this.dialog);
     this.menu.hidden = true;
   }
 
   private refreshIdentity() {
-    const name = this.self?.name ?? (this.nameInput.value.trim() || 'You');
+    const name = this.self?.name ?? this.account?.displayName ?? (this.localName || 'You');
     this.identityAvatar.style.setProperty('--c', this.self?.color ?? 'var(--oh-rig)');
     setText(this.identityAvatar, name[0].toUpperCase());
     setText(this.identityName, name);
@@ -822,6 +881,7 @@ export class UI {
     for (const [key, s] of Object.entries(this.sheets) as Array<[Section, ReturnType<typeof sheet>]>) reveal(s.el, key === id);
     for (const [key, b] of this.navItems) b.setAttribute('aria-current', String(key === id));
     if (id === 'perf' && this.lastReport) this.setPerf(this.lastReport, this.lastHistory);
+    if (id === 'account') this.accountSheet.opened();
   }
 
   /** Closes the sections that need the cursor; the performance readout stays until F3. */
@@ -846,12 +906,12 @@ export class UI {
 
   private buildDialog() {
     const confirm = button({
-      label: 'Log out',
+      label: 'Leave',
       variant: 'danger',
       icon: 'logout',
       onClick: () => {
         this.closeDialog();
-        this.handlers.onLogout();
+        this.handlers.onLeave();
       },
     });
     this.dialog.append(
@@ -859,7 +919,7 @@ export class UI {
         'div',
         { class: 'oh-dialog oh-glass oh-glass--strong', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'oh-logout-title', 'aria-describedby': 'oh-logout-desc' },
         el('div', { class: 'oh-dialog__icon' }, icon('logout')),
-        el('h2', { class: 'oh-dialog__title', id: 'oh-logout-title' }, 'Log out of Ocean Home?'),
+        el('h2', { class: 'oh-dialog__title', id: 'oh-logout-title' }, 'Leave the platform?'),
         this.dialogBody,
         el('div', { class: 'oh-dialog__actions' }, this.stayButton, confirm),
       ),
@@ -872,8 +932,8 @@ export class UI {
 
   private openDialog() {
     this.dialogBody.textContent = this.connected
-      ? 'You’ll leave the platform and go back to the sign-in screen. Everyone aboard will see that you left.'
-      : 'You’ll go back to the sign-in screen.';
+      ? 'You’ll go back to the start screen, still signed in. Everyone aboard will see that you left.'
+      : 'You’ll go back to the start screen.';
     reveal(this.dialog, true);
     this.stayButton.focus();
   }

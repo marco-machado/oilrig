@@ -1121,6 +1121,103 @@
   color: var(--oh-bad);
 }
 
+.oh-join__fields {
+  display: grid;
+  gap: 14px;
+}
+
+.oh-join__who {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--oh-ink-2);
+}
+
+.oh-join__who b {
+  font-weight: 600;
+  color: var(--oh-ink);
+}
+
+.oh-join__links {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: -4px 0 0;
+}
+
+/* ---------- account ---------- */
+
+.oh-form {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.oh-form__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.oh-form--inline {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.oh-form--inline .oh-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.oh-form-status {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--oh-ink-3);
+}
+
+.oh-form-status:empty {
+  display: none;
+}
+
+.oh-form-status.is-error {
+  color: var(--oh-bad);
+}
+
+.oh-keybox {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(242, 180, 12, 0.35);
+  border-radius: var(--r-lg);
+  background: var(--oh-rig-tint);
+}
+
+.oh-keybox p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--oh-ink-2);
+}
+
+.oh-keybox__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.oh-keybox__key {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: 500 12px/1.4 var(--font-mono);
+  color: var(--oh-ink);
+  user-select: all;
+}
+
 .oh-join__foot {
   position: absolute;
   left: clamp(16px, 7vw, 96px);

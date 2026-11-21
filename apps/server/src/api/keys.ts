@@ -1,27 +1,64 @@
-import { createHash, randomBytes } from 'node:crypto';
-import type { ApiKeyRow, Store } from '../db.ts';
+import { MAX_KEYS_PER_USER } from '@ocean-home/shared';
+import { AgentError } from '../agents/manager.ts';
 
-// API keys look like `ohk_<id>_<secret>`. Only a SHA-256 of the whole key is stored; the
-// plaintext is shown once, when the key is created.
+// API keys look like `ohk_<id>_<secret>` and belong to a user. Only a SHA-256 of the whole
+// key is stored; the plaintext is shown once, when the key is created.
 
 export const DEFAULT_RATE_PER_MINUTE = 120;
 
-export function hashKey(key: string) {
-  return createHash('sha256').update(key).digest('hex');
+export type ApiKeyRow = {
+  id: string;
+  ownerId: string;
+  name: string;
+  prefix: string;
+  ratePerMinute: number;
+  created: number;
+  lastUsed: number | null;
+  revoked: number | null;
+};
+
+export interface KeyStore {
+  addApiKey(k: { id: string; ownerId: string; name: string; hash: string; prefix: string; ratePerMinute: number }): void;
+  apiKeyByHash(hash: string): ApiKeyRow | null;
+  /** The owner's keys that are not revoked, oldest first. */
+  activeKeys(ownerId: string): ApiKeyRow[];
+  /** Revokes one of the owner's keys; false if there is no such active key. */
+  revokeApiKey(ownerId: string, id: string): boolean;
+  touchApiKey(id: string, at: number): void;
 }
 
-export function createApiKey(store: Store, name: string, ratePerMinute = DEFAULT_RATE_PER_MINUTE) {
-  const id = randomBytes(4).toString('hex');
-  const secret = randomBytes(24).toString('base64url');
-  const key = `ohk_${id}_${secret}`;
-  store.addApiKey({ id, name, hash: hashKey(key), prefix: `ohk_${id}`, ratePerMinute: Math.max(1, Math.round(ratePerMinute)) });
-  return { id, key, name, ratePerMinute };
+const hex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+
+export function base64url(bytes: Uint8Array) {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export const randomBytes = (n: number) => crypto.getRandomValues(new Uint8Array(n));
+
+export async function sha256Hex(text: string) {
+  return hex(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))));
+}
+
+export const hashKey = sha256Hex;
+
+/** Creates a key for a user, up to MAX_KEYS_PER_USER active at a time. */
+export async function createApiKey(store: KeyStore, ownerId: string, name: string) {
+  if (store.activeKeys(ownerId).length >= MAX_KEYS_PER_USER) {
+    throw new AgentError('too-many-keys', `You already have ${MAX_KEYS_PER_USER} keys. Revoke one first.`, 409);
+  }
+  const id = hex(randomBytes(4));
+  const key = `ohk_${id}_${base64url(randomBytes(24))}`;
+  const ratePerMinute = DEFAULT_RATE_PER_MINUTE;
+  store.addApiKey({ id, ownerId, name, hash: await hashKey(key), prefix: `ohk_${id}`, ratePerMinute });
+  return { id, key, name, prefix: `ohk_${id}`, ratePerMinute };
 }
 
 /** Looks a bearer token up; revoked or unknown keys give null. */
-export function verifyApiKey(store: Store, token: string): ApiKeyRow | null {
+export async function verifyApiKey(store: KeyStore, token: string): Promise<ApiKeyRow | null> {
   if (!/^ohk_[0-9a-f]{8}_[A-Za-z0-9_-]{32}$/.test(token)) return null;
-  const row = store.apiKeyByHash(hashKey(token));
+  const row = store.apiKeyByHash(await hashKey(token));
   if (!row || row.revoked) return null;
   return row;
 }

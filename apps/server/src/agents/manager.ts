@@ -1,7 +1,7 @@
 import type { Vec3 } from '@ocean-home/shared';
 import type { World } from '../world/world.ts';
 import { AGENT_DT, Agent, type TaskResult, yawOfHeading } from './agent.ts';
-import { NavigationMesh } from './navmesh.ts';
+import { NavigationMesh, type RecastImpl } from './navmesh.ts';
 import { type Perception, type PerceptionContext, Sight, perceivables, perceive } from './perception.ts';
 
 export interface AgentLimits {
@@ -38,7 +38,7 @@ export class AgentManager {
   private readonly agents = new Map<string, Agent>();
   private readonly limits: AgentLimits;
   private readonly ctx: PerceptionContext;
-  private timer: NodeJS.Timeout | null = null;
+  private timer: ReturnType<typeof setInterval> | null = null;
   private last = 0;
   private acc = 0;
 
@@ -60,22 +60,37 @@ export class AgentManager {
     });
   }
 
-  static async create(world: World, limits: Partial<AgentLimits> = {}) {
-    const nav = await NavigationMesh.build(world.sw);
+  /** `recast`: the Recast WASM module factory (Workers pass a precompiled one). */
+  static async create(world: World, limits: Partial<AgentLimits> = {}, recast?: RecastImpl) {
+    const nav = await NavigationMesh.build(world.sw, recast);
     const s = world.drone.state;
     if (world.sw.droneParked) nav.setDrone({ position: s.from, yaw: s.padYaw });
     return new AgentManager(world, nav, { perKey: 3, total: 24, idleMs: 30 * 60_000, ...limits });
   }
 
+  /** Runs the simulation loop. Safe to call twice. */
   start() {
+    if (this.timer) return;
     this.last = performance.now();
+    this.acc = 0;
     this.timer = setInterval(() => this.tick(), 1000 / 30);
   }
 
-  stop() {
+  /** Stops the loop; agents stay where they are. */
+  pause() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+  }
+
+  /** Stops the loop and sends every agent away. */
+  stop() {
+    this.pause();
     for (const a of [...this.agents.values()]) this.remove(a);
+  }
+
+  /** Sends away every avatar a key brought aboard (the key was revoked). */
+  removeForKey(keyId: string) {
+    for (const a of this.forKey(keyId)) this.remove(a);
   }
 
   /** Advances the simulation by real elapsed time in fixed steps. */

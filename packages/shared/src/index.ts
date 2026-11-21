@@ -9,4 +9,5 @@ export * from './sim/drone.ts';
 export * from './sim/elevator.ts';
 export * from './sim/weather.ts';
 export * from './protocol/messages.ts';
+export * from './protocol/account.ts';
 export * from './net/interpolation.ts';

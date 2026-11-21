@@ -1,6 +1,6 @@
 # Startup: shader and pipeline compilation
 
-**Status:** the fix is in the code but switched off. It turns on by itself with three.js r187 (`main.ts` checks `REVISION`); before that it was verified against three's dev branch. The upgrade itself is still to do (see the checklist at the end).
+**Status:** on. three is r187 since 21 Nov 2026, and `main.ts` runs the precompile when `REVISION` is 187 or later. Of the checklist at the end, steps 1 and 2 are done; the precompile match, `PER_FRAME` and the startup timings (steps 3 to 5) have not been measured on r187.
 **Area:** `apps/client` startup: the loading screen's "Compiling shaders" and "Warming up the ocean and lighting" steps.
 
 ## Summary
@@ -57,7 +57,7 @@ Afterwards the first frame creates 36 render pipelines. 16 of them are identical
 ## Upgrade checklist (three r187)
 
 1. Update `three` and `@types/three`. The precompile turns on by itself.
-2. **Port `render/stableClusteredLighting.ts`.** On three dev, the methods it overrides were renamed: `getLightData` → `_getLightData`, `updateLightsTexture` → `_updateLightsTexture`, `create(width, height)` → `_create(clusterCount)`. The overrides stop running, with no error. The aimed downlights then light the ceiling (the night interior's mean brightness went from 70 to 114), and the fixed cluster grid behind the resize fix in `postmortem-stutter.md` is probably gone too. Three dev's clustered lighting also reads spot-light data (`spotDirection`), so it may be able to replace the aimed point lights. That hasn't been checked.
+2. **Port `render/stableClusteredLighting.ts`.** Done: it overrides `_updateLightsTexture` and `_getLightData` (renamed in r187; a stale override stops running with no error, and the aimed downlights then light the ceiling). The fixed cluster grid is gone, since r187 keeps the grid's dimensions in uniforms and a resize no longer rebuilds lit shaders. r187's clustered lighting also reads spot-light data (`spotDirection`), so it may be able to replace the aimed point lights. That hasn't been checked. r187 also dropped `LightProbeGrid.falloff` and moved the probes half a cell inside the grid's box, so the pavilion's grid now spans the whole room.
 3. **Check that the precompile still matches.** `InteriorLight.compileAsync()` depends on the bake's internals: `_updateBounceGrid()`, `_bounceGrid`, 8 probes × 6 faces per capture, and a half-float target. If three changes them, the bake builds its own pipelines again. That means a slow cold start, but no error. In the profiler, the first frame should create about 36 render pipelines, and a cold start should take about 6–7 s here, not 25.
 4. **Revisit `PER_FRAME`** in `world/interiorLight.ts`. r187 renders 8 probes per capture, so baking 1 probe per frame leaves 7 slots of each capture empty, and #34909 reports bakes about 4× faster.
 5. Measure cold and warm startup again, and compare night screenshots with r186.

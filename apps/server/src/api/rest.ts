@@ -2,9 +2,8 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import type { Context, MiddlewareHandler } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { AgentError } from '../agents/manager.ts';
-import type { ApiKeyRow, Store } from '../db.ts';
 import type { EventLog } from './events.ts';
-import { type RateLimiter, verifyApiKey } from './keys.ts';
+import { type ApiKeyRow, type KeyStore, type RateLimiter, verifyApiKey } from './keys.ts';
 import {
   ActionRequest,
   ActionResult,
@@ -37,15 +36,19 @@ function fail(c: Context, status: 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500,
   return c.json({ error: { code, message } }, status);
 }
 
+/** How often a key's "last used" time is written, at most. */
+const TOUCH_EVERY_MS = 60_000;
+
 /** Bearer-key authentication plus a per-key token bucket. Shared by REST, SSE and MCP. */
-export function apiAuth(store: Store, limiter: RateLimiter): MiddlewareHandler<ApiEnv> {
+export function apiAuth(store: KeyStore, limiter: RateLimiter): MiddlewareHandler<ApiEnv> {
+  const touched = new Map<string, number>();
   return async (c, next) => {
     const header = c.req.header('authorization') ?? '';
     const m = /^Bearer\s+(\S+)$/i.exec(header);
-    const key = m ? verifyApiKey(store, m[1]) : null;
+    const key = m ? await verifyApiKey(store, m[1]) : null;
     if (!key) {
       c.header('WWW-Authenticate', 'Bearer realm="ocean-home"');
-      return fail(c, 401, 'unauthorized', 'Send an API key as "Authorization: Bearer ohk_…". Create one with: pnpm keys create <name>');
+      return fail(c, 401, 'unauthorized', 'Send an API key as "Authorization: Bearer ohk_…". Create one in the Account panel of the game menu.');
     }
     const r = limiter.take(key.id, key.ratePerMinute);
     c.header('RateLimit-Limit', String(key.ratePerMinute));
@@ -55,7 +58,11 @@ export function apiAuth(store: Store, limiter: RateLimiter): MiddlewareHandler<A
       return fail(c, 429, 'rate-limited', `Too many requests for this key (${key.ratePerMinute}/minute). Retry in ${r.retryAfterSeconds} s.`);
     }
     c.header('RateLimit-Remaining', String(r.remaining));
-    store.touchApiKey(key.id);
+    const now = Date.now();
+    if (now - (touched.get(key.id) ?? 0) >= TOUCH_EVERY_MS) {
+      touched.set(key.id, now);
+      store.touchApiKey(key.id, now);
+    }
     c.set('apiKey', key);
     await next();
   };
@@ -70,7 +77,7 @@ export function createRestApi(service: ApiService, events: EventLog, auth: Middl
       }
     },
   });
-  app.openAPIRegistry.registerComponent('securitySchemes', 'ApiKey', { type: 'http', scheme: 'bearer', description: 'Key from `pnpm keys create`' });
+  app.openAPIRegistry.registerComponent('securitySchemes', 'ApiKey', { type: 'http', scheme: 'bearer', description: 'Key from the Account panel in the game menu' });
 
   app.onError((err, c) => {
     if (err instanceof AgentError) return fail(c, err.status, err.code, err.message);
@@ -128,11 +135,11 @@ export function createRestApi(service: ApiService, events: EventLog, auth: Middl
           },
         },
       },
-      responses: { 201: json(AvatarStatus, 'Spawned'), 200: json(AvatarStatus, 'This key already had an avatar with that name'), ...COMMON_ERRORS, 404: errorResponse('Unknown place'), 409: errorResponse('Too many avatars') },
+      responses: { 201: json(AvatarStatus, 'Spawned'), 200: json(AvatarStatus, 'This key already had an avatar with that name'), ...COMMON_ERRORS, 404: errorResponse('Unknown place'), 409: errorResponse('Too many avatars, or the name belongs to someone') },
     }),
-    (c) => {
+    async (c) => {
       const body = c.req.valid('json');
-      const r = service.join(key(c), body.name, body.place);
+      const r = await service.join(key(c), body.name, body.place);
       return c.json(r.avatar, r.created ? 201 : 200);
     },
   );
@@ -241,12 +248,12 @@ export function createRestApi(service: ApiService, events: EventLog, auth: Middl
             await stream.write(': keep-alive\n\n');
             lastBeat = Date.now();
           }
-          let timer: NodeJS.Timeout | undefined;
+          let timer: ReturnType<typeof setTimeout> | undefined;
           await new Promise<void>((r) => {
             wake = r;
             timer = setTimeout(r, 15_000);
           });
-          clearTimeout(timer);
+          if (timer !== undefined) clearTimeout(timer);
           wake = null;
         }
         unsubscribe();

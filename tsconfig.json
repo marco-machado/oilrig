@@ -1,19 +1,10 @@
 {
+  // Node-side files: build and test configs, scripts, Playwright specs. Each app and test
+  // project has its own tsconfig (see `pnpm typecheck`).
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2024",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
-    "types": ["node"],
-    "strict": true,
-    "noEmit": true,
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "erasableSyntaxOnly": true,
-    "isolatedModules": true,
-    "skipLibCheck": true,
-    "noUncheckedIndexedAccess": false,
-    "resolveJsonModule": true
+    "types": ["node"]
   },
-  "include": ["packages/*/src", "apps/*/src", "apps/client/vite.config.ts", "tests"]
+  "include": ["*.ts", "scripts", "tests/e2e", "apps/client/vite.config.ts", "apps/server/vite-wasm.ts"]
 }

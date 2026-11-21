@@ -1,0 +1,9 @@
+{
+  // The browser game and pages.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"]
+  },
+  "include": ["src", "../../packages/shared/src"]
+}

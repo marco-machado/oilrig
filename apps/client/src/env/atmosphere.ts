@@ -1,10 +1,10 @@
 import {
   CircleGeometry,
   Color,
+  type CubeRenderTarget,
   Mesh,
   MeshBasicNodeMaterial,
   PMREMGenerator,
-  type RenderTarget,
   Scene,
   Vector3,
   type WebGPURenderer,
@@ -41,7 +41,7 @@ export class Atmosphere {
   readonly sky = new OceanSky();
   readonly sun = new SunLight(0xffffff, 1);
   private readonly pmrem: PMREMGenerator;
-  private envTarget: RenderTarget | null = null;
+  private envTarget: CubeRenderTarget | null = null;
   private readonly envScene = new Scene();
   private readonly lastEnvSun = new Vector3(0, -2, 0);
   private lastEnvCloud = -1;

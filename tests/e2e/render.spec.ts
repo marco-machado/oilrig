@@ -92,17 +92,17 @@ test('Esc frees the cursor without pausing: the world keeps running and the menu
   await expect(page.locator('.oh-perfhud')).toBeVisible();
 });
 
-test('Log out returns to the sign-in screen, and coming back aboard works', async ({ page }) => {
+test('Leave returns to the start screen, and coming back aboard works', async ({ page }) => {
   await page.goto('/?offline&q=low&hour=12&name=Tester');
   await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 5, undefined, { timeout: 60_000 });
   await page.click('button:has-text("Come aboard")');
   await page.waitForTimeout(800);
   await page.evaluate(() => document.exitPointerLock());
-  await page.click('.oh-rail button:has-text("Log out")');
+  await page.click('.oh-rail button:has-text("Leave")');
   await expect(page.locator('.oh-dialog')).toBeVisible();
-  await page.click('.oh-dialog button:has-text("Log out")');
+  await page.click('.oh-dialog button:has-text("Leave")');
   await expect(page.locator('.oh-join')).toBeVisible();
-  await expect(page.locator('.oh-join__status')).toHaveText('You logged out.');
+  await expect(page.locator('.oh-join__status')).toHaveText('You left the platform.');
   expect(await page.evaluate(() => (window as any).__oceanHome.ui.joined)).toBe(false);
   await page.click('button:has-text("Come aboard")');
   await page.waitForTimeout(800);

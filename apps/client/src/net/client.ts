@@ -1,4 +1,5 @@
 import {
+  CLOSE,
   type ClientMessage,
   NET,
   PROTOCOL_VERSION,
@@ -13,16 +14,15 @@ export interface NetHandlers {
   onMessage(m: Msg): void;
   /** `unreachable`: the socket never opened, i.e. the server is down or not there. */
   onClose(reason: string, willRetry: boolean, unreachable: boolean): void;
+  /** The server ended the connection for good: the account joined from elsewhere, or is no longer signed in. */
+  onEnded(why: 'replaced' | 'signed-out', message: string): void;
 }
 
-const SESSION_KEY = 'ocean-home.session';
-
-/** WebSocket connection with clock sync and automatic reconnect (same session). */
+/** WebSocket connection with clock sync and automatic reconnect. Who joins is the signed-in
+ * account (the session cookie goes along with the upgrade). */
 export class NetClient {
   private ws: WebSocket | null = null;
-  private name = '';
-  private password = '';
-  private session: string | null = null;
+  private ended: { why: 'replaced' | 'signed-out'; message: string } | null = null;
   private offset = 0;
   private offsetSamples = 0;
   private pingTimer = 0;
@@ -35,11 +35,6 @@ export class NetClient {
 
   constructor(handlers: NetHandlers) {
     this.handlers = handlers;
-    try {
-      this.session = sessionStorage.getItem(SESSION_KEY);
-    } catch {
-      this.session = null;
-    }
   }
 
   /** Server clock estimate in ms. */
@@ -47,21 +42,10 @@ export class NetClient {
     return Date.now() + this.offset;
   }
 
-  connect(name: string, password: string) {
-    this.name = name;
-    this.password = password;
+  connect() {
     this.closedByUser = false;
+    this.retry = 0;
     this.open();
-  }
-
-  /** Logging out: the next connect() joins as a new player instead of resuming this one. */
-  endSession() {
-    this.session = null;
-    try {
-      sessionStorage.removeItem(SESSION_KEY);
-    } catch {
-      // storage unavailable
-    }
   }
 
   /** Stops connecting (and reconnecting) until the next connect(). */
@@ -77,14 +61,9 @@ export class NetClient {
     const ws = new WebSocket(`${proto}://${location.host}/ws`);
     this.ws = ws;
     this.welcomed = false;
+    this.ended = null;
     ws.addEventListener('open', () => {
-      this.send({
-        type: 'hello',
-        version: PROTOCOL_VERSION,
-        name: this.name,
-        password: this.password || undefined,
-        session: this.session ?? undefined,
-      });
+      this.send({ type: 'hello', version: PROTOCOL_VERSION });
     });
     ws.addEventListener('message', (ev) => {
       let data: unknown;
@@ -100,12 +79,6 @@ export class NetClient {
         this.connected = true;
         this.welcomed = true;
         this.retry = 0;
-        this.session = m.session;
-        try {
-          sessionStorage.setItem(SESSION_KEY, m.session);
-        } catch {
-          // storage unavailable
-        }
         this.offset = m.serverTime - Date.now();
         this.offsetSamples = 1;
         this.startPing();
@@ -119,6 +92,12 @@ export class NetClient {
         this.offset += (est - this.offset) / this.offsetSamples;
         return;
       }
+      if (m.type === 'error' && (m.code === 'replaced' || m.code === 'signed-out')) {
+        // The close that follows ends it; no reconnecting.
+        this.ended = { why: m.code, message: m.message };
+        this.closedByUser = true;
+        return;
+      }
       if (m.type === 'error' && !this.welcomed) {
         this.closedByUser = true;
         this.handlers.onClose(m.message, false, false);
@@ -127,10 +106,18 @@ export class NetClient {
       }
       this.handlers.onMessage(m);
     });
-    ws.addEventListener('close', () => {
+    ws.addEventListener('close', (ev) => {
       const wasConnected = this.connected;
       this.connected = false;
       window.clearInterval(this.pingTimer);
+      if (this.ws !== ws) return;
+      if (!this.ended && ev.code === CLOSE.replaced) this.ended = { why: 'replaced', message: 'Signed in elsewhere.' };
+      if (!this.ended && ev.code === CLOSE.unauthorized) this.ended = { why: 'signed-out', message: 'Sign in to come aboard.' };
+      if (this.ended) {
+        this.closedByUser = true;
+        this.handlers.onEnded(this.ended.why, this.ended.message);
+        return;
+      }
       if (this.closedByUser) return;
       const willRetry = wasConnected || this.retry < 3;
       this.handlers.onClose(wasConnected ? 'Connection lost. Reconnecting…' : 'Could not reach the server.', willRetry, !wasConnected);

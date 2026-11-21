@@ -44,8 +44,8 @@ export function buildMcpServer(service: ApiService, keyId: string) {
       }),
     },
     ({ name, place }) =>
-      run(() => {
-        const r = service.join(keyId, name, place);
+      run(async () => {
+        const r = await service.join(keyId, name, place);
         return ok(r.created ? `You are aboard as ${r.avatar.name}.` : `${r.avatar.name} was already aboard.`, r.avatar);
       }),
   );

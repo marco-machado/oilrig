@@ -1,7 +1,5 @@
-import { EventEmitter } from 'node:events';
-import { randomBytes, randomUUID } from 'node:crypto';
-import RAPIER from '@dimforge/rapier3d-compat';
 import {
+  CLOSE,
   type ChatEntry,
   type ClientMessage,
   type ClockConfig,
@@ -18,6 +16,7 @@ import {
   type Layout,
   NET,
   type PlayerInfo,
+  type Rapier,
   type PlayerPose,
   type ServerMessage,
   type StaticWorld,
@@ -41,7 +40,8 @@ import {
   padOccupied,
   seatPosition,
 } from '@ocean-home/shared';
-import type { Store } from '../db.ts';
+import { Emitter } from './emitter.ts';
+import type { WorldStore } from './store.ts';
 import { type AcceptedPose, MovementValidator } from './validation.ts';
 
 export interface Connection {
@@ -50,9 +50,14 @@ export interface Connection {
   close(code?: number, reason?: string): void;
 }
 
+/** A signed-in person, as the Worker vouches for them. */
+export interface Identity {
+  userId: string;
+  name: string;
+}
+
 interface Player {
   info: PlayerInfo;
-  session: string;
   conn: Connection | null;
   /** Server-simulated AI avatar (always present until it leaves). */
   agent: boolean;
@@ -77,10 +82,10 @@ export type DoorResult = { ok: true; changed: boolean } | { ok: false; code: 'un
 export type ChatResult = { ok: true; entry: ChatEntry } | { ok: false; code: 'rate-limited' | 'empty'; message: string };
 
 export interface WorldOptions {
+  rapier: Rapier;
   clock: ClockConfig;
   weatherSeed: number;
-  joinPassword: string | null;
-  store: Store;
+  store: WorldStore;
   drone?: Partial<DroneScheduleOptions>;
 }
 
@@ -88,7 +93,7 @@ export interface WorldOptions {
 // a short trip now and then.
 const DRONE_DEFAULTS: DroneScheduleOptions = { intervalMs: 3 * 60_000, stayMs: 12 * 60_000, firstArrivalMs: 60_000, seed: 7, startLanded: true };
 
-function colorFor(name: string) {
+export function colorFor(name: string) {
   let h = 2166136261;
   for (const ch of name) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
   const hue = (h >>> 0) % 360;
@@ -105,18 +110,19 @@ function colorFor(name: string) {
 const sanitize = (text: string) => text.replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
 
 /** Authoritative shared world: players, doors, chat, clock and weather. */
-export class World extends EventEmitter<WorldEvents> {
+export class World extends Emitter<WorldEvents> {
   readonly layout: Layout;
   readonly sw: StaticWorld;
   clock: ClockConfig;
   private readonly weather: WeatherControl;
   private readonly validator: MovementValidator;
   private readonly players = new Map<string, Player>();
-  private readonly sessions = new Map<string, Player>();
   private readonly doors = new Map<string, boolean>();
   private readonly chat: ChatEntry[];
   private readonly opts: WorldOptions;
-  private timers: NodeJS.Timeout[] = [];
+  private timers: Array<ReturnType<typeof setInterval>> = [];
+  /** The configured clock, which a saved clock only replaces if it was set from the same one. */
+  private readonly clockBase: string;
   private lastWeather: WeatherState;
   readonly drone: DroneScheduler;
   readonly crew = new DroneCrew();
@@ -124,15 +130,19 @@ export class World extends EventEmitter<WorldEvents> {
   private droneLive: (DronePoseMsg & { t: number }) | null = null;
   readonly elevator: ElevatorController;
 
-  private constructor(sw: StaticWorld, opts: WorldOptions) {
+  private constructor(sw: StaticWorld, opts: WorldOptions, doors: Record<string, boolean>) {
     super();
     this.opts = opts;
     this.layout = getLayout();
     this.sw = sw;
-    this.clock = opts.clock;
+    this.clockBase = JSON.stringify(opts.clock);
+    const saved = opts.store.savedClock();
+    this.clock = saved && saved.base === this.clockBase ? saved.clock : opts.clock;
     this.weather = new WeatherControl(new WeatherModel(opts.weatherSeed, DEFAULT_EPOCH));
+    const mode = opts.store.savedWeatherMode();
+    if (mode) this.weather.restore(mode);
     this.validator = new MovementValidator(sw);
-    for (const d of this.layout.doors) this.doors.set(d.id, false);
+    for (const d of this.layout.doors) this.doors.set(d.id, doors[d.id] ?? false);
     this.chat = opts.store.recentChat(NET.chatHistory);
     this.lastWeather = this.currentWeather();
     this.drone = new DroneScheduler({ ...DRONE_DEFAULTS, ...opts.drone }, Date.now(), {
@@ -153,9 +163,12 @@ export class World extends EventEmitter<WorldEvents> {
     this.syncElevator(Date.now());
   }
 
-  static async create(opts: WorldOptions) {
-    await RAPIER.init();
-    return new World(buildStaticWorld(RAPIER, getLayout()), opts);
+  /** `opts.rapier` must already be initialised. */
+  static create(opts: WorldOptions) {
+    const layout = getLayout();
+    const known = new Set(layout.doors.map((d) => d.id));
+    const doors = Object.fromEntries(Object.entries(opts.store.doors()).filter(([id]) => known.has(id)));
+    return new World(buildStaticWorld(opts.rapier, layout, doors), opts, doors);
   }
 
   currentWeather(now = Date.now()): WeatherState {
@@ -166,7 +179,14 @@ export class World extends EventEmitter<WorldEvents> {
     return this.weather.mode;
   }
 
+  /** Runs the clocks: snapshots, weather, the drone and the elevator. Safe to call twice. */
   start() {
+    if (this.timers.length) return;
+    // The drone and the elevator have been idle; their schedules pick up from now.
+    const now = Date.now();
+    this.drone.update(now);
+    this.elevator.update(now);
+    this.syncElevator(now);
     this.timers.push(setInterval(() => this.broadcastSnapshot(), 1000 / NET.snapshotHz));
     this.timers.push(
       setInterval(() => {
@@ -176,7 +196,7 @@ export class World extends EventEmitter<WorldEvents> {
         this.broadcast({ type: 'env', t: Date.now(), weather: w });
       }, 1000 / NET.envHz),
     );
-    this.timers.push(setInterval(() => this.expireSessions(), 30_000));
+    this.timers.push(setInterval(() => this.expirePlayers(), 30_000));
     this.timers.push(
       setInterval(() => {
         const now = Date.now();
@@ -190,6 +210,10 @@ export class World extends EventEmitter<WorldEvents> {
   stop() {
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
+  }
+
+  get running() {
+    return this.timers.length > 0;
   }
 
   get playerCount() {
@@ -234,24 +258,22 @@ export class World extends EventEmitter<WorldEvents> {
     this.broadcast({ type: 'snapshot', t: Date.now(), players, ...(drone ? { drone } : {}) });
   }
 
-  private expireSessions() {
-    const now = Date.now();
-    for (const [token, p] of this.sessions) {
-      if (!p.conn && now - p.lastSeen > NET.sessionTtlMs) {
-        this.sessions.delete(token);
-        this.players.delete(p.info.id);
-      }
+  /** People who left keep their place for a while, so a reconnect puts them back where they were. */
+  private expirePlayers(now = Date.now()) {
+    for (const p of this.players.values()) {
+      if (!p.agent && !p.conn && now - p.lastSeen > NET.sessionTtlMs) this.players.delete(p.info.id);
     }
   }
 
-  /** Handles one validated message from a connection. Returns the player once joined. */
-  handle(conn: Connection, current: Player | null, m: ClientMessage): Player | null {
+  /** Handles one validated message from a connection. Returns the player once joined (`who`
+   * is needed until then). */
+  handle(conn: Connection, current: Player | null, m: ClientMessage, who?: Identity): Player | null {
     if (!current) {
-      if (m.type !== 'hello') {
+      if (m.type !== 'hello' || !who) {
         conn.send({ type: 'error', code: 'not-joined', message: 'Send hello first.' });
         return null;
       }
-      return this.join(conn, m);
+      return this.join(conn, who);
     }
     const now = Date.now();
     current.lastSeen = now;
@@ -292,26 +314,27 @@ export class World extends EventEmitter<WorldEvents> {
     }
   }
 
-  private join(conn: Connection, m: Extract<ClientMessage, { type: 'hello' }>): Player | null {
-    if (this.opts.joinPassword && m.password !== this.opts.joinPassword) {
-      conn.send({ type: 'error', code: 'bad-password', message: 'Wrong password.' });
-      return null;
-    }
-    const name = sanitize(m.name).slice(0, NET.nameMaxLength) || 'Guest';
+  /** Brings someone aboard, or back to where they were. The newest connection wins: an older
+   * one for the same person is told why and closed. */
+  join(conn: Connection, who: Identity): Player {
+    const name = sanitize(who.name).slice(0, NET.nameMaxLength) || 'Guest';
     const now = Date.now();
-    let player = m.session ? this.sessions.get(m.session) : undefined;
-    if (player && player.conn) player = undefined; // session already in use: start fresh
+    let player = this.players.get(who.userId);
+    const wasHere = !!player?.conn;
     if (player) {
+      const old = player.conn;
+      if (old && old !== conn) {
+        old.send({ type: 'error', code: 'replaced', message: 'Signed in elsewhere.' });
+        old.close(CLOSE.replaced, 'signed in elsewhere');
+      }
       player.conn = conn;
       player.info.name = name;
       player.lastSeen = now;
       player.pose.t = now;
     } else {
       const spawn = this.layout.spawn;
-      const color = this.opts.store.profileColor(name) ?? colorFor(name);
       player = {
-        info: { id: randomUUID().slice(0, 8), name, color, kind: 'human' },
-        session: randomBytes(18).toString('base64url'),
+        info: { id: who.userId, name, color: colorFor(who.userId), kind: 'human' },
         conn,
         agent: false,
         pose: { p: spawn.position, t: now, yaw: spawn.yaw, pitch: 0, speed: 0, grounded: true },
@@ -320,13 +343,10 @@ export class World extends EventEmitter<WorldEvents> {
         poseTimes: [],
       };
       this.players.set(player.info.id, player);
-      this.sessions.set(player.session, player);
     }
-    this.opts.store.touchProfile(name, player.info.color);
     conn.send({
       type: 'welcome',
       you: player.info,
-      session: player.session,
       pose: { p: player.pose.p, yaw: player.pose.yaw },
       serverTime: now,
       clock: this.clock,
@@ -339,13 +359,16 @@ export class World extends EventEmitter<WorldEvents> {
       elevator: this.elevator.state,
       weatherMode: this.weather.mode,
     });
-    this.broadcast({ type: 'join', player: player.info }, player);
-    this.emit('join', player.info);
+    if (!wasHere) {
+      this.broadcast({ type: 'join', player: player.info }, player);
+      this.emit('join', player.info);
+    }
     return player;
   }
 
-  disconnect(player: Player) {
-    if (!player.conn) return;
+  /** A connection closed. Only the player's current connection counts: one it replaced does not. */
+  disconnect(player: Player, conn: Connection) {
+    if (!player.conn || player.conn !== conn) return;
     if (this.crew.seatOf(player.info.id) !== null) {
       // Whoever drops out of the drone comes back on the terrace.
       this.leaveDrone(player, Date.now());
@@ -404,7 +427,7 @@ export class World extends EventEmitter<WorldEvents> {
     const text = sanitize(raw).slice(0, NET.chatMaxLength);
     if (!text) return { ok: false, code: 'empty', message: 'Nothing to say.' };
     p.chatTimes.push(now);
-    const entry: ChatEntry = { id: randomUUID(), from: p.info.id, name: p.info.name, text, t: now };
+    const entry: ChatEntry = { id: crypto.randomUUID(), from: p.info.id, name: p.info.name, text, t: now };
     this.chat.push(entry);
     while (this.chat.length > NET.chatHistory) this.chat.shift();
     this.opts.store.addChat(entry);
@@ -432,6 +455,7 @@ export class World extends EventEmitter<WorldEvents> {
     if (this.doors.get(id) === open) return { ok: true, changed: false };
     this.doors.set(id, open);
     this.sw.setDoorOpen(id, open);
+    this.opts.store.saveDoor(id, open);
     this.broadcast({ type: 'door', id, open, by: p.info.id });
     this.emit('door', { id, open, by: p.info.id });
     return { ok: true, changed: true };
@@ -448,8 +472,7 @@ export class World extends EventEmitter<WorldEvents> {
     const clean = sanitize(name).slice(0, NET.nameMaxLength) || 'Agent';
     const now = Date.now();
     const player: Player = {
-      info: { id: randomUUID().slice(0, 8), name: clean, color: colorFor(`agent:${clean}`), kind: 'agent' },
-      session: '',
+      info: { id: crypto.randomUUID().slice(0, 8), name: clean, color: colorFor(`agent:${clean}`), kind: 'agent' },
       conn: null,
       agent: true,
       pose: { p: position, t: now, yaw, pitch: 0, speed: 0, grounded: true },
@@ -606,16 +629,34 @@ export class World extends EventEmitter<WorldEvents> {
   /** Someone changed the time of day, the speed of the day or the weather, for everyone. */
   private setEnv(p: Player, m: Extract<ClientMessage, { type: 'setenv' }>, now: number) {
     if (p.agent) return;
-    if (m.hour !== undefined || m.rate !== undefined) this.clock = adjustClock(this.clock, now, { hour: m.hour, rate: m.rate });
-    if (m.weather) this.weather.set(m.weather as WeatherMode, gameTime(this.clock, now), now);
-    this.broadcast({ type: 'envctl', clock: this.clock, weatherMode: this.weather.mode, by: p.info.name });
+    this.changeEnvironment({ hour: m.hour, rate: m.rate, weather: m.weather as WeatherMode | undefined }, now, p.info.name);
   }
 
   /** Same as a player's controls, for tests and tools. */
   setEnvironment(o: { hour?: number; rate?: number; weather?: WeatherMode }, now = Date.now()) {
-    if (o.hour !== undefined || o.rate !== undefined) this.clock = adjustClock(this.clock, now, o);
-    if (o.weather) this.weather.set(o.weather, gameTime(this.clock, now), now);
-    this.broadcast({ type: 'envctl', clock: this.clock, weatherMode: this.weather.mode });
+    this.changeEnvironment(o, now);
+  }
+
+  private changeEnvironment(o: { hour?: number; rate?: number; weather?: WeatherMode }, now: number, by?: string) {
+    if (o.hour !== undefined || o.rate !== undefined) {
+      this.clock = adjustClock(this.clock, now, { hour: o.hour, rate: o.rate });
+      this.opts.store.saveClock(this.clock, this.clockBase);
+    }
+    if (o.weather) {
+      this.weather.set(o.weather, gameTime(this.clock, now), now);
+      this.opts.store.saveWeatherMode(o.weather);
+    }
+    this.broadcast({ type: 'envctl', clock: this.clock, weatherMode: this.weather.mode, ...(by ? { by } : {}) });
+  }
+
+  // ---------- accounts ----------
+
+  /** Someone changed their display name: everyone aboard sees it at once. */
+  rename(userId: string, name: string) {
+    const p = this.players.get(userId);
+    if (!p || p.agent) return;
+    p.info.name = sanitize(name).slice(0, NET.nameMaxLength) || p.info.name;
+    if (p.conn) this.broadcast({ type: 'player', player: p.info });
   }
 
   doorState(id: string) {

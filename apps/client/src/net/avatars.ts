@@ -21,6 +21,7 @@ interface Avatar {
   buffer: InterpolationBuffer;
   phase: number;
   label: CSS2DObject;
+  tag: HTMLElement;
   bubble: HTMLElement;
   bubbleUntil: number;
 }
@@ -106,7 +107,7 @@ export class Avatars {
 
     const tagEl = document.createElement('div');
     tagEl.className = 'tag';
-    tagEl.textContent = info.name;
+    tagEl.append(info.name);
     if (info.kind === 'agent') {
       // AI agents look like everyone else, with a small badge on the name tag.
       tagEl.classList.add('agent');
@@ -141,9 +142,18 @@ export class Avatars {
       buffer: new InterpolationBuffer(),
       phase: 0,
       label,
+      tag: tagEl,
       bubble,
       bubbleUntil: 0,
     });
+  }
+
+  /** Someone's display name changed. */
+  rename(id: string, name: string) {
+    const a = this.avatars.get(id);
+    if (!a) return;
+    a.info = { ...a.info, name };
+    a.tag.firstChild!.textContent = name;
   }
 
   remove(id: string) {

@@ -1,7 +1,7 @@
-import { DataTexture, FloatType, type Light, RGBAFormat, type Vector3, type WebGPURenderer } from 'three/webgpu';
+import { DataTexture, FloatType, type Light, RGBAFormat, type Vector3 } from 'three/webgpu';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
 import ClusteredLightsNode from 'three/addons/tsl/lighting/ClusteredLightsNode.js';
-import { Fn, clamp, dot, float, int, ivec2, log, normalize, positionView, positionWorld, screenUV, smoothstep, textureLoad, vec2 } from 'three/tsl';
+import { dot, float, int, ivec2, normalize, positionView, smoothstep, textureLoad, vec4 } from 'three/tsl';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -22,14 +22,12 @@ export interface AimedLight {
 export const CONE_SOFTNESS = 0.22;
 
 /**
- * Clustered lighting whose cluster grid never changes size, with aimed point lights.
+ * Clustered lighting with aimed point lights.
  *
- * three 0.186 bakes the grid (NX × NY screen tiles of 32 px) into every lit shader as
- * constants and rebuilds the grid whenever the drawing buffer changes size, so a window
- * resize or a dynamic-resolution step rebuilt every lit shader (about a second). Here
- * the grid is built once, from the first drawing-buffer size, and fragments find their
- * tile by screen fraction instead of by pixel: the tiles stretch with the screen and
- * the shaders stay valid at any resolution.
+ * Since three r187 the cluster grid's dimensions are uniforms, so a window resize or a
+ * dynamic-resolution step no longer rebuilds every lit shader, and this class only adds the
+ * aim. It overrides two private methods of three's ClusteredLightsNode (`_updateLightsTexture`
+ * and `_getLightData`): if three renames them, the cones stop applying, with no error.
  */
 class StableClusteredLightsNode extends ClusteredLightsNode {
   /** Per light, in the same (depth-sorted) order as the lights texture: aim xyz, cone cosine (-2: everywhere). */
@@ -40,17 +38,8 @@ class StableClusteredLightsNode extends ClusteredLightsNode {
     this.aimTexture = new DataTexture(new Float32Array(maxLights * 4), maxLights, 1, RGBAFormat, FloatType);
   }
 
-  updateProgram(renderer: WebGPURenderer) {
-    if ((this as any)._bufferSize === null) (ClusteredLightsNode.prototype as any).updateProgram.call(this, renderer);
-  }
-
-  setSize(width: number, height: number) {
-    if ((this as any)._bufferSize === null) super.setSize(width, height);
-    return this;
-  }
-
-  updateLightsTexture(camera: any) {
-    (ClusteredLightsNode.prototype as any).updateLightsTexture.call(this, camera);
+  _updateLightsTexture(camera: any) {
+    (ClusteredLightsNode.prototype as any)._updateLightsTexture.call(this, camera);
     const order: number[] = (this as any)._lightSortOrder;
     const data = this.aimTexture.image.data as Float32Array;
     for (let i = 0; i < order.length; i++) {
@@ -68,32 +57,14 @@ class StableClusteredLightsNode extends ClusteredLightsNode {
     this.aimTexture.needsUpdate = true;
   }
 
-  getLightData(index: any) {
-    const d = (ClusteredLightsNode.prototype as any).getLightData.call(this, index);
-    // Only the fragment pass uses the colour: the cluster compute never builds this.
+  _getLightData(index: any) {
+    const d = (ClusteredLightsNode.prototype as any)._getLightData.call(this, index);
+    // Only the fragment pass uses the colour: the cluster compute reads the light bounds instead.
     const aim = textureLoad(this.aimTexture, ivec2(int(index), 0));
-    const toFragment = normalize(positionWorld.sub(d.position));
-    const inCone = smoothstep(aim.w, aim.w.add(CONE_SOFTNESS), dot(toFragment, aim.xyz));
+    const aimView = (this as any)._cameraViewMatrix.mul(vec4(aim.xyz, 0)).xyz;
+    const toFragment = normalize(positionView.sub(d.viewPosition));
+    const inCone = smoothstep(aim.w, aim.w.add(CONE_SOFTNESS), dot(toFragment, aimView));
     return { ...d, color: d.color.mul(aim.w.lessThan(-1.5).select(float(1), inCone)) };
-  }
-
-  create(width: number, height: number) {
-    (ClusteredLightsNode.prototype as any).create.call(this, width, height);
-    const self = this as any;
-    const NX = Math.floor(width / this.tileSize);
-    const NY = Math.floor(height / this.tileSize);
-    const NZ = this.zSlices;
-    // Same as three's cluster lookup, with the screen tile from screenUV instead of pixels.
-    self._screenClusterIndex = Fn(() => {
-      const tile = clamp(screenUV.mul(vec2(NX, NY)).floor(), vec2(0, 0), vec2(NX - 1, NY - 1));
-      const viewDepth = positionView.z.negate();
-      const invLogFarOverNear = float(1).div(log(self._cameraFar.div(self._cameraNear)));
-      const sliceFloat = log(viewDepth.div(self._cameraNear)).mul(invLogFarOverNear).mul(float(NZ));
-      const zSlice = clamp(sliceFloat.floor(), float(0), float(NZ - 1));
-      return int(tile.x)
-        .add(int(tile.y).mul(int(NX)))
-        .add(int(zSlice).mul(int(NX * NY)));
-    })().toVar();
   }
 
   dispose() {

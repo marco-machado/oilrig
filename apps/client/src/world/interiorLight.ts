@@ -12,7 +12,6 @@ import {
 } from 'three/webgpu';
 import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js';
 import { replaceSunLights, restoreSunLights } from 'three/addons/lighting/LightProbeGridUtils.js';
-import { LightProbeGridNode } from 'three/addons/tsl/lighting/LightProbeGridNode.js';
 import { DIMS } from '@ocean-home/shared';
 
 // Each probe renders the scene six times (a cube map), all on the GPU: 15 a frame stalled
@@ -51,19 +50,15 @@ export class InteriorLight {
     this.renderer = renderer;
     this.scene = scene;
     this.hidden = hiddenDuringBake;
-    // bake() registers the grid's light node, but shaders are pre-compiled before the
-    // first bake; without this they are built with no bounce light at all.
-    if (renderer.library.getLightNodeClass(LightProbeGrid) === null) {
-      renderer.library.addLight(LightProbeGridNode, LightProbeGrid);
-    }
     const P = DIMS.PAVILION;
-    const w = P.x1 - P.x0 - 1;
-    const h = P.height - 0.8;
-    const d = P.z1 - P.z0 - 1;
+    // The whole room: since three r187 the grid lights only what is inside its box (there is
+    // no falloff beyond it), and the probes sit half a cell in from the box's faces.
+    const w = P.x1 - P.x0;
+    const h = P.height;
+    const d = P.z1 - P.z0;
     this.grid = new LightProbeGrid(w, h, d, 9, 3, 5);
     this.grid.position.set((P.x0 + P.x1) / 2, P.floor + P.height / 2, (P.z0 + P.z1) / 2);
     this.grid.updateBoundingBox();
-    this.grid.falloff = 0.8;
     this.grid.intensity = 0.8;
     this.total = 9 * 3 * 5;
     scene.add(this.grid);

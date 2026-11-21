@@ -18,6 +18,8 @@ export class EventLog {
   private seq = 0;
   private readonly ring: LoggedEvent[] = [];
   private readonly subs = new Set<(e: LoggedEvent) => void>();
+  /** Called when a stream opens or closes (open streams keep the world running). */
+  onSubscribersChange: ((count: number) => void) | null = null;
 
   constructor(world: World) {
     world.on('join', (p) => this.push('join', p));
@@ -43,7 +45,10 @@ export class EventLog {
 
   subscribe(fn: (e: LoggedEvent) => void) {
     this.subs.add(fn);
-    return () => this.subs.delete(fn);
+    this.onSubscribersChange?.(this.subs.size);
+    return () => {
+      if (this.subs.delete(fn)) this.onSubscribersChange?.(this.subs.size);
+    };
   }
 
   get subscribers() {

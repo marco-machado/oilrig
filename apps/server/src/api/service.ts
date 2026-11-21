@@ -19,10 +19,13 @@ const iso = (ms: number) => new Date(ms).toISOString();
 export class ApiService {
   readonly world: World;
   readonly agents: AgentManager;
+  /** Whether a name belongs to a registered person (agents may not use it). */
+  private readonly nameTaken: (name: string) => Promise<boolean>;
 
-  constructor(world: World, agents: AgentManager) {
+  constructor(world: World, agents: AgentManager, nameTaken: (name: string) => Promise<boolean> = async () => false) {
     this.world = world;
     this.agents = agents;
+    this.nameTaken = nameTaken;
   }
 
   worldStatus(now = Date.now()) {
@@ -66,12 +69,13 @@ export class ApiService {
   }
 
   /** Joins with a new avatar, or returns the key's avatar of the same name if it is already aboard. */
-  join(keyId: string, name: string, place?: string): { avatar: AvatarStatus; created: boolean } {
+  async join(keyId: string, name: string, place?: string): Promise<{ avatar: AvatarStatus; created: boolean }> {
     const same = this.agents.forKey(keyId).find((a) => a.name.toLowerCase() === name.trim().toLowerCase());
     if (same) {
       same.touch();
       return { avatar: this.agents.status(same), created: false };
     }
+    if (await this.nameTaken(name)) throw new AgentError('name-taken', `"${name.trim()}" is someone's name here. Pick another.`, 409);
     const a = this.agents.spawn(keyId, name, place);
     return { avatar: this.agents.status(a), created: true };
   }
@@ -163,12 +167,12 @@ export class ApiService {
       const quick = await Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), 0))]);
       return quick ? outcome(quick.status, quick.message, quick) : outcome('moving', startedMessage, null);
     }
-    let timer: NodeJS.Timeout | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<null>((r) => {
       timer = setTimeout(() => r(null), timeoutMs);
     });
     const r = await Promise.race([p, timeout]);
-    clearTimeout(timer);
+    if (timer !== undefined) clearTimeout(timer);
     a.touch();
     if (!r) return outcome('moving', `${startedMessage} Still on the way after ${Math.round(timeoutMs / 1000)} s; it keeps going.`, null);
     return outcome(r.status, r.message, r);

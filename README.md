@@ -235,7 +235,7 @@ apps/client       WebGPU renderer, FFT ocean (TSL compute) with GPU height readb
                   sign-up page (signup.html).
 ```
 
-The client predicts its own movement with the same motor the tests use. The server accepts poses only if they are physically plausible: speed, climb rate, no passing through walls, rails, furniture, closed doors or the parked drone, and no standing inside geometry. People seated in the drone are placed in their seats by the server. Otherwise it sends a correction. Agents are simulated by the server itself with the same motor, so they need no validation.
+The client predicts its own movement with the same motor the tests use. The server accepts poses only if they are physically plausible: speed and climb rate (allowances that fill with time, so sending more poses buys no more distance), ground under the feet or a jump or fall that explains being in the air, no passing through walls, rails, furniture, closed doors or the parked drone, and no standing inside geometry. People seated in the drone are placed in their seats by the server. Otherwise it sends a correction. Agents are simulated by the server itself with the same motor, so they need no validation.
 
 Every layout element, place and zone has a semantic `id`/`kind`; the server's in-process event bus (`join`, `leave`, `chat`, `door`, `weather`, `drone`, `elevator`) feeds the SSE stream and the agents' inboxes.
 
@@ -259,7 +259,7 @@ These are behaviour tests (Vitest), with no mocks and no snapshot-of-self. The `
 - **MCP:** over Streamable HTTP with the official client: the eleven tools are listed; join → move_to the helipad → say hello is seen and heard by a WebSocket player; `read_messages` hears a reply once; `interact` refuses doors out of reach and opens one in reach; `leave_world` is seen.
 - **Sun position:** checked against independent references: solstice and equinox geometry, and NOAA solar-noon times.
 - **Weather:** values stay in physical bounds, nothing jumps between samples, every weather kind is reached, and the sequence is deterministic.
-- **Movement validation:** honest runs, stair climbs and jumps are accepted; teleports, speed hacks, flying, and clipping through doors or rails are rejected.
+- **Movement validation:** honest runs, stair climbs, jumps, a long fall, a ride in the elevator and every long route across the platform are accepted, also when poses arrive late or in bursts; teleports and clipping through doors or rails are rejected; a speed hack is held to a run however fast the poses are sent; flying, hovering and walking on air end back on the ground; a wall does not count as ground.
 - **Interpolation:** snapshots under jitter and out-of-order delivery still produce smooth motion.
 - **World socket:** signed-out and cross-site sockets are refused; protocol fuzzing; two-player sync (movement, chat, doors) and coming back to the same place; the newest connection of an account wins; a new display name reaches everyone while old chat lines keep the old one.
 - **Durable Object life:** `/healthz` does not boot the world; it runs while someone is aboard or an agent is out and stops when nobody needs it; time, weather, doors and chat survive an eviction.

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
   DIMS,
   DRONE_SAFE_Y,
@@ -358,12 +358,25 @@ describe('the drone in the shared world', () => {
     expect(b.last('drone')?.crew[0]).toBe(pa.info.id);
     // The pilot streams a flight to the terrace, landing by the firepit lounge.
     const target: Vec3 = [-14, 20.05, 6];
+    // The flight takes time: what the server allows is top speed over the time that passed.
     const steps = 80;
+    const takeoff = Date.now();
+    vi.useFakeTimers({ toFake: ['Date'], now: takeoff });
+    onTestFinished(() => void vi.useRealTimers());
     for (let i = 1; i <= steps; i++) {
       const u = i / steps;
       const p: Vec3 = [PAD[0] + (target[0] - PAD[0]) * u, PAD[1] + Math.sin(u * Math.PI) * 20, PAD[2] + (target[2] - PAD[2]) * u];
+      vi.setSystemTime(takeoff + i * 50);
       world.handle(a.conn, pa, { type: 'drone', p, v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 1, grounded: false });
     }
+    // Streamed faster than the drone flies, the same route gets nowhere: sending more poses buys no distance.
+    const before = world.dronePose().position;
+    for (let i = 1; i <= 200; i++) world.handle(a.conn, pa, { type: 'drone', p: [before[0] + i * 2, before[1], before[2]], v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 1, grounded: false });
+    expect(world.dronePose().position[0]).toBeLessThan(before[0] + DIMS.DRONE.maxSpeed);
+    vi.setSystemTime(takeoff + steps * 50 + 1000);
+    world.handle(a.conn, pa, { type: 'drone', p: before, v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 1, grounded: false });
+    expect(world.dronePose().position).toEqual(before);
+    vi.setSystemTime(takeoff + steps * 50 + 2000);
     // A jump no drone could make is ignored.
     world.handle(a.conn, pa, { type: 'drone', p: [500, 60, 500], v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 1, grounded: false });
     expect(world.dronePose().position[0]).toBeLessThan(0);

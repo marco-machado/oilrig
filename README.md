@@ -89,7 +89,7 @@ The Worker's variables are in `apps/server/wrangler.jsonc` (`vars`); change them
 | `DRONE_START_AWAY` | `false` | Start with the drone away instead of parked on the pad |
 | `DRONE_FIRST_ARRIVAL_MINUTES` | `1` | When starting away: delay before it first arrives |
 | `AGENTS_PER_KEY` / `MAX_AGENTS` | `3` / `24` | AI avatars per API key, and in total |
-| `AGENT_IDLE_MINUTES` | `30` | An agent with no API calls for this long leaves |
+| `AGENT_IDLE_MINUTES` | `30` | An agent with no API calls for this long leaves. Event streams are closed once nobody has been aboard for this long |
 
 ## Deploy
 
@@ -151,7 +151,7 @@ Everything is under `/api/v1`, described by an OpenAPI 3.1 document at `/api/v1/
 | `GET /avatars/{id}/perception` | Perception |
 | `POST /avatars/{id}/chat`, `GET /avatars/{id}/messages` | Say something; unread chat |
 | `GET /chat` | Recent chat |
-| `GET /events` | Server-Sent Events: `join`, `leave`, `chat`, `door`, `weather`, `drone`, `elevator`. Send `Last-Event-ID` to replay what you missed. |
+| `GET /events` | Server-Sent Events: `join`, `leave`, `chat`, `door`, `weather`, `drone`, `elevator`. Send `Last-Event-ID` to replay what you missed; ids only grow, also across a restart of the server. With nobody (person or avatar) aboard for `AGENT_IDLE_MINUTES` the stream is closed and a new one answers `204` until someone is aboard again. |
 
 ```bash
 curl -s -X POST localhost:5173/api/v1/avatars -H "Authorization: Bearer $KEY" -H 'content-type: application/json' -d '{"name":"Scout"}'
@@ -215,7 +215,8 @@ apps/server       The Cloudflare Worker (wrangler.jsonc) and its Durable Objects
   src/do          WorldDO ("world", one instance): the server. Players over hibernatable
                   WebSockets, agents, the REST/SSE/MCP API, chat, API keys; SQLite for chat,
                   keys, saved time/weather and doors. Its clocks run only while someone is
-                  aboard, an agent is out or an event stream is open, with a heartbeat alarm.
+                  aboard, an agent is out or an event stream is open (a stream alone holds it for
+                  half an hour after the last of them left), with a heartbeat alarm.
                   UserDO (one per account): profile, password hash, sessions, sign-in throttle.
                   DirectoryDO ("directory", one instance): the registry of usernames and
                   display names.
@@ -262,7 +263,7 @@ These are behaviour tests (Vitest), with no mocks and no snapshot-of-self. The `
 - **Movement validation:** honest runs, stair climbs, jumps, a long fall, a ride in the elevator and every long route across the platform are accepted, also when poses arrive late or in bursts; teleports and clipping through doors or rails are rejected; a speed hack is held to a run however fast the poses are sent; flying, hovering and walking on air end back on the ground; a wall does not count as ground.
 - **Interpolation:** snapshots under jitter and out-of-order delivery still produce smooth motion.
 - **World socket:** signed-out and cross-site sockets are refused; protocol fuzzing; sixty changes of weather or door presses sent at once are cut down to a handful, and the sender is told once; two-player sync (movement, chat, doors) and coming back to the same place; the newest connection of an account wins; a new display name reaches everyone while old chat lines keep the old one.
-- **Durable Object life:** `/healthz` does not boot the world; it runs while someone is aboard or an agent is out and stops when nobody needs it; time, weather, doors and chat survive an eviction.
+- **Durable Object life:** `/healthz` does not boot the world; it runs while someone is aboard or an agent is out and stops when nobody needs it; an event stream with nobody left to watch is closed and does not keep it running; event ids keep growing across a restart, so a reconnect is sent what happened since; time, weather, doors and chat survive an eviction.
 
 Browser checks use Playwright with the installed Chrome and a temporary profile:
 

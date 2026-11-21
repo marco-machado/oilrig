@@ -261,7 +261,7 @@ These are behaviour tests (Vitest), with no mocks and no snapshot-of-self. The `
 - **Weather:** values stay in physical bounds, nothing jumps between samples, every weather kind is reached, and the sequence is deterministic.
 - **Movement validation:** honest runs, stair climbs, jumps, a long fall, a ride in the elevator and every long route across the platform are accepted, also when poses arrive late or in bursts; teleports and clipping through doors or rails are rejected; a speed hack is held to a run however fast the poses are sent; flying, hovering and walking on air end back on the ground; a wall does not count as ground.
 - **Interpolation:** snapshots under jitter and out-of-order delivery still produce smooth motion.
-- **World socket:** signed-out and cross-site sockets are refused; protocol fuzzing; two-player sync (movement, chat, doors) and coming back to the same place; the newest connection of an account wins; a new display name reaches everyone while old chat lines keep the old one.
+- **World socket:** signed-out and cross-site sockets are refused; protocol fuzzing; sixty changes of weather or door presses sent at once are cut down to a handful, and the sender is told once; two-player sync (movement, chat, doors) and coming back to the same place; the newest connection of an account wins; a new display name reaches everyone while old chat lines keep the old one.
 - **Durable Object life:** `/healthz` does not boot the world; it runs while someone is aboard or an agent is out and stops when nobody needs it; time, weather, doors and chat survive an eviction.
 
 Browser checks use Playwright with the installed Chrome and a temporary profile:

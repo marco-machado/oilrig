@@ -40,6 +40,7 @@ import {
   padOccupied,
   seatPosition,
 } from '@ocean-home/shared';
+import { MessageBudget } from './budget.ts';
 import { Emitter } from './emitter.ts';
 import type { WorldStore } from './store.ts';
 import { MovementValidator, type Track } from './validation.ts';
@@ -68,6 +69,8 @@ interface Player {
   lastSeen: number;
   chatTimes: number[];
   poseTimes: number[];
+  /** How many of each kind of message this person may still send. */
+  budget: MessageBudget;
 }
 
 export interface WorldEvents {
@@ -285,6 +288,11 @@ export class World extends Emitter<WorldEvents> {
     }
     const now = Date.now();
     current.lastSeen = now;
+    if (!current.budget.take(m.type, now)) {
+      // Sent faster than anyone does by hand: dropped, so one person cannot flood the others.
+      if (current.budget.shouldTell(m.type, now)) conn.send({ type: 'error', code: 'rate-limited', message: 'Slow down a little.' });
+      return current;
+    }
     switch (m.type) {
       case 'hello':
         conn.send({ type: 'error', code: 'already-joined', message: 'Already joined.' });
@@ -350,6 +358,7 @@ export class World extends Emitter<WorldEvents> {
         lastSeen: now,
         chatTimes: [],
         poseTimes: [],
+        budget: new MessageBudget(),
       };
       this.players.set(player.info.id, player);
     }
@@ -494,6 +503,7 @@ export class World extends Emitter<WorldEvents> {
       lastSeen: now,
       chatTimes: [],
       poseTimes: [],
+      budget: new MessageBudget(),
     };
     this.players.set(player.info.id, player);
     this.broadcast({ type: 'join', player: player.info });

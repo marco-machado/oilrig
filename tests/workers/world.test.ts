@@ -110,6 +110,34 @@ describe('world socket', () => {
     c.close();
   });
 
+  it('one person cannot flood the others: changes sent faster than a hand can make them are dropped', async () => {
+    const [flood] = await Player.join(await member('Flood'));
+    const [other] = await Player.join(await member('Bystander'));
+    // 60 changes of weather at once, each of which would be stored and announced to everyone.
+    for (let i = 0; i < 60; i++) flood.send({ type: 'setenv', weather: i % 2 ? 'rain' : 'fog' });
+    // Then something else, which still goes through: the limits are per kind of message.
+    flood.send({ type: 'chat', text: 'Done.' });
+    await other.next('chat', (m) => m.entry.text === 'Done.');
+    const heard = other.inbox.filter((m) => m.type === 'envctl').length;
+    expect(heard).toBeGreaterThan(0);
+    expect(heard).toBeLessThanOrEqual(5);
+    // The sender is told, once, not sixty times.
+    expect(flood.inbox.filter((m) => m.type === 'error' && m.code === 'rate-limited').length).toBe(1);
+    // The same for doors (too far away to move one, so each accepted try is answered with "too far").
+    for (let i = 0; i < 60; i++) flood.send({ type: 'door', id: 'door-north', open: i % 2 === 0 });
+    flood.send({ type: 'chat', text: 'Done again.' });
+    await other.next('chat', (m) => m.entry.text === 'Done again.');
+    const tries = flood.inbox.filter((m) => m.type === 'error' && m.code === 'too-far').length;
+    expect(tries).toBeGreaterThan(0);
+    expect(tries).toBeLessThanOrEqual(8);
+    // Back to the forecast for the other tests, once the allowance has refilled.
+    await new Promise((r) => setTimeout(r, 2100));
+    flood.send({ type: 'setenv', weather: 'auto' });
+    expect((await other.next('envctl', (m) => m.weatherMode === 'auto')).weatherMode).toBe('auto');
+    flood.close();
+    other.close();
+  });
+
   it('newest connection wins: the older one is told and closed, nobody sees a leave', async () => {
     const watcher = await member('Watcher');
     const twin = await member('Twin');

@@ -59,7 +59,10 @@ export class InteriorLight {
     this.grid = new LightProbeGrid(w, h, d, 9, 3, 5);
     this.grid.position.set((P.x0 + P.x1) / 2, P.floor + P.height / 2, (P.z0 + P.z1) / 2);
     this.grid.updateBoundingBox();
-    this.grid.intensity = 0.8;
+    // Half of the 0.8 used up to r186: there the floor and ceiling lay 0.4 m outside the grid's
+    // box, halfway through its 0.8 m falloff, so they got half the bounce light. Now they are
+    // inside the box and get all of it.
+    this.grid.intensity = 0.4;
     this.total = 9 * 3 * 5;
     scene.add(this.grid);
   }

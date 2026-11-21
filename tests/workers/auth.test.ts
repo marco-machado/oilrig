@@ -13,7 +13,7 @@ describe('accounts', () => {
     const res = await signUp({ username: username.toUpperCase(), displayName: `Ana ${username}`, password: 'sea breeze 42' });
     expect(res.status).toBe(201);
     const set = res.headers.get('set-cookie')!;
-    expect(set).toMatch(/oh_session=/);
+    expect(set).toMatch(/oilrig_session=/);
     expect(set).toMatch(/HttpOnly/i);
     expect(set).toMatch(/SameSite=Lax/i);
     expect(set).toMatch(/Max-Age=2592000/);
@@ -67,7 +67,7 @@ describe('accounts', () => {
     const cookie = cookieFrom(ok);
 
     const out = await request('/auth/signout', { method: 'POST', cookie });
-    expect(out.headers.get('set-cookie')).toMatch(/oh_session=;/);
+    expect(out.headers.get('set-cookie')).toMatch(/oilrig_session=;/);
     // The old cookie no longer works, even if a client keeps sending it.
     expect(await (await request('/auth/me', { cookie })).json()).toMatchObject({ user: null });
   });
@@ -87,9 +87,9 @@ describe('accounts', () => {
 
   it('rejects tampered cookies', async () => {
     const m = await member('Tamper');
-    const [id, token] = m.cookie.replace('oh_session=', '').split('.');
+    const [id, token] = m.cookie.replace('oilrig_session=', '').split('.');
     const other = await member('Victim');
-    for (const cookie of [`oh_session=${other.account.id}.${token}`, `oh_session=${id}.${'A'.repeat(43)}`, 'oh_session=garbage']) {
+    for (const cookie of [`oilrig_session=${other.account.id}.${token}`, `oilrig_session=${id}.${'A'.repeat(43)}`, 'oilrig_session=garbage']) {
       expect(await (await request('/auth/me', { cookie })).json(), cookie).toMatchObject({ user: null });
     }
   });
@@ -128,14 +128,14 @@ describe('accounts', () => {
       const r = await request('/auth/keys', { method: 'POST', cookie: m.cookie, json: { name: `key ${i}` } });
       expect(r.status).toBe(201);
       const body = (await r.json()) as { key: string; info: { id: string; ratePerMinute: number } };
-      expect(body.key).toMatch(/^ohk_[0-9a-f]{8}_[A-Za-z0-9_-]{32}$/);
+      expect(body.key).toMatch(/^ork_[0-9a-f]{8}_[A-Za-z0-9_-]{32}$/);
       expect(body.info.ratePerMinute).toBe(120);
       made.push(body.info.id);
     }
     const sixth = await request('/auth/keys', { method: 'POST', cookie: m.cookie, json: { name: 'one too many' } });
     expect(sixth.status).toBe(409);
     const list = JSON.stringify(await (await request('/auth/keys', { cookie: m.cookie })).json());
-    expect(list).not.toMatch(/ohk_[0-9a-f]{8}_/);
+    expect(list).not.toMatch(/ork_[0-9a-f]{8}_/);
     expect((await request(`/auth/keys/${made[0]}`, { method: 'DELETE', cookie: m.cookie })).status).toBe(200);
     expect((await request(`/auth/keys/${made[0]}`, { method: 'DELETE', cookie: m.cookie })).status).toBe(404);
     // Someone else's key cannot be revoked.

@@ -35,6 +35,7 @@ import {
 } from './components/index.ts';
 import './components.css';
 import './screens.css';
+import { readStored } from '../storage.ts';
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const compass = (deg: number) => COMPASS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
@@ -54,12 +55,12 @@ export interface Settings {
   autoResolution: boolean;
 }
 
-const SETTINGS_KEY = 'ocean-home.settings';
+const SETTINGS_KEY = 'oilrig.settings';
 
 export function loadSettings(defaultQuality: QualityName): Settings {
   const base: Settings = { quality: defaultQuality, fov: 72, sensitivity: 1, invertY: false, volume: 0.8, autoResolution: false };
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
+    const raw = readStored(SETTINGS_KEY);
     if (raw) return { ...base, ...JSON.parse(raw) };
   } catch {
     // storage unavailable

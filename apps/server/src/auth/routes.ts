@@ -12,7 +12,7 @@ import {
 import { signupsOpen } from '../config.ts';
 import type { SessionCheck } from '../do/user.ts';
 
-export const SESSION_COOKIE = 'oh_session';
+export const SESSION_COOKIE = 'oilrig_session';
 
 export type AuthEnv = { Bindings: Env; Variables: { session: NonNullable<SessionCheck> } };
 

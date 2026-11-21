@@ -1,4 +1,5 @@
 import type { Light, Scene, WebGPURenderer } from 'three/webgpu';
+import { readStored } from './storage.ts';
 
 // Frame profiler. CPU time is measured per named section of the main loop with
 // performance.now(); GPU time (longest pass per frame, a lower bound) comes from WebGPU
@@ -384,13 +385,13 @@ function pipelineCount(renderer: WebGPURenderer | null): number {
   return p?.caches?.size ?? 0;
 }
 
-const GPU_KEY = 'ocean-home.gpuTiming';
+const GPU_KEY = 'oilrig.gpuTiming';
 
 /** GPU timing needs timestamp queries from the start; it is on with ?perf or when the overlay was left open. */
 export function gpuTimingWanted(): boolean {
   if (new URLSearchParams(location.search).has('perf')) return true;
   try {
-    return localStorage.getItem(GPU_KEY) === '1';
+    return readStored(GPU_KEY) === '1';
   } catch {
     return false;
   }

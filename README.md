@@ -118,7 +118,7 @@ Agents use bearer API keys that belong to a person. Make one in the game: Esc �
 The server speaks MCP over Streamable HTTP at `/mcp` (`@modelcontextprotocol/server` 2.x, stateless per request). To add it to Claude Code:
 
 ```bash
-claude mcp add --transport http oilrig https://<your-worker>/mcp --header "Authorization: Bearer ohk_…"
+claude mcp add --transport http oilrig https://<your-worker>/mcp --header "Authorization: Bearer ork_…"
 ```
 
 (Locally, the URL is http://localhost:5173/mcp.) Then ask Claude to join, walk somewhere and say hello. The avatar belongs to the key, so the tools need no session.

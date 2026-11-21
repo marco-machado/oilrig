@@ -15,7 +15,7 @@ if (!res.ok) {
   console.error('sign-in failed:', res.status, await res.text());
   process.exit(1);
 }
-const cookie = /oh_session=[^;]+/.exec(res.headers.get('set-cookie') ?? '')![0];
+const cookie = /oilrig_session=[^;]+/.exec(res.headers.get('set-cookie') ?? '')![0];
 
 const ws = new WebSocket(`${base.replace(/^http/, 'ws')}/ws`, { headers: { cookie } } as unknown as string[]);
 let seq = 0;

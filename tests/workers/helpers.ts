@@ -23,8 +23,8 @@ export function request(path: string, init: RequestInit & { cookie?: string; jso
 /** The session cookie from a response, as a Cookie header value. */
 export function cookieFrom(res: Response) {
   const set = res.headers.get('set-cookie') ?? '';
-  const m = /oh_session=([^;]*)/.exec(set);
-  return m ? `oh_session=${m[1]}` : '';
+  const m = /oilrig_session=([^;]*)/.exec(set);
+  return m ? `oilrig_session=${m[1]}` : '';
 }
 
 export interface Member {

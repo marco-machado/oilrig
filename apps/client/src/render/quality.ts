@@ -1,3 +1,5 @@
+import { readStored } from '../storage.ts';
+
 export type QualityName = 'low' | 'medium' | 'high' | 'ultra';
 
 export interface Quality {
@@ -84,11 +86,11 @@ export const QUALITY: Record<QualityName, Quality> = {
   },
 };
 
-const KEY = 'ocean-home.quality';
+const KEY = 'oilrig.quality';
 
 export function loadQualityName(): QualityName {
   try {
-    const v = localStorage.getItem(KEY);
+    const v = readStored(KEY);
     if (v && v in QUALITY) return v as QualityName;
   } catch {
     // storage unavailable

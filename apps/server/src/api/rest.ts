@@ -48,7 +48,7 @@ export function apiAuth(store: KeyStore, limiter: RateLimiter): MiddlewareHandle
     const key = m ? await verifyApiKey(store, m[1]) : null;
     if (!key) {
       c.header('WWW-Authenticate', 'Bearer realm="oilrig"');
-      return fail(c, 401, 'unauthorized', 'Send an API key as "Authorization: Bearer ohk_…". Create one in the Account panel of the game menu.');
+      return fail(c, 401, 'unauthorized', 'Send an API key as "Authorization: Bearer ork_…". Create one in the Account panel of the game menu.');
     }
     const r = limiter.take(key.id, key.ratePerMinute);
     c.header('RateLimit-Limit', String(key.ratePerMinute));

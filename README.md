@@ -58,6 +58,8 @@ Flying the drone (pilot's seat): **W A S D** move relative to where you look, th
 
 Gamepads work too: left stick moves, right stick looks, A jumps (climbs in the drone, B descends, or use the triggers), X interacts, LB runs, Y flies the drone home.
 
+On a phone or tablet the controls are on the screen: a stick appears under your thumb on the lower left (drag it well past its ring to run), dragging anywhere else looks around, and buttons jump, use what you are looking at, open the chat and open the menu. In the drone the jump button climbs, and buttons to descend and to fly home appear. The interaction prompt can be tapped too. A first visit on a phone starts on the Low preset with automatic resolution on; Settings changes both. `?touch` shows these controls on a desktop, for testing with a mouse. Phones need WebGPU like everything else: iOS or iPadOS 26 or later (any browser), or a current Chrome on Android 12 or later (Android 16 or later with a PowerVR graphics chip; Samsung's Xclipse chips and Firefox for Android are not supported by their browsers yet).
+
 ### Time and weather
 
 Esc → **Time & weather**: drag the time of day, pick the speed of the day (paused, real time, a 2-hour day, a 24-minute day, a 6-minute day), and pick the weather (or **Forecast** for the seeded weather model). Online, changes apply to everyone and show up in the chat; a change of weather eases in over about 25 seconds. Offline they are only for you.

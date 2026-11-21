@@ -3,7 +3,7 @@ import { whenLoaded } from '../loading.ts';
 import { buildAccount } from './account.ts';
 import { COORDS } from './coords.ts';
 import type { PerfReport } from '../perf.ts';
-import { QUALITY, type QualityName } from '../render/quality.ts';
+import { QUALITY, type QualityName, isPhone } from '../render/quality.ts';
 import {
   type IconName,
   badge,
@@ -56,8 +56,9 @@ export interface Settings {
 
 const SETTINGS_KEY = 'ocean-home.settings';
 
+/** Saved settings over the defaults; a phone starts with automatic resolution on. */
 export function loadSettings(defaultQuality: QualityName): Settings {
-  const base: Settings = { quality: defaultQuality, fov: 72, sensitivity: 1, invertY: false, volume: 0.8, autoResolution: false };
+  const base: Settings = { quality: defaultQuality, fov: 72, sensitivity: 1, invertY: false, volume: 0.8, autoResolution: isPhone() };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...base, ...JSON.parse(raw) };
@@ -189,6 +190,8 @@ export class UI {
   private readonly toast = el('div', { class: 'oh-toast oh-glass', role: 'status' });
   private toastTimer = 0;
   private promptText: string | null = null;
+  /** On a touch screen: what a tap on the prompt does (it then reads "Tap" for the key). */
+  touchUse: (() => void) | null = null;
   private readonly chat = el('div', { class: 'oh-chat oh-joined-only' });
   private chatBurst = 0;
   private readonly chatLog = el('div', { class: 'oh-chat__log', role: 'log', 'aria-live': 'polite' });
@@ -574,6 +577,11 @@ export class UI {
     this.aboard.hidden = true;
     this.perfHud.append(el('div', { class: 'oh-perf-top' }, el('div', { class: 'oh-fps' }, this.hudFps, el('span', { class: 'oh-fps__u' }, 'FPS')), this.hudHealth.el), this.hudGraph, this.hudCaption);
     this.perfHud.hidden = true;
+    this.prompt.addEventListener('click', () => this.touchUse?.());
+    // No Esc on a touch screen: tapping back into the world closes the chat.
+    this.chatInput.addEventListener('blur', () => {
+      if (this.touchUse && this.chatOpen) this.closeChat();
+    });
     this.flight.hidden = true;
     this.toast.hidden = true;
     this.hud.append(
@@ -598,7 +606,7 @@ export class UI {
     }
     // "E · Open the door": the key becomes a keycap.
     const m = /^(\S+) · (.+)$/.exec(text);
-    this.prompt.replaceChildren(...(m ? [kbd(m[1]), m[2]] : [text]));
+    this.prompt.replaceChildren(...(m ? [kbd(this.touchUse ? 'Tap' : m[1]), m[2]] : [text]));
     this.prompt.classList.toggle('is-plain', !m);
     this.prompt.hidden = false;
   }
@@ -1137,6 +1145,7 @@ export class UI {
   private buildControls() {
     const s = this.sheets.controls;
     s.setEyebrow('Keyboard, mouse and gamepad');
+    const textRow = (label: string, how: string) => el('div', { class: 'oh-row oh-row--keys' }, el('span', { class: 'oh-row__title' }, label), el('span', { class: 'oh-caption' }, how));
     const keyRow = (combo: string, label: string) => el('div', { class: 'oh-row oh-row--keys' }, el('span', { class: 'oh-row__title' }, label), keys(combo));
     s.body.append(
       section(
@@ -1156,6 +1165,16 @@ export class UI {
       section(
         'Flying the drone',
         group(keyRow('W A S D', 'Fly'), keyRow('Space', 'Climb'), keyRow('Shift / C', 'Descend'), keyRow('H', 'Fly home and land on the helipad'), keyRow('E', 'Climb out once landed')),
+      ),
+      section(
+        'Touch screen',
+        group(
+          textRow('Move', 'Stick under your left thumb'),
+          textRow('Run', 'Drag the stick past its ring'),
+          textRow('Look around', 'Drag anywhere else'),
+          textRow('Use doors, elevator, drone', 'Use, or tap the prompt'),
+          textRow('Drone', 'Hold the arrows to climb and descend'),
+        ),
       ),
       el('p', { class: 'oh-note' }, icon('alert'), el('span', {}, 'Gamepad: left stick moves, right stick looks, A jumps, X uses, LB runs, Y flies the drone home.')),
     );

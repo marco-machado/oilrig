@@ -1,0 +1,155 @@
+/* On-screen controls of a touch screen (player/touch.ts). */
+
+.oh-touch {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.oh-touch__ring {
+  position: absolute;
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  margin: calc(var(--r) * -1) 0 0 calc(var(--r) * -1);
+  border-radius: 50%;
+  border: 1.5px solid rgba(232, 239, 242, 0.34);
+  background: rgba(10, 24, 34, 0.22);
+}
+
+.oh-touch__ring.is-running {
+  border-color: var(--oh-rig);
+}
+
+.oh-touch__knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: rgba(232, 239, 242, 0.5);
+}
+
+.oh-touch__top,
+.oh-touch__pad {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.oh-touch__top {
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+}
+
+.oh-touch__pad {
+  right: calc(20px + env(safe-area-inset-right));
+  bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+/* No backdrop blur here: it is a full extra pass on a phone's GPU. */
+.oh-touch__btn {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  border: 1.5px solid rgba(232, 239, 242, 0.3);
+  border-radius: 50%;
+  background: rgba(10, 24, 34, 0.42);
+  color: var(--oh-ink);
+  font: 600 13px/1 var(--font-ui);
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.oh-touch__btn.is-down,
+.oh-touch__btn:active {
+  background: rgba(232, 239, 242, 0.3);
+}
+
+.oh-touch__btn .oh-i {
+  width: 24px;
+  height: 24px;
+}
+
+.oh-touch__btn--jump {
+  width: 72px;
+  height: 72px;
+}
+
+.oh-touch__btn--menu,
+.oh-touch__btn--chat {
+  width: 44px;
+  height: 44px;
+}
+
+/* The game itself: no scrolling, zooming, selecting or callouts under the fingers. */
+.is-touch,
+.is-touch body {
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.is-touch input,
+.is-touch textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.is-touch #app canvas {
+  touch-action: none;
+}
+
+/* Scrolling stays possible inside the menu's sheets and the start screen. */
+.is-touch .oh-menu,
+.is-touch .oh-join {
+  touch-action: pan-y;
+}
+
+/* Keyboard hints mean nothing here. */
+.is-touch .oh-keys,
+.is-touch .oh-chatbox__hint,
+.is-touch .oh-rail__hint,
+.is-touch .oh-nav__meta .oh-kbd {
+  display: none;
+}
+
+/* The chat moves up, clear of the stick and of the on-screen keyboard. */
+.is-touch .oh-chat {
+  top: calc(60px + env(safe-area-inset-top));
+  bottom: auto;
+  left: calc(16px + env(safe-area-inset-left));
+  width: min(440px, 58vw);
+  flex-direction: column-reverse;
+}
+
+/* The prompt is a button: a tap uses what it names. */
+.is-touch .oh-prompt {
+  pointer-events: auto;
+  height: 40px;
+}
+
+/* The buttons say what the keys would. */
+.is-touch .oh-flight__hint {
+  display: none;
+}
+
+/* Room for the chat and menu buttons in the corner. */
+.is-touch .oh-presence {
+  right: calc(124px + env(safe-area-inset-right));
+}
+
+.is-touch .oh-status {
+  left: calc(16px + env(safe-area-inset-left));
+}

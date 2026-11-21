@@ -78,6 +78,7 @@ body {
   display: block;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
 }
 
 [hidden] {
@@ -93,6 +94,14 @@ body {
   font: 400 32px/1.25 var(--font-display);
   text-align: center;
   text-wrap: balance;
+}
+
+.fatal small {
+  display: block;
+  max-width: 34em;
+  margin-top: 14px;
+  font: 400 15px/1.5 var(--font-ui);
+  color: var(--oh-ink-2);
 }
 
 .oh-eyebrow {

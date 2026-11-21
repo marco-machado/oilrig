@@ -11,6 +11,9 @@ export interface WorldStore {
   saveWeatherMode(mode: WeatherMode): void;
   doors(): Record<string, boolean>;
   saveDoor(id: string, open: boolean): void;
+  /** When a person was last aboard or an agent last out, as of the last time the world stopped. */
+  lastPresence(): number | null;
+  saveLastPresence(t: number): void;
 }
 
 /** In-memory store, for tests. */
@@ -19,6 +22,7 @@ export class MemoryWorldStore implements WorldStore {
   private clock: { clock: ClockConfig; base: string } | null = null;
   private weather: WeatherMode | null = null;
   private readonly doorStates: Record<string, boolean> = {};
+  private presence: number | null = null;
 
   addChat(e: ChatEntry) {
     this.chat.push(e);
@@ -50,5 +54,13 @@ export class MemoryWorldStore implements WorldStore {
 
   saveDoor(id: string, open: boolean) {
     this.doorStates[id] = open;
+  }
+
+  lastPresence() {
+    return this.presence;
+  }
+
+  saveLastPresence(t: number) {
+    this.presence = t;
   }
 }

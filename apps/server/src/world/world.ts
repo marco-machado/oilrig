@@ -600,23 +600,27 @@ export class World extends Emitter<WorldEvents> {
 
   private onDronePose(p: Player, m: Extract<ClientMessage, { type: 'drone' }>, now: number) {
     if (this.crew.pilot !== p.info.id || this.drone.state.phase !== 'piloted') return;
+    if (m.p[1] < -1 || m.p[1] > DIMS.DRONE.maxAltitude + 20) return;
     const prev = this.droneLive;
     let reach = DRONE_REACH_CAP;
+    let at = m.p as Vec3;
     if (prev) {
       // A pilot cannot outfly the drone. The distance allowed fills with time, not with
-      // messages; a pose beyond it is ignored and the allowance is kept for the next one.
+      // messages. A pose beyond it (a speed hack, or poses that arrive late after a stall)
+      // moves the drone as far towards it as the allowance goes: at more than top speed, so
+      // an honest pilot's drone catches up with the stream instead of being left behind.
       const dt = Math.min(Math.max((now - prev.t) / 1000, 0), 1);
       reach = Math.min(DRONE_REACH_CAP, prev.reach + DIMS.DRONE.maxSpeed * DRONE_SPEED_SLACK * dt);
       const d = Math.hypot(m.p[0] - prev.p[0], m.p[1] - prev.p[1], m.p[2] - prev.p[2]);
       if (d > reach) {
-        this.droneLive = { ...prev, t: now, reach };
-        return;
-      }
-      reach -= d;
+        const k = reach / d;
+        at = [prev.p[0] + (m.p[0] - prev.p[0]) * k, prev.p[1] + (m.p[1] - prev.p[1]) * k, prev.p[2] + (m.p[2] - prev.p[2]) * k];
+        reach = 0;
+      } else reach -= d;
     }
-    if (m.p[1] < -1 || m.p[1] > DIMS.DRONE.maxAltitude + 20) return;
-    this.droneLive = { ...m, t: now, reach };
-    this.drone.track(m.p as Vec3, m.yaw);
+    // Short of where the pilot says it is, it is still on its way there: not landed.
+    this.droneLive = { ...m, p: at, grounded: m.grounded && at === m.p, t: now, reach };
+    this.drone.track(at, m.yaw);
   }
 
   /** At touchdown, anyone who walked under the descending drone is moved clear. */

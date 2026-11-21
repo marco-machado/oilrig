@@ -375,12 +375,36 @@ describe('the drone in the shared world', () => {
     expect(world.dronePose().position[0]).toBeLessThan(before[0] + DIMS.DRONE.maxSpeed);
     vi.setSystemTime(takeoff + steps * 50 + 1000);
     world.handle(a.conn, pa, { type: 'drone', p: before, v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 1, grounded: false });
-    expect(world.dronePose().position).toEqual(before);
-    vi.setSystemTime(takeoff + steps * 50 + 2000);
-    // A jump no drone could make is ignored.
-    world.handle(a.conn, pa, { type: 'drone', p: [500, 60, 500], v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 1, grounded: false });
+    world.dronePose().position.forEach((v, i) => expect(v).toBeCloseTo(before[i], 6));
+    // Poses that arrive late after a stall are not lost for good: the drone catches up with the stream.
+    let t = takeoff + steps * 50 + 1000;
+    const from = world.dronePose().position;
+    const along = (s: number): Vec3 => [from[0] + s * DIMS.DRONE.maxSpeed, from[1], from[2]];
+    vi.setSystemTime((t += 1000));
+    for (let i = 1; i <= 20; i++) world.handle(a.conn, pa, { type: 'drone', p: along(i / 20), v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 1, grounded: false });
+    expect(world.dronePose().position[0]).toBeLessThan(along(1)[0] - 5);
+    for (let i = 1; i <= 100; i++) {
+      vi.setSystemTime((t += 50));
+      world.handle(a.conn, pa, { type: 'drone', p: along(1 + i / 20), v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 1, grounded: false });
+    }
+    expect(world.dronePose().position[0]).toBeCloseTo(along(6)[0], 6);
+    // Back where the test goes on from.
+    for (let i = 1; i <= 200; i++) {
+      vi.setSystemTime((t += 50));
+      world.handle(a.conn, pa, { type: 'drone', p: before, v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 1, grounded: false });
+    }
+    world.dronePose().position.forEach((v, i) => expect(v).toBeCloseTo(before[i], 6));
+    // A jump no drone could make gets no further than the drone flies in that time.
+    vi.setSystemTime((t += 50));
+    world.handle(a.conn, pa, { type: 'drone', p: [500, 60, 500], v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 1, grounded: true });
+    expect(Math.hypot(...world.dronePose().position.map((v, i) => v - before[i]))).toBeLessThan(DIMS.DRONE.maxSpeed * 0.5 + 1e-6);
     expect(world.dronePose().position[0]).toBeLessThan(0);
-    world.handle(a.conn, pa, { type: 'drone', p: target, v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 0.4, grounded: true });
+    expect((world as unknown as { droneGrounded: boolean }).droneGrounded).toBe(false);
+    // It lands where the pilot lands it.
+    for (let i = 1; i <= 100; i++) {
+      vi.setSystemTime((t += 50));
+      world.handle(a.conn, pa, { type: 'drone', p: target, v: [0, 0, 0], yaw: 1, pitch: 0, roll: 0, rotor: 0.4, grounded: true });
+    }
     expect(world.dronePose().position).toEqual(target);
     // Snapshots carry the live pose to everyone; the passenger's body is in its seat.
     (world as unknown as { broadcastSnapshot(): void }).broadcastSnapshot();

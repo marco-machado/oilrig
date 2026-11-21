@@ -88,6 +88,11 @@ describe('world lifecycle', () => {
     expect((await request('/api/v1/events', { headers: auth })).status).toBe(204);
     expect(await state()).toMatchObject({ running: false, alarm: null });
 
+    // Nor does a restart of the world make it listen again: it remembers how long it has been empty.
+    await evictDurableObject(world(), { webSockets: 'close' });
+    expect((await request('/api/v1/events', { headers: auth })).status).toBe(204);
+    expect(await state()).toMatchObject({ running: false, alarm: null });
+
     // Once someone is aboard there is something to watch again.
     const a = (await (await request('/api/v1/avatars', { method: 'POST', headers: auth, json: { name: 'Back' } })).json()) as { id: string };
     const again = await request('/api/v1/events', { headers: auth });

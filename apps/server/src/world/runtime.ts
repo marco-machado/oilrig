@@ -32,13 +32,17 @@ export class WorldRuntime {
   readonly api: Hono<ApiEnv>;
   /** How long event streams alone keep the world running once nobody is aboard. */
   private readonly listenMs: number;
-  /** When a person was last aboard or an agent last out. */
-  private lastPresence = Date.now();
+  /** When a person was last aboard or an agent last out. Kept across restarts, so a world
+   * that stopped for want of company does not start listening again just by being woken. */
+  private lastPresence: number;
+  private readonly store: WorldStore & KeyStore;
 
-  private constructor(world: World, agents: AgentManager, store: KeyStore, listenMs: number, nameTaken?: (name: string) => Promise<boolean>) {
+  private constructor(world: World, agents: AgentManager, store: WorldStore & KeyStore, listenMs: number, nameTaken?: (name: string) => Promise<boolean>) {
     this.world = world;
     this.agents = agents;
     this.listenMs = listenMs;
+    this.store = store;
+    this.lastPresence = store.lastPresence() ?? Date.now();
     this.events = new EventLog(world);
     this.events.accepting = () => this.listening;
     const service = new ApiService(world, agents, nameTaken);
@@ -91,5 +95,6 @@ export class WorldRuntime {
     this.world.stop();
     this.agents.pause();
     this.events.end();
+    this.store.saveLastPresence(this.lastPresence);
   }
 }

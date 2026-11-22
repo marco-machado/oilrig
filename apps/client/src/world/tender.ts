@@ -3,6 +3,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   CatmullRomCurve3,
+  Color,
   CylinderGeometry,
   DoubleSide,
   Group,
@@ -125,6 +126,9 @@ export function buildTenderHull(def: VesselDef, materials: MaterialSet): Group {
   const tube = new MeshStandardNodeMaterial({ color: 0x3b4148, roughness: 0.75 });
   const dark = new MeshStandardNodeMaterial({ color: 0x1d1f22, roughness: 0.45, metalness: 0.2 });
   const glass = new MeshPhysicalNodeMaterial({ color: 0x9fb4bd, roughness: 0.05, transmission: 0.6, transparent: true, opacity: 0.5, side: DoubleSide });
+  // The windscreen as seen from afar (see Tender.update): a plain transparent pane, with what the
+  // transmissive one lets through (60% transmission at 50% opacity: 0.5 + 0.3 × tint).
+  const glassFar = new MeshPhysicalNodeMaterial({ color: new Color(0x9fb4bd).multiplyScalar(0.54), roughness: 0.05, transparent: true, opacity: 0.37, side: DoubleSide });
   const add = (g: BufferGeometry, m: Material) => {
     const mesh = new Mesh(g, m);
     mesh.castShadow = true;
@@ -144,11 +148,36 @@ export function buildTenderHull(def: VesselDef, materials: MaterialSet): Group {
   const floorAt = (z: number) => deckY((L / 2 - z) / L, B, F);
   const consoleY = floorAt(0.1);
   add(mergeGeometries([box(0.75, 0.92, 0.65, 0, consoleY, 0.1), box(0.9, 0.42, 0.5, 0, floorAt(1.05), 1.05)], false)!, white);
-  add(box(0.72, 0.32, 0.03, 0, consoleY + 0.9, -0.18), glass);
+  const windscreen = box(0.72, 0.32, 0.03, 0, consoleY + 0.9, -0.18);
+  add(windscreen, glass).name = WINDSCREEN;
+  const far = add(windscreen, glassFar);
+  far.name = WINDSCREEN_FAR;
+  far.visible = false;
   add(mergeGeometries([box(0.42, 0.55, 0.42, 0, 0.35, L / 2 + 0.2), box(0.22, 0.6, 0.22, 0, -0.25, L / 2 + 0.22)], false)!, dark);
   add(tubeGeometry([0.25, consoleY + 0.92, 0.12], [-0.25, consoleY + 0.92, 0.12], 0.018, 8), materials.steelGrey);
   return hull;
 }
+
+const WINDSCREEN = 'tender-windscreen';
+const WINDSCREEN_FAR = 'tender-windscreen-far';
+/**
+ * Beyond this the plain windscreen is drawn (m, with a band either side so it does not flicker).
+ * A transmissive material makes three copy the whole frame and build the copy's mip chain
+ * whenever it is in view: at 1440p that was 12 render passes, a 37.5 MB texture and 3–4% of the
+ * frame for a 0.7 m pane, which from 40 m is under 20 pixels wide.
+ */
+const WINDSCREEN_NEAR_M = 40;
+
+// Scratch for the mooring lines, which are laid out again every frame.
+const ROPE_UP = new Vector3(0, 1, 0);
+const ropeA = new Vector3();
+const ropeB = new Vector3();
+const ropeP = new Vector3();
+const ropeQ = new Vector3();
+const ropeD = new Vector3();
+const ropeScale = new Vector3();
+const ropeRot = new Quaternion();
+const ropeM = new Matrix4();
 
 interface Spring {
   x: number;
@@ -171,6 +200,7 @@ export class Tender {
   private readonly surgeX: Spring = { x: 0, v: 0 };
   private readonly surgeZ: Spring = { x: 0, v: 0 };
   private readonly ropes: InstancedMesh;
+  private readonly windscreen: [near: Mesh, far: Mesh];
   private readonly cleats: V[];
   private readonly bollards: V[];
   private time = 0;
@@ -182,6 +212,7 @@ export class Tender {
     const [L, B, F] = def.size;
     this.sampler = new WaveSampler(renderer, ocean.sim.cascades, 5);
     this.hull = buildTenderHull(def, materials);
+    this.windscreen = [this.hull.getObjectByName(WINDSCREEN) as Mesh, this.hull.getObjectByName(WINDSCREEN_FAR) as Mesh];
     this.hull.rotation.order = 'YXZ';
     this.group.add(this.hull);
     this.group.position.set(def.position[0], 0, def.position[2]);
@@ -211,20 +242,29 @@ export class Tender {
     return this.ropes;
   }
 
-  private worldOf(local: V): Vector3 {
-    return this.hull.localToWorld(new Vector3(...local));
-  }
-
-  update(dt: number) {
+  /** `eye`: where the camera is, which decides how the windscreen is drawn. */
+  update(dt: number, eye: Vector3) {
     this.time += dt;
+    const [near, far] = this.windscreen;
+    const d = eye.distanceTo(this.group.position);
+    if (near.visible ? d > WINDSCREEN_NEAR_M + 2 : d < WINDSCREEN_NEAR_M - 2) {
+      near.visible = !near.visible;
+      far.visible = !near.visible;
+    }
     const [L, B] = this.def.size;
     // Sample around the hull's current footprint (in world space).
     const c = Math.cos(this.def.rotationY);
     const s = Math.sin(this.def.rotationY);
     const ox = this.def.position[0] + this.surgeX.x;
     const oz = this.def.position[2] + this.surgeZ.x;
-    const at = (lx: number, lz: number): [number, number] => [ox + lx * c + lz * s, oz - lx * s + lz * c];
-    this.sampler.setPoints([at(0, -L * 0.42), at(0, L * 0.42), at(-B * 0.45, 0), at(B * 0.45, 0), at(0, 0)]);
+    const half = L * 0.42;
+    const side = B * 0.45;
+    // Bow, stern, port, starboard, centre.
+    this.sampler.setPoint(0, ox - half * s, oz - half * c);
+    this.sampler.setPoint(1, ox + half * s, oz + half * c);
+    this.sampler.setPoint(2, ox - side * c, oz + side * s);
+    this.sampler.setPoint(3, ox + side * c, oz - side * s);
+    this.sampler.setPoint(4, ox, oz);
     this.sampler.update();
     const r = this.sampler.result;
     for (let i = 0; i < 5; i++) this.heights[i] = r[i * 3];
@@ -249,27 +289,26 @@ export class Tender {
   }
 
   private updateRopes() {
-    const m = new Matrix4();
-    const q = new Quaternion();
-    const up = new Vector3(0, 1, 0);
     const per = 12;
     let k = 0;
-    this.cleats.forEach((cl, i) => {
-      const a = this.worldOf(cl);
-      const b = new Vector3(...this.bollards[i]);
-      const span = a.distanceTo(b);
-      const sag = Math.max(0.05, 0.25 * span * 0.15);
-      const pt = (t: number) => new Vector3().lerpVectors(a, b, t).add(new Vector3(0, -sag * 4 * t * (1 - t), 0));
+    for (let i = 0; i < this.cleats.length; i++) {
+      const a = this.hull.localToWorld(ropeA.fromArray(this.cleats[i]));
+      const b = ropeB.fromArray(this.bollards[i]);
+      const sag = Math.max(0.05, 0.25 * a.distanceTo(b) * 0.15);
+      // A point t of the way along the sagging line.
+      const at = (t: number, out: Vector3) => {
+        out.lerpVectors(a, b, t);
+        out.y -= sag * 4 * t * (1 - t);
+        return out;
+      };
       for (let j = 0; j < per; j++) {
-        const p0 = pt(j / per);
-        const p1 = pt((j + 1) / per);
-        const d = p1.clone().sub(p0);
-        const len = d.length();
-        q.setFromUnitVectors(up, d.normalize());
-        m.compose(p0, q, new Vector3(1, len, 1));
-        this.ropes.setMatrixAt(k++, m);
+        at(j / per, ropeP);
+        ropeD.copy(at((j + 1) / per, ropeQ)).sub(ropeP);
+        ropeScale.set(1, ropeD.length(), 1);
+        ropeM.compose(ropeP, ropeRot.setFromUnitVectors(ROPE_UP, ropeD.normalize()), ropeScale);
+        this.ropes.setMatrixAt(k++, ropeM);
       }
-    });
+    }
     this.ropes.count = k;
     this.ropes.instanceMatrix.needsUpdate = true;
   }

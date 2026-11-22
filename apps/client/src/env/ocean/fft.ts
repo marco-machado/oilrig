@@ -1,12 +1,10 @@
 // GPU inverse FFT (Stockham/Cooley-Tukey butterflies) in TSL compute.
 // Ported from owenyuwono/poseidon (MIT), itself after gasgiant/FFT-Ocean (MIT).
-import { Fn, attributeArray, float, instanceIndex, uint, vec2 } from 'three/tsl';
+import { Fn, attributeArray, instanceIndex, uint, vec2, vec4 } from 'three/tsl';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Buf = any;
 type Kernel = any;
-
-const cmul = (a: any, b: any) => vec2(a.x.mul(b.x).sub(a.y.mul(b.y)), a.x.mul(b.y).add(a.y.mul(b.x)));
 
 function fillButterfly(array: Float32Array, N: number) {
   const logN = Math.log2(N);
@@ -30,11 +28,8 @@ function fillButterfly(array: Float32Array, N: number) {
   }
 }
 
-export interface FieldKernels {
-  h: Kernel[];
-  v: Kernel[];
-  permute: Kernel;
-}
+/** A buffer of vec4, two complex numbers per element, and the scratch buffer it is transformed through. */
+export type FieldPair = [field: Buf, scratch: Buf];
 
 export class FFT {
   readonly N: number;
@@ -49,45 +44,48 @@ export class FFT {
     this.butterfly.value.needsUpdate = true;
   }
 
-  /** `pass` counts every step across both directions so the ping-pong parity is
-   * continuous and the result always lands back in `field` (2·logN steps). */
-  private step(field: Buf, scratch: Buf, s: number, vertical: boolean): Kernel {
+  /**
+   * One butterfly pass over every N×N layer of every pair at once. `pass` counts the steps of
+   * both directions, so the ping-pong parity is continuous and the result lands back in the
+   * fields after 2·logN steps.
+   */
+  private step(pairs: FieldPair[], layers: number, s: number, vertical: boolean): Kernel {
     const N = this.N;
+    const n2 = N * N;
     const pass = vertical ? this.logN + s : s;
-    const src = pass % 2 === 0 ? field : scratch;
-    const dst = pass % 2 === 0 ? scratch : field;
     const bf = this.butterfly;
     return Fn(() => {
       const id = instanceIndex;
-      const x = id.mod(uint(N));
-      const y = id.div(uint(N));
+      const local = id.mod(uint(n2));
+      const layer = id.sub(local);
+      const x = local.mod(uint(N));
+      const y = local.div(uint(N));
       const data = bf.element(uint(s * N).add(vertical ? y : x));
-      const tw = vec2(data.x, data.y.negate());
-      const a = vertical ? src.element(uint(data.z).mul(N).add(x)) : src.element(y.mul(N).add(uint(data.z)));
-      const b = vertical ? src.element(uint(data.w).mul(N).add(x)) : src.element(y.mul(N).add(uint(data.w)));
-      dst.element(id).assign(a.add(cmul(tw, b)));
-    })().compute(N * N);
+      const tw: any = vec2(data.x, data.y.negate()).toVar();
+      const at = (i: any) => (vertical ? layer.add(uint(i).mul(N)).add(x) : layer.add(y.mul(N)).add(uint(i)));
+      const ia = at(data.z).toVar();
+      const ib = at(data.w).toVar();
+      for (const [field, scratch] of pairs) {
+        const src = pass % 2 === 0 ? field : scratch;
+        const dst = pass % 2 === 0 ? scratch : field;
+        const a = src.element(ia);
+        const b: any = src.element(ib).toVar();
+        // a + tw·b for both complex numbers of the element.
+        const twb = vec4(tw.x.mul(b.x).sub(tw.y.mul(b.y)), tw.x.mul(b.y).add(tw.y.mul(b.x)), tw.x.mul(b.z).sub(tw.y.mul(b.w)), tw.x.mul(b.w).add(tw.y.mul(b.z)));
+        dst.element(id).assign(a.add(twb));
+      }
+    })().compute(layers * n2);
   }
 
-  private permute(field: Buf): Kernel {
-    const N = this.N;
-    return Fn(() => {
-      const id = instanceIndex;
-      const x = id.mod(uint(N));
-      const y = id.div(uint(N));
-      const sign = float(1).sub(float(x.add(y).mod(uint(2))).mul(2));
-      field.element(id).assign(field.element(id).mul(sign));
-    })().compute(N * N);
-  }
-
-  /** Kernels that inverse-transform `field` in place, using `scratch`. */
-  buildField(field: Buf, scratch: Buf): FieldKernels {
-    const h: Kernel[] = [];
-    const v: Kernel[] = [];
-    for (let s = 0; s < this.logN; s++) {
-      h.push(this.step(field, scratch, s, false));
-      v.push(this.step(field, scratch, s, true));
-    }
-    return { h, v, permute: this.permute(field) };
+  /**
+   * Kernels that inverse-transform, in place and in this order, the `layers` N×N fields stored
+   * one after another in each pair. The result still carries the sign (-1)^(x+y) of the
+   * centred spectrum: whoever reads it multiplies by `1 - 2·((x + y) mod 2)`.
+   */
+  build(pairs: FieldPair[], layers: number): Kernel[] {
+    const kernels: Kernel[] = [];
+    for (let s = 0; s < this.logN; s++) kernels.push(this.step(pairs, layers, s, false));
+    for (let s = 0; s < this.logN; s++) kernels.push(this.step(pairs, layers, s, true));
+    return kernels;
   }
 }

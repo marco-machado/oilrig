@@ -14,10 +14,13 @@ import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js';
 import { replaceSunLights, restoreSunLights } from 'three/addons/lighting/LightProbeGridUtils.js';
 import { DIMS } from '@oilrig/shared';
 
-// Each probe renders the scene six times (a cube map), all on the GPU: 15 a frame stalled
-// the next frame about 100 ms. In the running game 4 a frame still made frames of 30–110 ms
-// (1440p High); 1 keeps them near 11 ms (at most ~30 ms), and the whole grid takes 135 frames.
-const PER_FRAME = 1;
+// Each probe renders the scene six times (a cube map), and every bake() call also re-renders
+// the bake light's shadow map and repacks the grid, whatever the number of probes. Measured on
+// three r187 (1440p High, M5 Pro; docs/performance.md): with one probe a call the frames of a
+// re-bake are ~0.5 ms longer than the rest (no frame cap) and the grid takes 135 frames; with two
+// they are ~1.1 ms longer, and both the time and the main-thread work halve (97 → 53 ms of bake()
+// per re-bake). Four or eight per call cost 2–4 ms a frame.
+const PER_FRAME = 2;
 const MIN_INTERVAL_MS = 20_000;
 const BAKE = { cubemapSize: 16, near: 0.05, far: 80 };
 /** three r187 captures 8 probes per render: 8 × 6 cube faces of one ArrayCamera. */

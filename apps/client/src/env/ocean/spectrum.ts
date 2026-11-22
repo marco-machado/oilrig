@@ -184,8 +184,13 @@ export function applySpectrum(u: SharedSpectrum, local: SeaParams, swell: SeaPar
   fillSet(u.swell, swell, u.g.value, swellScale);
 }
 
+/**
+ * The initial spectrum of one cascade. The cascades' spectra lie one after another in `h0k` and
+ * `wavesData`; this one starts at element `offset`.
+ */
 export function buildInitialSpectrum(o: {
   N: number;
+  offset: number;
   noise: N;
   h0k: N;
   wavesData: N;
@@ -194,7 +199,7 @@ export function buildInitialSpectrum(o: {
   cutoffLow: N;
   cutoffHigh: N;
 }) {
-  const { N, noise, h0k, wavesData, shared, deltaK, cutoffLow, cutoffHigh } = o;
+  const { N, offset, noise, h0k, wavesData, shared, deltaK, cutoffLow, cutoffHigh } = o;
   return Fn(() => {
     const id = instanceIndex;
     const x = id.mod(uint(N));
@@ -215,26 +220,31 @@ export function buildInitialSpectrum(o: {
       );
     const inBand = step(cutoffLow, kLen).mul(step(kLen, cutoffHigh));
     const amplitude = sqrt(spectrum.mul(2).mul(abs(dOmega)).div(kSafe).mul(deltaK).mul(deltaK));
-    h0k.element(id).assign(noise.element(id).mul(amplitude).mul(inBand));
-    wavesData.element(id).assign(vec4(k.x, float(1).div(kSafe), k.y, omega));
+    h0k.element(id.add(uint(offset))).assign(noise.element(id).mul(amplitude).mul(inBand));
+    wavesData.element(id.add(uint(offset))).assign(vec4(k.x, float(1).div(kSafe), k.y, omega));
   })().compute(N * N);
 }
 
-export function buildConjugate(N: number, h0k: N, h0: N) {
+export function buildConjugate(N: number, offset: number, h0k: N, h0: N) {
   return Fn(() => {
     const id = instanceIndex;
     const x = id.mod(uint(N));
     const y = id.div(uint(N));
     const xm = uint(N).sub(x).mod(uint(N));
     const ym = uint(N).sub(y).mod(uint(N));
-    const a = h0k.element(id);
-    const b = h0k.element(ym.mul(uint(N)).add(xm));
-    h0.element(id).assign(vec4(a.x, a.y, b.x, b.y.negate()));
+    const a = h0k.element(id.add(uint(offset)));
+    const b = h0k.element(ym.mul(uint(N)).add(xm).add(uint(offset)));
+    h0.element(id.add(uint(offset))).assign(vec4(a.x, a.y, b.x, b.y.negate()));
   })().compute(N * N);
 }
 
-export function buildTimeDependent(o: { N: number; h0: N; wavesData: N; DxDz: N; DyDxz: N; DyxDyz: N; DxxDzz: N; time: N }) {
-  const { N, h0, wavesData, DxDz, DyDxz, DyxDyz, DxxDzz, time } = o;
+/**
+ * The spectra at `time`, for every cascade at once (`count` elements). The four complex fields
+ * the surface is assembled from go out as two vec4 buffers: `a` holds DxDz and DyDxz, `b`
+ * DyxDyz and DxxDzz.
+ */
+export function buildTimeDependent(o: { count: number; h0: N; wavesData: N; a: N; b: N; time: N }) {
+  const { count, h0, wavesData, a, b, time } = o;
   return Fn(() => {
     const id = instanceIndex;
     const wave = wavesData.element(id);
@@ -257,9 +267,7 @@ export function buildTimeDependent(o: { N: number; h0: N; wavesData: N; DxDz: N;
     const dispZdx = ihc.mul(wave.x).mul(wave.z).mul(kInv);
     const dispYdz = ih.mul(wave.z);
     const dispZdz = ihc.mul(wave.z).mul(wave.z).mul(kInv);
-    DxDz.element(id).assign(vec2(dispX.x.sub(dispZ.y), dispX.y.add(dispZ.x)));
-    DyDxz.element(id).assign(vec2(dispY.x.sub(dispZdx.y), dispY.y.add(dispZdx.x)));
-    DyxDyz.element(id).assign(vec2(dispYdx.x.sub(dispYdz.y), dispYdx.y.add(dispYdz.x)));
-    DxxDzz.element(id).assign(vec2(dispXdx.x.sub(dispZdz.y), dispXdx.y.add(dispZdz.x)));
-  })().compute(N * N);
+    a.element(id).assign(vec4(dispX.x.sub(dispZ.y), dispX.y.add(dispZ.x), dispY.x.sub(dispZdx.y), dispY.y.add(dispZdx.x)));
+    b.element(id).assign(vec4(dispYdx.x.sub(dispYdz.y), dispYdx.y.add(dispYdz.x), dispXdx.x.sub(dispZdz.y), dispXdx.y.add(dispZdz.x)));
+  })().compute(count);
 }

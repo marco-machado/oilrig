@@ -123,13 +123,17 @@ function piercings(): Array<[number, number, number]> {
 export class Ocean {
   readonly sim: OceanSimulation;
   readonly mesh: Mesh;
+  /** How far the grid reaches from the camera (m). */
+  private readonly radius: number;
   private readonly origin = uniform(new Vector2());
   private readonly material: MeshPhysicalNodeMaterial;
 
   constructor(renderer: WebGPURenderer, q: OceanQuality) {
     this.sim = new OceanSimulation(renderer, q.N, LENGTHS);
     this.material = this.createMaterial();
-    this.mesh = new Mesh(radialGrid(q.rings, q.sectors, 0.3, 36), this.material);
+    const grid = radialGrid(q.rings, q.sectors, 0.3, 36);
+    this.radius = grid.boundingSphere!.radius;
+    this.mesh = new Mesh(grid, this.material);
     this.mesh.frustumCulled = false;
     this.mesh.receiveShadow = true;
     // Opaque, drawn last in the opaque pass: its own refraction copy then holds everything
@@ -303,6 +307,25 @@ export class Ocean {
     const rough = min(sqrt(float(0.0016).add(lostVar.mul(0.5)).add(saturate(footprint.mul(0.004)).mul(0.04))), 0.35);
     mat.roughnessNode = mix(rough.add(U.rain.mul(0.08)), float(0.9), foam);
     return mat;
+  }
+
+  /**
+   * For a camera `height` metres above mean sea level: the y of the highest unit view direction
+   * that is sure to end on the sea. Everything lower in the view is covered by this mesh, so
+   * what lies behind it there cannot show (the water absorbs it long before the far plane).
+   * -2, which no direction is below, when a crest might reach the camera.
+   */
+  coversBelow(height: number, windSpeed: number): number {
+    // The surface height's standard deviation, measured with this spectrum (five points for 25 s
+    // per weather, `tender.state.heights`): 1.26 m at 5 m/s, 1.46 at 7, 1.93 at 11, 2.45 at 17
+    // and no more above that. Measure again if the spectrum's scale or swell changes.
+    const sigma = Math.min(2.5, 0.77 + 0.1 * windSpeed);
+    // Five deviations: a crest that high passes a given point about once in months.
+    if (height <= 5 * sigma) return -2;
+    // The rim is long, so somewhere on it a trough runs deeper than that; it also moves
+    // sideways with the waves, and the grid's centre snaps to the camera.
+    const drop = height + 6.5 * sigma;
+    return -drop / Math.hypot(drop, this.radius * 0.95);
   }
 
   update(t: number, dt: number, camera: Vector3, windSpeed: number, windDirection: number) {

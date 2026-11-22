@@ -1,7 +1,7 @@
-import { DataTexture, FloatType, type Light, LightsNode, RGBAFormat, type Vector3 } from 'three/webgpu';
+import { type Light, LightsNode, type Vector3 } from 'three/webgpu';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
 import ClusteredLightsNode from 'three/addons/tsl/lighting/ClusteredLightsNode.js';
-import { Fn, If, Loop, cameraViewMatrix, directPointLight, dot, float, int, ivec2, normalize, positionView, smoothstep, textureLoad, vec4 } from 'three/tsl';
+import { Fn, If, Loop, cameraViewMatrix, directPointLight, dot, int, ivec2, positionView, smoothstep, textureLoad, vec4 } from 'three/tsl';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -10,8 +10,8 @@ import { Fn, If, Loop, cameraViewMatrix, directPointLight, dot, float, int, ivec
  * `light.userData.cone` to the cosine of the beam's half angle. It then lights only what lies
  * inside that cone (with a soft edge), like a recessed downlight or a floodlight, so the
  * ceiling a downlight sits in, the rail beside a floodlight or the drone above its own landing
- * light stay dark. Aimed lights stay clustered point lights: a spot light would be evaluated in
- * every lit material instead.
+ * light stay dark. Aimed lights stay point lights: their cone goes into the clustered lights'
+ * own data (below), so they cost no more than three's clustered spot lights and keep this edge.
  */
 export interface AimedLight {
   aim?: Vector3;
@@ -25,63 +25,74 @@ export const CONE_SOFTNESS = 0.22;
 const POSITION_ROW = 0; // world position, cutoff distance
 const COLOR_ROW = 1; // colour × intensity, decay
 const SPOT_ROW = 2; // scaled world spot direction, scaled cone cosine
+const BOUNDS_ROW = 3; // world bounding sphere centre, radius
 
 /**
  * Clustered lighting with aimed point lights.
  *
  * Since three r187 the cluster grid's dimensions are uniforms, so a window resize or a
- * dynamic-resolution step no longer rebuilds every lit shader, and this class adds two things:
- * the aim, and renders through an ArrayCamera. three clusters the lights for the ArrayCamera
- * itself, not for its sub-cameras, so in such a render (r187's light-probe bake) the clustered
- * lights were missing and the room lost their bounce light. There the lights are not clustered:
- * every fragment loops over all of them, in its own sub-camera's view space. Those renders are
- * tiny (16 px cube faces).
+ * dynamic-resolution step no longer rebuilds every lit shader, and this class adds three things.
  *
- * It overrides private methods of three's ClusteredLightsNode (`_updateLightsTexture`,
- * `_getLightData`) and reads its lights texture: if three renames them, the cones stop
- * applying, with no error.
+ * The aim. three's lights texture has a row for spot lights, which its shader reads for every
+ * clustered light: `smoothstep(0, 1, dot(L, direction) - offset)`, 1 for a point light. An aimed
+ * point light gets its cone written there, so three's own loop applies it and skips the lighting
+ * model for fragments outside the beam (most of the fragments within a downlight's range).
+ *
+ * Tighter culling. An aimed light is clustered by the sphere round its cone, not round its
+ * whole range, and a lamp that is switched off by no cluster at all: lamps only ever change
+ * intensity (hiding one would rebuild every lit shader), so by day most of the 76 were still in
+ * the clusters, each running the lighting model for nothing: up to a fifth of the frame indoors.
+ *
+ * Renders through an ArrayCamera. three clusters the lights for the ArrayCamera itself, not for
+ * its sub-cameras, so in such a render (r187's light-probe bake) the clustered lights were
+ * missing and the room lost their bounce light. There the lights are not clustered: every
+ * fragment loops over all of them, in its own sub-camera's view space. Those renders are tiny
+ * (16 px cube faces).
+ *
+ * It overrides a private method of three's ClusteredLightsNode (`_updateLightsTexture`) and
+ * edits its lights texture: if three renames either or reorders the rows, the cones stop
+ * applying (downlights then light the ceiling) and dark lamps cost a lighting pass again, with
+ * no error.
  */
 class StableClusteredLightsNode extends ClusteredLightsNode {
-  /** Per light, in the same (depth-sorted) order as the lights texture: aim xyz, cone cosine (-2: everywhere). */
-  private readonly aimTexture: DataTexture;
-
-  constructor(maxLights: number, tileSize: number, zSlices: number, maxLightsPerCluster: number) {
-    super(maxLights, tileSize, zSlices, maxLightsPerCluster);
-    this.aimTexture = new DataTexture(new Float32Array(maxLights * 4), maxLights, 1, RGBAFormat, FloatType);
-  }
-
   _updateLightsTexture(camera: any) {
     (ClusteredLightsNode.prototype as any)._updateLightsTexture.call(this, camera);
     const order: number[] = (this as any)._lightSortOrder;
-    const data = this.aimTexture.image.data as Float32Array;
+    const image = (this as any)._lightsTexture.image;
+    const data = image.data as Float32Array;
+    const row = image.width * 4;
+    const m = camera.matrixWorld.elements;
     for (let i = 0; i < order.length; i++) {
-      const u = (this.clusteredLights[order[i]] as Light).userData as AimedLight;
-      const o = i * 4;
-      if (u.aim && u.cone !== undefined) {
-        data[o] = u.aim.x;
-        data[o + 1] = u.aim.y;
-        data[o + 2] = u.aim.z;
-        data[o + 3] = u.cone;
-      } else {
-        data[o + 3] = -2;
+      const light = this.clusteredLights[order[i]] as Light & { distance: number; isSpotLight?: boolean };
+      const bounds = row * BOUNDS_ROW + i * 4;
+      if (light.intensity <= 0) {
+        // Dark: a point just behind the camera, which no cluster contains.
+        data[bounds] = m[12] + m[8];
+        data[bounds + 1] = m[13] + m[9];
+        data[bounds + 2] = m[14] + m[10];
+        data[bounds + 3] = 0;
+        continue;
+      }
+      const { aim, cone } = light.userData as AimedLight;
+      if (!aim || cone === undefined || light.isSpotLight) continue;
+      // smoothstep(cone, cone + softness, dot(to the fragment, aim)) in three's terms: its L
+      // points from the fragment to the light, so the direction is the aim reversed.
+      const spot = row * SPOT_ROW + i * 4;
+      data[spot] = -aim.x / CONE_SOFTNESS;
+      data[spot + 1] = -aim.y / CONE_SOFTNESS;
+      data[spot + 2] = -aim.z / CONE_SOFTNESS;
+      data[spot + 3] = cone / CONE_SOFTNESS;
+      // The smallest sphere round the cone (as three bounds its spot lights), for cones up to a hemisphere.
+      const d = light.distance;
+      if (d > 0 && cone >= 0) {
+        const wide = cone <= Math.SQRT1_2;
+        const along = wide ? d * cone : d / (2 * cone);
+        data[bounds] += aim.x * along;
+        data[bounds + 1] += aim.y * along;
+        data[bounds + 2] += aim.z * along;
+        data[bounds + 3] = wide ? d * Math.sqrt(1 - cone * cone) : along;
       }
     }
-    this.aimTexture.needsUpdate = true;
-  }
-
-  _getLightData(index: any) {
-    const d = (ClusteredLightsNode.prototype as any)._getLightData.call(this, index);
-    // Only the fragment pass uses the colour: the cluster compute reads the light bounds instead.
-    return { ...d, color: d.color.mul(this.inCone(index, d.viewPosition, (this as any)._cameraViewMatrix)) };
-  }
-
-  /** 1 inside the light's cone (or for a light that isn't aimed), 0 outside, with a soft edge. */
-  private inCone(index: any, viewPosition: any, viewMatrix: any) {
-    const aim = textureLoad(this.aimTexture, ivec2(int(index), 0));
-    const aimView = viewMatrix.mul(vec4(aim.xyz, 0)).xyz;
-    const toFragment = normalize(positionView.sub(viewPosition));
-    const cone = smoothstep(aim.w, aim.w.add(CONE_SOFTNESS), dot(toFragment, aimView));
-    return aim.w.lessThan(-1.5).select(float(1), cone);
   }
 
   setupLights(builder: any, lightNodes: any) {
@@ -110,7 +121,7 @@ class StableClusteredLightsNode extends ClusteredLightsNode {
             this,
             // three r187 takes `lightVector`; @types/three 0.187.0 still declares `lightViewPosition`.
             directPointLight({
-              color: dataB.rgb.mul(spotAttenuation).mul(this.inCone(i, viewPosition, cameraViewMatrix)),
+              color: dataB.rgb.mul(spotAttenuation),
               lightVector,
               cutoffDistance: distance,
               decayExponent: dataB.w,
@@ -119,11 +130,6 @@ class StableClusteredLightsNode extends ClusteredLightsNode {
         });
       });
     }, 'void')();
-  }
-
-  dispose() {
-    this.aimTexture.dispose();
-    super.dispose();
   }
 }
 

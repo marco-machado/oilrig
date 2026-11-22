@@ -54,6 +54,9 @@ export class Atmosphere {
   private readonly sunVec = new Vector3();
   private readonly moonVec = new Vector3();
   private readonly tmp = new Vector3();
+  /** Scratch for the sky model's results. */
+  private readonly sunRgb = [0, 0, 0];
+  private readonly radiance = [0, 0, 0];
   /** Called with a delay (s) when lightning strikes, so audio can play thunder. */
   onLightning: ((distanceSeconds: number) => void) | null = null;
 
@@ -98,15 +101,15 @@ export class Atmosphere {
   /** `lamps`: lamplight falling around the camera (see lampLightAt), which the exposure adapts to as well. */
   update(dt: number, cameraPos: Vector3, c: Celestial, w: WeatherState, lamps = 0) {
     const sky = this.sky;
-    this.sunVec.set(...c.sunDirection);
-    this.moonVec.set(...c.moonDirection);
+    this.sunVec.fromArray(c.sunDirection);
+    this.moonVec.fromArray(c.moonDirection);
     sky.position.copy(cameraPos);
     sky.sunPosition.value.copy(this.sunVec);
     sky.moonPosition.value.copy(this.moonVec);
     sky.moonIllumination.value = c.moonIllumination;
-    sky.starEx.value.set(...c.basis.ex);
-    sky.starEy.value.set(...c.basis.ey);
-    sky.starPole.value.set(...c.basis.pole);
+    sky.starEx.value.fromArray(c.basis.ex);
+    sky.starEy.value.fromArray(c.basis.ey);
+    sky.starPole.value.fromArray(c.basis.pole);
     sky.cloudCoverage.value = w.cloudCover;
     sky.cloudDensity.value = 0.35 + 0.65 * w.cloudDensity;
     const haze = Math.min(1, w.fog * 0.95 + w.rain * 0.35);
@@ -142,8 +145,9 @@ export class Atmosphere {
     const cloudBlock = Math.pow(w.cloudCover, 1.5) * (0.45 + 0.5 * w.cloudDensity);
     const sunElev = c.sunElevation;
     const sunUp = smooth(-1.5, 2.5, sunElev);
-    const st = sunTransmittance(this.params, this.sunVec);
-    const maxc = Math.max(...st.rgb, 1e-6);
+    const rgb = this.sunRgb;
+    const sunStrength = sunTransmittance(this.params, this.sunVec, rgb);
+    const maxc = Math.max(rgb[0], rgb[1], rgb[2], 1e-6);
     const sunIrr = 150 * maxc * (1 - 0.92 * cloudBlock) * sunUp;
     const moonUp = smooth(-2, 4, c.moonElevation) * (1 - sunUp);
     const moonIrr = 0.55 * c.moonIllumination * moonUp * (1 - 0.85 * cloudBlock);
@@ -151,7 +155,7 @@ export class Atmosphere {
     const dir = useSun ? this.sunVec : this.moonVec;
     this.sun.position.copy(dir).multiplyScalar(100);
     if (useSun) {
-      this.sun.color.setRGB(st.rgb[0] / maxc, st.rgb[1] / maxc, st.rgb[2] / maxc);
+      this.sun.color.setRGB(rgb[0] / maxc, rgb[1] / maxc, rgb[2] / maxc);
       this.sun.intensity = sunIrr;
     } else {
       this.sun.color.setRGB(0.62, 0.72, 1.0);
@@ -174,7 +178,7 @@ export class Atmosphere {
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2;
       this.tmp.set(Math.cos(a), 0.04, Math.sin(a)).normalize();
-      const r = skyRadiance(this.params, this.sunVec, this.tmp);
+      const r = skyRadiance(this.params, this.sunVec, this.tmp, this.radiance);
       fr += r[0] / 4;
       fg += r[1] / 4;
       fb += r[2] / 4;
@@ -190,11 +194,11 @@ export class Atmosphere {
     // Exposure follows an estimate of scene light (sky + direct), with eye adaptation.
     let skyLum = 0;
     for (const d of SAMPLE_DIRS) {
-      const r = skyRadiance(this.params, this.sunVec, d);
+      const r = skyRadiance(this.params, this.sunVec, d, this.radiance);
       skyLum += (0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2]) / SAMPLE_DIRS.length;
     }
     // Cloud radiance mirrors the sky shader: ambient + sun-lit shade, greyed when thick.
-    const sunCloud = sunUp * st.strength * 1000 * maxc * 0.0088 * 0.7;
+    const sunCloud = sunUp * sunStrength * 1000 * maxc * 0.0088 * 0.7;
     const cloudLum = (skyLum + sunCloud) * (1 - 0.4 * w.storminess);
     const cover = Math.min(1, Math.pow(w.cloudCover, 0.8));
     skyLum = (skyLum * (1 - cover) + cloudLum * cover) * dim + nightFloor * 0.5;
@@ -240,7 +244,7 @@ export class Atmosphere {
     this.lastEnvCloud = w.cloudCover;
     this.lastEnvTime = now;
     void c;
-    const pos = this.sky.position.clone();
+    const pos = this.tmp.copy(this.sky.position);
     this.sky.position.set(0, 0, 0);
     this.envScene.add(this.sky);
     this.envTarget = this.pmrem.fromScene(this.envScene, 0, 0.1, 1000, {

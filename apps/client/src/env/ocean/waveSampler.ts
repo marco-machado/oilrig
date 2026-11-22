@@ -1,4 +1,4 @@
-import type { WebGPURenderer } from 'three/webgpu';
+import { ReadbackBuffer, type WebGPURenderer } from 'three/webgpu';
 import { Fn, float, instanceIndex, instancedArray, texture, vec2, vec4 } from 'three/tsl';
 import type { Cascade } from './simulation.ts';
 
@@ -20,12 +20,15 @@ export class WaveSampler {
   private readonly output: any;
   private readonly kernel: any;
   private readonly renderer: WebGPURenderer;
+  /** The GPU buffer the heights are copied to and mapped from, reused by every readback. */
+  private readonly readback: ReadbackBuffer;
   private pending = false;
 
   constructor(renderer: WebGPURenderer, cascades: Cascade[], count: number) {
     this.renderer = renderer;
     this.count = count;
     this.result = new Float32Array(count * 3);
+    this.readback = new ReadbackBuffer(count * 16);
     this.input = instancedArray(count, 'vec4');
     this.output = instancedArray(count, 'vec4');
     const input = this.input;
@@ -44,13 +47,12 @@ export class WaveSampler {
     })().compute(count);
   }
 
-  /** Sets the world XZ of each sample point. */
-  setPoints(points: Array<[number, number]>) {
+  /** Sets the world XZ of sample point `i`. */
+  setPoint(i: number, x: number, z: number) {
     const arr = this.input.value.array as Float32Array;
-    points.forEach(([x, z], i) => {
-      arr[i * 4] = x;
-      arr[i * 4 + 1] = z;
-    });
+    if (arr[i * 4] === x && arr[i * 4 + 1] === z) return;
+    arr[i * 4] = x;
+    arr[i * 4 + 1] = z;
     this.input.value.needsUpdate = true;
   }
 
@@ -61,18 +63,27 @@ export class WaveSampler {
     this.pending = true;
     this.renderer.compute(this.kernel);
     this.renderer
-      .getArrayBufferAsync(this.output.value)
-      .then((buf) => {
-        const f = new Float32Array(buf);
-        for (let i = 0; i < this.count; i++) {
-          this.result[i * 3] = f[i * 4];
-          this.result[i * 3 + 1] = f[i * 4 + 1];
-          this.result[i * 3 + 2] = f[i * 4 + 2];
+      .getArrayBufferAsync(this.output.value, this.readback)
+      .then(() => {
+        try {
+          const f = new Float32Array(this.readback.buffer!);
+          for (let i = 0; i < this.count; i++) {
+            this.result[i * 3] = f[i * 4];
+            this.result[i * 3 + 1] = f[i * 4 + 1];
+            this.result[i * 3 + 2] = f[i * 4 + 2];
+          }
+        } finally {
+          // Unmaps it: the next readback copies into the same GPU buffer.
+          this.readback.release();
         }
         this.age = 0;
         this.readbacks += 1;
       })
-      .catch((e) => console.warn('wave readback failed', e))
+      .catch((e) => {
+        console.warn('wave readback failed', e);
+        // Whatever state it was left in: the next readback must be able to use the buffer.
+        this.readback.release();
+      })
       .finally(() => {
         this.pending = false;
       });

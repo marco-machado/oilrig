@@ -21,6 +21,7 @@
     "perf": "PERF=1 playwright test tests/e2e/perf.spec.ts",
     "trace": "TRACE=1 playwright test tests/e2e/trace.spec.ts",
     "trace:report": "node scripts/trace-report.ts",
+    "bench": "node scripts/bench.ts",
     "screenshots": "SHOTS=1 playwright test tests/e2e/screenshots.spec.ts",
     "bot": "node scripts/bot.ts",
     "sfx": "node scripts/sfx.ts"

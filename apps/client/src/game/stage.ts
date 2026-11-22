@@ -128,8 +128,8 @@ export async function buildStage(app: HTMLElement) {
    * on a ring as well as underfoot so walking under one lamp does not pump the exposure.
    */
   const lampsAround = (p: Vector3) => {
-    let e = 0;
-    for (const [dx, dz] of [[0, 0], ...RING]) e += lampLightAt(lamps, lampProbe.set(p.x + dx, p.y - 1.5, p.z + dz));
+    let e = lampLightAt(lamps, lampProbe.set(p.x, p.y - 1.5, p.z));
+    for (const [dx, dz] of RING) e += lampLightAt(lamps, lampProbe.set(p.x + dx, p.y - 1.5, p.z + dz));
     return e / (RING.length + 1);
   };
   // Hidden while probes bake: anything transmissive or refractive (it would need its own

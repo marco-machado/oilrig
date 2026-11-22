@@ -34,8 +34,6 @@ import {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Buf = any;
 
-const FIELDS = ['DxDz', 'DyDxz', 'DyxDyz', 'DxxDzz'] as const;
-
 function gaussianNoise(N: number, seed = 0x5eed0cea) {
   const rand = mulberry32(seed);
   const data = new Float32Array(N * N * 2);
@@ -62,17 +60,41 @@ function mapTexture(N: number, mips: boolean) {
   return tex;
 }
 
+/**
+ * A storage buffer that only the kernels write, created empty on the device.
+ *
+ * three creates a storage buffer mapped and copies the attribute's array into it. For these
+ * buffers that is megabytes of zeros (20 MB at N = 256, 78 MB at 512), and the browser holds on
+ * to memory such an upload passes through: with it the renderer process was 27–31 MB larger at
+ * 256 and 125 MB at 512, the GPU process 9–11 MB and 64 MB (docs/performance.md). A buffer
+ * made here is never mapped, and its array, never read, takes no memory either.
+ *
+ * This depends on three's internals: `createAttribute` in `WebGPUAttributeUtils` leaves alone
+ * a buffer that the backend's data for the attribute already holds, and `createStorageAttribute`
+ * in `WebGPUBackend` asks for the usage given here. `OceanSimulation.checkBuffers` reports it
+ * if three replaces the buffer with its own; if three stopped looking there at all, nothing
+ * would, and `pnpm bench count` is the check (GPU buffers alive on High stay 65.3 MB).
+ */
+function deviceArray(renderer: WebGPURenderer, made: Array<[attribute: object, buffer: GPUBuffer]>, count: number, type: 'vec2' | 'vec4'): Buf {
+  const node: Buf = type === 'vec2' ? attributeArray(count, 'vec2') : attributeArray(count, 'vec4');
+  const backend = renderer.backend as any;
+  const device: GPUDevice | undefined = backend.device;
+  const usage = (globalThis as any).GPUBufferUsage;
+  if (!device || !usage) return node;
+  const attribute = node.value;
+  const buffer = device.createBuffer({
+    size: attribute.array.byteLength,
+    usage: usage.STORAGE | usage.VERTEX | usage.COPY_SRC | usage.COPY_DST,
+  });
+  backend.get(attribute).buffer = buffer;
+  made.push([attribute, buffer]);
+  return node;
+}
+
 export interface Cascade {
   lengthScale: number;
   displacement: StorageTexture;
   derivatives: StorageTexture;
-}
-
-interface CascadeInternal extends Cascade {
-  kInitial: Buf;
-  kConjugate: Buf;
-  kTime: Buf;
-  fields: Record<(typeof FIELDS)[number], Buf>;
 }
 
 export const SWELL: SeaParams = {
@@ -101,19 +123,25 @@ export const LOCAL_DEFAULTS: Omit<SeaParams, 'windSpeed' | 'windDirection'> = {
 
 export class OceanSimulation {
   readonly N: number;
-  readonly cascades: Cascade[];
+  readonly cascades: Cascade[] = [];
   readonly lambda = uniform(1.6);
-  private readonly internal: CascadeInternal[] = [];
   private readonly time = uniform(0);
   private readonly dt = uniform(1 / 60);
   private readonly foamDecay = uniform(3.9);
   private readonly drift = uniform(new Vector2());
   private readonly shared: SharedSpectrum;
-  private readonly timeGroup: Buf[];
-  private readonly stepGroups: Buf[][] = [];
-  private readonly assembleGroups: Buf[][] = [[], []];
+  /** The initial spectra of every cascade, then their conjugates: run when the wind changes. */
+  private readonly spectrumKernels: Buf[] = [];
+  /**
+   * One frame of the simulation as one compute pass: the spectra at the current time, the
+   * inverse FFT and the maps. There are two because the foam history alternates between two
+   * textures; the arrays themselves are what three keys the pass by, so they are kept.
+   */
+  private readonly frameKernels: [Buf[], Buf[]];
   private frame = 0;
   private dirty = true;
+  /** The buffers made by `deviceArray`, until `checkBuffers` has seen three use them. */
+  private readonly deviceBuffers: Array<[attribute: object, buffer: GPUBuffer]> = [];
   private readonly renderer: WebGPURenderer;
   private local: SeaParams;
 
@@ -127,39 +155,50 @@ export class OceanSimulation {
     (noise.value.array as Float32Array).set(gaussianNoise(N));
     noise.value.needsUpdate = true;
 
+    // Every cascade's data lies in the same buffers, one N×N layer after another, so each step
+    // of a frame is one dispatch over all of them (it was one per cascade and field: 200 a frame).
     const n2 = N * N;
+    const total = lengthScales.length * n2;
     const boundary = (i: number) => ((2 * Math.PI) / lengthScales[i]) * 6;
-    const fft = new FFT(N);
-    const ffts: ReturnType<FFT['buildField']>[] = [];
+    // The kernels write all of these before anything reads them, so they are made empty.
+    const empty = (type: 'vec2' | 'vec4') => deviceArray(renderer, this.deviceBuffers, total, type);
+    const h0k = empty('vec2');
+    const h0 = empty('vec4');
+    const wavesData = empty('vec4');
+    // The four complex fields, two to a buffer: DxDz with DyDxz, DyxDyz with DxxDzz.
+    const fieldsA = empty('vec4');
+    const fieldsB = empty('vec4');
+    const conjugates: Buf[] = [];
+    const assemble: Array<[Buf, Buf]> = [];
 
     lengthScales.forEach((L, i) => {
-      const h0k = attributeArray(n2, 'vec2');
-      const h0 = attributeArray(n2, 'vec4');
-      const wavesData = attributeArray(n2, 'vec4');
-      const fields = Object.fromEntries(FIELDS.map((f) => [f, attributeArray(n2, 'vec2')])) as CascadeInternal['fields'];
+      const offset = i * n2;
       const deltaK = uniform((2 * Math.PI) / L);
       const cutoffLow = uniform(i === 0 ? 1e-4 : boundary(i));
       const cutoffHigh = uniform(i === lengthScales.length - 1 ? 9999 : boundary(i + 1));
-      const kInitial = buildInitialSpectrum({ N, noise, h0k, wavesData, shared: this.shared, deltaK, cutoffLow, cutoffHigh });
-      const kConjugate = buildConjugate(N, h0k, h0);
-      const kTime = buildTimeDependent({ N, h0, wavesData, ...fields, time: this.time });
-      for (const f of FIELDS) ffts.push(fft.buildField(fields[f], attributeArray(n2, 'vec2')));
-      const displacement = mapTexture(N, true);
-      const derivatives = mapTexture(N, true);
-      const c: CascadeInternal = { lengthScale: L, displacement, derivatives, kInitial, kConjugate, kTime, fields };
-      this.internal.push(c);
-      const asm = this.buildAssemble(c);
-      this.assembleGroups[0].push(asm[0]);
-      this.assembleGroups[1].push(asm[1]);
+      this.spectrumKernels.push(buildInitialSpectrum({ N, offset, noise, h0k, wavesData, shared: this.shared, deltaK, cutoffLow, cutoffHigh }));
+      conjugates.push(buildConjugate(N, offset, h0k, h0));
+      const c: Cascade = { lengthScale: L, displacement: mapTexture(N, true), derivatives: mapTexture(N, true) };
+      this.cascades.push(c);
+      assemble.push(this.buildAssemble(c, offset, fieldsA, fieldsB));
     });
-    this.cascades = this.internal;
-    this.timeGroup = this.internal.map((c) => c.kTime);
-    for (let s = 0; s < fft.logN; s++) this.stepGroups.push(ffts.map((f) => f.h[s]));
-    for (let s = 0; s < fft.logN; s++) this.stepGroups.push(ffts.map((f) => f.v[s]));
-    this.stepGroups.push(ffts.map((f) => f.permute));
+    this.spectrumKernels.push(...conjugates);
+    const kTime = buildTimeDependent({ count: total, h0, wavesData, a: fieldsA, b: fieldsB, time: this.time });
+    const fft = new FFT(N).build(
+      [
+        [fieldsA, empty('vec4')],
+        [fieldsB, empty('vec4')],
+      ],
+      lengthScales.length,
+    );
+    this.frameKernels = [
+      [kTime, ...fft, ...assemble.map((k) => k[0])],
+      [kTime, ...fft, ...assemble.map((k) => k[1])],
+    ];
   }
 
-  private buildAssemble(c: CascadeInternal): [Buf, Buf] {
+  /** Writes a cascade's displacement, derivative and foam maps from its transformed fields at `offset`. */
+  private buildAssemble(c: Cascade, offset: number, fieldsA: Buf, fieldsB: Buf): [Buf, Buf] {
     const N = this.N;
     const { lambda, dt, foamDecay, drift } = this;
     const tauScale = Math.sqrt(c.lengthScale / 144);
@@ -168,10 +207,14 @@ export class OceanSimulation {
       Fn(() => {
         const id = instanceIndex;
         const coord = uvec2(id.mod(uint(N)), id.div(uint(N)));
-        const DxDz = c.fields.DxDz.element(id);
-        const DyDxz = c.fields.DyDxz.element(id);
-        const DyxDyz = c.fields.DyxDyz.element(id);
-        const DxxDzz = c.fields.DxxDzz.element(id);
+        // The sign the transform leaves in (see FFT.build).
+        const sign = float(1).sub(float(coord.x.add(coord.y).mod(uint(2))).mul(2));
+        const a: any = fieldsA.element(id.add(uint(offset))).mul(sign).toVar();
+        const b: any = fieldsB.element(id.add(uint(offset))).mul(sign).toVar();
+        const DxDz = a.xy;
+        const DyDxz = a.zw;
+        const DyxDyz = b.xy;
+        const DxxDzz = b.zw;
         const jxx = float(1).add(lambda.mul(DxxDzz.x));
         const jzz = float(1).add(lambda.mul(DxxDzz.y));
         const jxz = lambda.mul(DyDxz.y);
@@ -210,19 +253,29 @@ export class OceanSimulation {
       this.dirty = false;
       const swellScale = Math.pow(Math.min(Math.max(this.local.windSpeed / 10.5, 0.35), 1.7), 0.7);
       applySpectrum(this.shared, this.local, SWELL, swellScale);
-      for (const c of this.internal) {
-        this.renderer.compute(c.kInitial);
-        this.renderer.compute(c.kConjugate);
-      }
+      this.renderer.compute(this.spectrumKernels);
     }
     this.time.value = t;
     this.dt.value = Math.min(Math.max(dt, 0), 0.1);
     const wd = (this.local.windDirection * Math.PI) / 180;
     const v = 0.03 * this.local.windSpeed;
     this.drift.value.set(v * Math.sin(wd), -v * Math.cos(wd));
-    this.renderer.compute(this.timeGroup);
-    for (const g of this.stepGroups) this.renderer.compute(g);
-    this.renderer.compute(this.assembleGroups[this.frame & 1]);
+    this.renderer.compute(this.frameKernels[this.frame & 1]);
     this.frame++;
+    if (this.deviceBuffers.length > 0) this.checkBuffers();
+  }
+
+  /**
+   * After the first frame's kernels have run, the backend should still hold every buffer made by
+   * `deviceArray`. If three put its own there instead, ours would be megabytes held for nothing.
+   */
+  private checkBuffers() {
+    const backend = this.renderer.backend as any;
+    for (const [attribute, buffer] of this.deviceBuffers) {
+      if (backend.get(attribute).buffer === buffer) continue;
+      buffer.destroy();
+      console.error('OceanSimulation: three did not take a storage buffer made for it (see deviceArray in ocean/simulation.ts).');
+    }
+    this.deviceBuffers.length = 0;
   }
 }

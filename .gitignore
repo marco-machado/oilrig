@@ -4,6 +4,8 @@ dist
 *.db-*
 .DS_Store
 test-results
+# Builds and results of `pnpm bench` (not under test-results: Playwright empties that on every run).
+bench-results
 playwright-report
 .playwright-cli
 .idea

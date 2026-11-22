@@ -40,6 +40,13 @@ export function createFrame(g: Game, pipeline: ReturnType<typeof createPipeline>
   const viewE = new Euler();
   const shakeE = new Euler();
   let uiTick = 0;
+  // Kept between frames, so a frame does not build them again.
+  let fixedWeather: WeatherState | null = null;
+  let celestialAtMs = NaN;
+  let celestial!: ReturnType<typeof celestialAt>;
+  const gatesOpen: boolean[] = DIMS.ELEVATOR.stops.map(() => false);
+  const liftCentre: [number, number, number] = [(DIMS.ELEVATOR.x0 + DIMS.ELEVATOR.x1) / 2, 0, (DIMS.ELEVATOR.z0 + DIMS.ELEVATOR.z1) / 2];
+  const seated = new Map<string, { position: Vec3; yaw: number; pitch: number; roll: number }>();
   const stats = { frames: 0, gpuReady: false };
   const doorTargets: Interactable[] = layout.doors.map((d) => ({ id: d.id, point: d.center, reach: 3.2 }));
   const liftTargets: Interactable[] = elevatorPanels().map((p) => ({ id: `lift-call-${p.stop}`, point: p.position, reach: 2.6, facing: 0.6 }));
@@ -70,8 +77,12 @@ export function createFrame(g: Game, pipeline: ReturnType<typeof createPipeline>
       sw0.windDirection = (sw0.windDirection + dd * k + 360) % 360;
       sw0.kind = target.kind;
     }
-    const weather: WeatherState = dbg.weather ? { ...g.shownWeather, ...dbg.weather } : g.shownWeather;
-    const celestial = celestialAt(gms);
+    const weather: WeatherState = dbg.weather ? Object.assign((fixedWeather ??= { ...g.shownWeather }), g.shownWeather, dbg.weather) : g.shownWeather;
+    // The sky's geometry changes only with the game clock, which a fixed hour stops.
+    if (gms !== celestialAtMs) {
+      celestialAtMs = gms;
+      celestial = celestialAt(gms);
+    }
 
     // Elevator: the car and the gates follow the shared timeline; riders move with the car.
     prof.begin('elevator');
@@ -80,7 +91,8 @@ export function createFrame(g: Game, pipeline: ReturnType<typeof createPipeline>
       g.liftState = g.localLift.state;
     }
     const liftNow = elevatorPose(g.liftState, realNow);
-    sw.setElevator(liftNow.y, DIMS.ELEVATOR.stops.map((_, i) => gateOpen(liftNow, i)));
+    for (let i = 0; i < gatesOpen.length; i++) gatesOpen[i] = gateOpen(liftNow, i);
+    sw.setElevator(liftNow.y, gatesOpen);
     if (g.joined) player.ride(g.carY, liftNow.y);
     if (liftNow.phase !== g.liftPhase) {
       const doorAt = (stop: number | null): Vec3 => [(DIMS.ELEVATOR.door.x0 + DIMS.ELEVATOR.door.x1) / 2, (stop === null ? liftNow.y : DIMS.ELEVATOR.stops[stop]) + 1.2, DIMS.ELEVATOR.z0];
@@ -94,7 +106,8 @@ export function createFrame(g: Game, pipeline: ReturnType<typeof createPipeline>
     g.carY = liftNow.y;
     if (g.calling && (performance.now() > g.calling.until || (liftNow.stop === g.calling.stop && liftNow.phase !== 'closing'))) g.calling = null;
     lift.update(liftNow, g.calling?.stop ?? null);
-    sound.setElevator([(DIMS.ELEVATOR.x0 + DIMS.ELEVATOR.x1) / 2, liftNow.y + 1.2, (DIMS.ELEVATOR.z0 + DIMS.ELEVATOR.z1) / 2], liftNow.phase === 'travel');
+    liftCentre[1] = liftNow.y + 1.2;
+    sound.setElevator(liftCentre, liftNow.phase === 'travel');
     prof.end('elevator');
 
     // Drone schedule (offline) and pose.
@@ -236,11 +249,11 @@ export function createFrame(g: Game, pipeline: ReturnType<typeof createPipeline>
 
     prof.time('atmosphere', () => atmosphere.update(dt, camera.position, celestial, weather, lampsAround(camera.position)));
     if (!off.has('probes')) {
-      const baked = prof.time('interior', () => interior.update(sunDir.set(...celestial.sunDirection), weather.cloudCover));
+      const baked = prof.time('interior', () => interior.update(sunDir.fromArray(celestial.sunDirection), weather.cloudCover));
       if (baked) prof.note(baked);
     }
     if (!off.has('ocean')) prof.time('ocean', () => ocean.update(simTime, dt, camera.position, weather.windSpeed, weather.windDirection));
-    prof.time('tender', () => tender.update(dt));
+    prof.time('tender', () => tender.update(dt, camera.position));
     prof.begin('world');
     furniture.update(simTime);
     props.update(dt);
@@ -249,10 +262,11 @@ export function createFrame(g: Game, pipeline: ReturnType<typeof createPipeline>
     rain.update();
     prof.end('world');
     prof.time('avatars', () => {
-      const seated = new Map<string, { position: Vec3; yaw: number; pitch: number; roll: number }>();
-      g.crew.forEach((id, i) => {
+      seated.clear();
+      for (let i = 0; i < g.crew.length; i++) {
+        const id = g.crew[i];
         if (id && id !== g.selfId) seated.set(id, { position: seatPosition(shownPose, i, -DIMS.DRONE.seatedHips), yaw: shownPose.yaw, pitch: shownPose.pitch, roll: shownPose.roll });
-      });
+      }
       avatars.update(g.now(), dt, seated);
     });
     prof.time('ui', () => {
@@ -269,7 +283,11 @@ export function createFrame(g: Game, pipeline: ReturnType<typeof createPipeline>
       prof.note(`resolution ${renderedScale}→${dynRes.scale}`);
       renderedScale = dynRes.scale;
     }
+    // Where the sea covers the sky in this render the sky is not shaded. Only here: the
+    // environment map and the probe bakes (earlier in the frame) see the sky without the sea.
+    atmosphere.sky.hiddenBelow.value = off.has('ocean') ? -2 : ocean.coversBelow(camera.position.y, weather.windSpeed);
     prof.time('render', () => pipeline.render());
+    atmosphere.sky.hiddenBelow.value = -2;
     if (g.shotWanted) {
       g.shotWanted = false;
       saveScreenshot(renderer.domElement).then(

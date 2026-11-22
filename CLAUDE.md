@@ -20,6 +20,7 @@ pnpm test:render                  # Playwright: every quality preset renders wit
 pnpm test:auth                    # Playwright: accounts end to end
 pnpm perf                         # frame times from six viewpoints (PERF_QUALITY=ultra for another preset)
 pnpm screenshots                  # writes PNG captures to docs/screenshots (gitignored; the README uses .webp copies)
+pnpm bench timing --build new=apps/client/dist/client   # frame pacing of a built client; docs/performance.md has the suites
 pnpm deploy                       # build + wrangler deploy
 ```
 
@@ -37,7 +38,7 @@ There is no lint script; `pnpm typecheck` is the static check.
 - A second dev server beside the first needs its own port, state and inspector port (`CLIENT_PORT`, `CF_STATE`, `CF_INSPECTOR_PORT`); `.claude/launch.json` has `client` (5173) and `client-alt` (5180, sign-ups open) set up.
 - The `workers` Vitest project overrides bindings (`vitest.config.ts`): sign-ups open, weather seed 5, drone away for the whole run.
 - Playwright uses the installed Chrome with WebGPU flags and starts its own dev servers on 5174 (sign-ups open) and 5175 (closed), with empty state. `PW_BASE_URL` points it at another server instead.
-- `scripts/*.ts` run directly under Node (`pnpm bot`, `pnpm sfx`, `pnpm trace:report`).
+- `scripts/*.ts` run directly under Node (`pnpm bot`, `pnpm sfx`, `pnpm trace:report`, `pnpm bench`).
 
 ## Cloud sessions
 
@@ -87,8 +88,10 @@ Vite app with three entries: the game (`index.html` → `src/main.ts`), the sign
 From `docs/postmortem-stutter.md` and `docs/startup-shader-compile.md` (both partly describe three r186; check the code before relying on a detail):
 
 - **Never change anything that is part of the lit-shader cache key at run time.** Toggling a light's `visible` or `castShadow` rebuilds every lit material's shader (0.5 to 3 s freezes), and the `castShadow` toggle also corrupted the renderer's MRT state. Lights change `intensity` only; the sun keeps `castShadow = true` and uses `shadow.intensity` / `shadow.autoUpdate`.
-- **Two pieces depend on three's internals and fail silently on upgrade:** `render/stableClusteredLighting.ts` overrides private methods of `ClusteredLightsNode` (a stale override just stops running, and aimed downlights then light the ceiling), and `InteriorLight.compileAsync()` mirrors the internals of `LightProbeGrid.bake()` (a mismatch means a slow cold start, no error). The startup doc has the upgrade checklist.
+- **Two pieces depend on three's internals and fail silently on upgrade:** `render/stableClusteredLighting.ts` overrides a private method of `ClusteredLightsNode` and edits its lights texture (a stale override just stops running: aimed downlights then light the ceiling, and lamps that are switched off cost a lighting pass per fragment again), and `InteriorLight.compileAsync()` mirrors the internals of `LightProbeGrid.bake()` (a mismatch means a slow cold start, no error). The startup doc has the upgrade checklist.
+- **A third depends on them:** `deviceArray` in `env/ocean/simulation.ts` creates the ocean's GPU-only work buffers on the device and puts them where three's backend keeps an attribute's buffer, so three does not upload megabytes of zeros to create them. If three replaces such a buffer with its own, the simulation logs an error after the first frame (`pnpm test:render` fails on it) and frees its copy. If three stops looking there at all, nothing is logged and the buffers exist twice: `pnpm bench count` shows it (GPU buffers alive on High should stay 65.3 MB, of which 45.7 MB uploaded at creation). Either way the game still runs (`docs/performance.md`).
 - Aimed downlights and floods are clustered **point** lights with `userData.aim` / `userData.cone`, not spot lights.
+- **The sky is not shaded where the sea will cover it.** `frame.ts` sets `OceanSky.hiddenBelow` only around the game's own render; anything else that renders the sky (the environment map, the probe bakes, a new pass) must see -2. The cut comes from `Ocean.coversBelow()`, which assumes the wave heights measured for the current spectrum: re-measure them (the comment there says how) if the spectrum's scale or swell changes.
 - `precompile()` in `game/precompile.ts` must see the scene as the first frame will: a new object that starts hidden, or a new render path with its own light set, needs to be covered there or it compiles on the first frame.
 
 ## Verifying client changes

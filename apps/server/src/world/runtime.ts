@@ -20,6 +20,9 @@ export interface RuntimeOptions {
   nameTaken?: (name: string) => Promise<boolean>;
 }
 
+/** As long as an idle agent stays (AGENT_IDLE_MINUTES), unless configured. */
+const DEFAULT_LISTEN_MS = 30 * 60_000;
+
 /** Everything the world server runs: the world, its AI agents, and the REST, SSE and MCP API
  * (served under /api/v1 and /mcp, authenticated with users' API keys). */
 export class WorldRuntime {
@@ -27,11 +30,21 @@ export class WorldRuntime {
   readonly agents: AgentManager;
   readonly events: EventLog;
   readonly api: Hono<ApiEnv>;
+  /** How long event streams alone keep the world running once nobody is aboard. */
+  private readonly listenMs: number;
+  /** When a person was last aboard or an agent last out. Kept across restarts, so a world
+   * that stopped for want of company does not start listening again just by being woken. */
+  private lastPresence: number;
+  private readonly store: WorldStore & KeyStore;
 
-  private constructor(world: World, agents: AgentManager, store: KeyStore, nameTaken?: (name: string) => Promise<boolean>) {
+  private constructor(world: World, agents: AgentManager, store: WorldStore & KeyStore, listenMs: number, nameTaken?: (name: string) => Promise<boolean>) {
     this.world = world;
     this.agents = agents;
+    this.listenMs = listenMs;
+    this.store = store;
+    this.lastPresence = store.lastPresence() ?? Date.now();
     this.events = new EventLog(world);
+    this.events.accepting = () => this.listening;
     const service = new ApiService(world, agents, nameTaken);
     const auth = apiAuth(store, new RateLimiter());
     const mcp = createMcpEndpoint(service);
@@ -45,12 +58,26 @@ export class WorldRuntime {
     const clock = makeClock({ realTime: c.realTime, dayLengthMinutes: c.dayLengthMinutes, offsetHours: c.timeOffsetHours });
     const world = World.create({ rapier: o.rapier, clock, weatherSeed: c.weatherSeed, store: o.store, drone: c.drone });
     const agents = await AgentManager.create(world, c.agents, o.recast);
-    return new WorldRuntime(world, agents, o.store, o.nameTaken);
+    return new WorldRuntime(world, agents, o.store, c.agents.idleMs ?? DEFAULT_LISTEN_MS, o.nameTaken);
   }
 
-  /** Something needs the world to keep running: people aboard, agents, or open event streams. */
+  /** A person is aboard or an agent is out. */
+  private get present() {
+    if (this.world.humanCount === 0 && this.agents.count === 0) return false;
+    this.lastPresence = Date.now();
+    return true;
+  }
+
+  /** Event streams are worth serving: someone is aboard, or was not long ago. A stream with
+   * nothing to watch must not keep the world simulating for ever. */
+  get listening() {
+    return this.present || Date.now() - this.lastPresence < this.listenMs;
+  }
+
+  /** Something needs the world to keep running: people aboard, agents, or event streams
+   * opened while there was still something to watch. */
   get active() {
-    return this.world.humanCount > 0 || this.agents.count > 0 || this.events.subscribers > 0;
+    return this.present || (this.events.subscribers > 0 && this.listening);
   }
 
   get running() {
@@ -62,9 +89,12 @@ export class WorldRuntime {
     this.agents.start();
   }
 
-  /** Stops the clocks; agents and people's places are kept. */
+  /** Stops the clocks; agents and people's places are kept. Streams still open are ended:
+   * left open they would hold the object in memory with nothing to send. */
   pause() {
     this.world.stop();
     this.agents.pause();
+    this.events.end();
+    this.store.saveLastPresence(this.lastPresence);
   }
 }

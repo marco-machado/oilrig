@@ -221,25 +221,39 @@ export function createRestApi(service: ApiService, events: EventLog, auth: Middl
       path: '/events',
       summary: 'Live event stream',
       description:
-        'Server-Sent Events: join, leave, chat, door, weather, drone and elevator, each with an id. Reconnect with Last-Event-ID to replay what you missed.',
-      responses: { 200: { content: { 'text/event-stream': { schema: z.string() } }, description: 'Event stream' }, ...COMMON_ERRORS },
+        'Server-Sent Events: join, leave, chat, door, weather, drone and elevator, each with an id. Reconnect with Last-Event-ID to replay what you missed; ' +
+        'ids only grow, also across a restart of the server. Once nobody (person or avatar) has been aboard for AGENT_IDLE_MINUTES the stream is closed, and ' +
+        'opening one answers 204 until someone is aboard again.',
+      responses: {
+        200: { content: { 'text/event-stream': { schema: z.string() } }, description: 'Event stream' },
+        204: { description: 'Nobody has been aboard for a while: nothing to stream (an EventSource stops reconnecting)' },
+        ...COMMON_ERRORS,
+      },
     }),
     (c) => {
+      if (!events.accepting()) return c.body(null, 204) as never;
       const last = Number(c.req.header('last-event-id') ?? c.req.query('lastEventId') ?? 0) || 0;
       return streamSSE(c, async (stream) => {
         const queue: Array<{ id: number; type: string; data: unknown }> = [...events.since(last)];
         let wake: (() => void) | null = null;
-        const unsubscribe = events.subscribe((e) => {
-          queue.push(e);
-          wake?.();
-        });
+        let ended = false;
+        const unsubscribe = events.subscribe(
+          (e) => {
+            queue.push(e);
+            wake?.();
+          },
+          () => {
+            ended = true;
+            wake?.();
+          },
+        );
         stream.onAbort(() => {
           unsubscribe();
           wake?.();
         });
         await stream.write(': connected\n\n');
         let lastBeat = Date.now();
-        while (!stream.aborted) {
+        while (!stream.aborted && !ended) {
           while (queue.length) {
             const e = queue.shift()!;
             await stream.writeSSE({ id: String(e.id), event: e.type, data: JSON.stringify(e.data) });
@@ -256,6 +270,7 @@ export function createRestApi(service: ApiService, events: EventLog, auth: Middl
           if (timer !== undefined) clearTimeout(timer);
           wake = null;
         }
+        if (ended && !stream.aborted) await stream.write(': nobody aboard\n\n');
         unsubscribe();
       }) as never;
     },

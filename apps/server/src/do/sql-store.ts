@@ -85,6 +85,14 @@ export class SqlWorldStore implements WorldStore, KeyStore {
     this.put('weather', mode);
   }
 
+  lastPresence() {
+    return this.get<number>('presence');
+  }
+
+  saveLastPresence(t: number) {
+    this.put('presence', t);
+  }
+
   doors(): Record<string, boolean> {
     const rows = this.sql.exec<{ id: string; open: number }>('SELECT id, open FROM doors').toArray();
     return Object.fromEntries(rows.map((r) => [r.id, r.open === 1]));

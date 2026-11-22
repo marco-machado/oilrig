@@ -40,9 +40,10 @@ import {
   padOccupied,
   seatPosition,
 } from '@oilrig/shared';
+import { MessageBudget } from './budget.ts';
 import { Emitter } from './emitter.ts';
 import type { WorldStore } from './store.ts';
-import { type AcceptedPose, MovementValidator } from './validation.ts';
+import { MovementValidator, type Track } from './validation.ts';
 
 export interface Connection {
   send(m: ServerMessage): void;
@@ -61,10 +62,15 @@ interface Player {
   conn: Connection | null;
   /** Server-simulated AI avatar (always present until it leaves). */
   agent: boolean;
-  pose: AcceptedPose & { yaw: number; pitch: number; speed: number; grounded: boolean };
+  pose: { p: Vec3; /** Server receive time, ms. */ t: number; yaw: number; pitch: number; speed: number; grounded: boolean };
+  /** Movement bookkeeping for the validator. It belongs to `pose.p`: once the server puts the
+   * person somewhere else, the next pose starts a new one from there. */
+  track: Track | null;
   lastSeen: number;
   chatTimes: number[];
   poseTimes: number[];
+  /** How many of each kind of message this person may still send. */
+  budget: MessageBudget;
 }
 
 export interface WorldEvents {
@@ -92,6 +98,11 @@ export interface WorldOptions {
 // The drone lives here: it starts parked on the pad, stays a good while, and flies off on
 // a short trip now and then.
 const DRONE_DEFAULTS: DroneScheduleOptions = { intervalMs: 3 * 60_000, stayMs: 12 * 60_000, firstArrivalMs: 60_000, seed: 7, startLanded: true };
+
+/** The pilot's stream may run this much over the drone's top speed (clock drift, late poses)… */
+const DRONE_SPEED_SLACK = 1.2;
+/** …and cover this many metres at once, for poses that arrive in a burst after a stall. */
+const DRONE_REACH_CAP = DIMS.DRONE.maxSpeed * 0.5;
 
 export function colorFor(name: string) {
   let h = 2166136261;
@@ -127,7 +138,7 @@ export class World extends Emitter<WorldEvents> {
   readonly drone: DroneScheduler;
   readonly crew = new DroneCrew();
   /** The pilot's latest drone pose (server receive time), while someone flies it. */
-  private droneLive: (DronePoseMsg & { t: number }) | null = null;
+  private droneLive: (DronePoseMsg & { t: number; reach: number }) | null = null;
   readonly elevator: ElevatorController;
 
   private constructor(sw: StaticWorld, opts: WorldOptions, doors: Record<string, boolean>) {
@@ -277,6 +288,11 @@ export class World extends Emitter<WorldEvents> {
     }
     const now = Date.now();
     current.lastSeen = now;
+    if (!current.budget.take(m.type, now)) {
+      // Sent faster than anyone does by hand: dropped, so one person cannot flood the others.
+      if (current.budget.shouldTell(m.type, now)) conn.send({ type: 'error', code: 'rate-limited', message: 'Slow down a little.' });
+      return current;
+    }
     switch (m.type) {
       case 'hello':
         conn.send({ type: 'error', code: 'already-joined', message: 'Already joined.' });
@@ -338,9 +354,11 @@ export class World extends Emitter<WorldEvents> {
         conn,
         agent: false,
         pose: { p: spawn.position, t: now, yaw: spawn.yaw, pitch: 0, speed: 0, grounded: true },
+        track: null,
         lastSeen: now,
         chatTimes: [],
         poseTimes: [],
+        budget: new MessageBudget(),
       };
       this.players.set(player.info.id, player);
     }
@@ -392,14 +410,19 @@ export class World extends Emitter<WorldEvents> {
       p.pose = { p: [at[0], at[1] - 0.45, at[2]], t: now, yaw: m.yaw, pitch: Math.max(-1.6, Math.min(1.6, m.pitch)), speed: 0, grounded: true };
       return;
     }
-    const verdict = this.validator.check(p.pose, m.p, now);
+    // A track only continues from the position it accepted: after a respawn, a seat in the
+    // drone or any other move by the server, movement is judged afresh from where they stand.
+    if (p.track?.p !== p.pose.p) p.track = this.validator.start(p.pose.p, now);
+    const verdict = this.validator.check(p.track, m.p as Vec3, now);
     if (!verdict.ok) {
+      // In mid-air with nothing to explain it: back to the last ground, not to the air.
+      if (verdict.reason === 'unsupported') p.pose = { ...p.pose, p: verdict.to, speed: 0, grounded: true };
       p.pose.t = now;
       p.conn?.send({ type: 'correct', seq: m.seq, p: p.pose.p, reason: verdict.reason });
       return;
     }
     p.pose = {
-      p: m.p as Vec3,
+      p: p.track.p,
       t: now,
       yaw: m.yaw,
       pitch: Math.max(-1.6, Math.min(1.6, m.pitch)),
@@ -476,9 +499,11 @@ export class World extends Emitter<WorldEvents> {
       conn: null,
       agent: true,
       pose: { p: position, t: now, yaw, pitch: 0, speed: 0, grounded: true },
+      track: null,
       lastSeen: now,
       chatTimes: [],
       poseTimes: [],
+      budget: new MessageBudget(),
     };
     this.players.set(player.info.id, player);
     this.broadcast({ type: 'join', player: player.info });
@@ -542,7 +567,7 @@ export class World extends Emitter<WorldEvents> {
     if (seat === null) return fail('The drone is full.');
     if (seat === 0 && s.phase === 'landed') {
       this.drone.takeControl(now);
-      this.droneLive = { p: s.from, v: [0, 0, 0], yaw: s.padYaw, pitch: 0, roll: 0, rotor: 0.4, grounded: true, t: now };
+      this.droneLive = { p: s.from, v: [0, 0, 0], yaw: s.padYaw, pitch: 0, roll: 0, rotor: 0.4, grounded: true, t: now, reach: DRONE_REACH_CAP };
     }
     this.broadcast(this.droneMessage());
   }
@@ -553,7 +578,7 @@ export class World extends Emitter<WorldEvents> {
     if (!this.droneGrounded) return fail('Land first.');
     const d = this.dronePose(now);
     const near = Math.hypot(at[0] - d.position[0], at[2] - d.position[2]) < 8 && Math.abs(at[1] - d.position[1]) < 3;
-    const spot = near && this.validator.check({ p: at, t: now - 1000 }, at, now).ok ? at : null;
+    const spot = near && this.validator.standable(at) ? at : null;
     this.leaveDrone(p, now);
     const out = spot ?? this.layout.spawn.position;
     p.pose = { ...p.pose, p: out, t: now, speed: 0, grounded: true };
@@ -575,16 +600,27 @@ export class World extends Emitter<WorldEvents> {
 
   private onDronePose(p: Player, m: Extract<ClientMessage, { type: 'drone' }>, now: number) {
     if (this.crew.pilot !== p.info.id || this.drone.state.phase !== 'piloted') return;
-    const prev = this.droneLive;
-    if (prev) {
-      // A pilot cannot outfly the drone: an implausible jump is ignored.
-      const dt = Math.min(Math.max((now - prev.t) / 1000, 0.016), 1);
-      const d = Math.hypot(m.p[0] - prev.p[0], m.p[1] - prev.p[1], m.p[2] - prev.p[2]);
-      if (d > DIMS.DRONE.maxSpeed * 1.6 * dt + 2) return;
-    }
     if (m.p[1] < -1 || m.p[1] > DIMS.DRONE.maxAltitude + 20) return;
-    this.droneLive = { ...m, t: now };
-    this.drone.track(m.p as Vec3, m.yaw);
+    const prev = this.droneLive;
+    let reach = DRONE_REACH_CAP;
+    let at = m.p as Vec3;
+    if (prev) {
+      // A pilot cannot outfly the drone. The distance allowed fills with time, not with
+      // messages. A pose beyond it (a speed hack, or poses that arrive late after a stall)
+      // moves the drone as far towards it as the allowance goes: at more than top speed, so
+      // an honest pilot's drone catches up with the stream instead of being left behind.
+      const dt = Math.min(Math.max((now - prev.t) / 1000, 0), 1);
+      reach = Math.min(DRONE_REACH_CAP, prev.reach + DIMS.DRONE.maxSpeed * DRONE_SPEED_SLACK * dt);
+      const d = Math.hypot(m.p[0] - prev.p[0], m.p[1] - prev.p[1], m.p[2] - prev.p[2]);
+      if (d > reach) {
+        const k = reach / d;
+        at = [prev.p[0] + (m.p[0] - prev.p[0]) * k, prev.p[1] + (m.p[1] - prev.p[1]) * k, prev.p[2] + (m.p[2] - prev.p[2]) * k];
+        reach = 0;
+      } else reach -= d;
+    }
+    // Short of where the pilot says it is, it is still on its way there: not landed.
+    this.droneLive = { ...m, p: at, grounded: m.grounded && at === m.p, t: now, reach };
+    this.drone.track(at, m.yaw);
   }
 
   /** At touchdown, anyone who walked under the descending drone is moved clear. */

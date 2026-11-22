@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { DIMS, PLAYER, type Vec3, droneBodyBoxes, findPlace, getLayout } from '@ocean-home/shared';
+import { DIMS, PLAYER, type Vec3, droneBodyBoxes, findPlace, getLayout } from '@oilrig/shared';
 import { AGENT_DT, Agent, type TaskResult } from '../../apps/server/src/agents/agent.ts';
 import { NavigationMesh } from '../../apps/server/src/agents/navmesh.ts';
 import type { World } from '../../apps/server/src/world/world.ts';

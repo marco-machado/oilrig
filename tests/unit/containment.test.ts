@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findPlace } from '@ocean-home/shared';
+import { findPlace } from '@oilrig/shared';
 import { DT, allDoorsOpen, motor, mulberry, world } from './helpers.ts';
 
 // Bots wander at random (turning, running, jumping) for several simulated minutes.

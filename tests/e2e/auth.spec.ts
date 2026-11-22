@@ -9,8 +9,8 @@ const username = `e2e-${stamp}`;
 const displayName = `E2E ${stamp}`;
 const password = 'ocean breeze 2026';
 
-const loaded = (page: Page) => page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 5, undefined, { timeout: 60_000 });
-const joined = (page: Page) => page.evaluate(() => (window as any).__oceanHome.ui.joined as boolean);
+const loaded = (page: Page) => page.waitForFunction(() => (window as any).__oilrig?.stats.frames > 5, undefined, { timeout: 60_000 });
+const joined = (page: Page) => page.evaluate(() => (window as any).__oilrig.ui.joined as boolean);
 
 test('the sign-up page says sign-ups are closed when ALLOW_SIGNUPS is not "true"', async ({ page }) => {
   await page.goto(`${CLOSED}/signup`);

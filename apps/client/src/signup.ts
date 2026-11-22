@@ -1,4 +1,4 @@
-import { type MeResponse, DisplayName, Password, Username } from '@ocean-home/shared';
+import { type MeResponse, DisplayName, Password, Username } from '@oilrig/shared';
 import { AuthError, auth } from './net/auth.ts';
 import { brandMark, button, el, field, input, setButton } from './ui/components/index.ts';
 import { COORDS } from './ui/coords.ts';
@@ -17,7 +17,7 @@ root.append(
     'div',
     { class: 'oh-signup' },
     el('div', { class: 'oh-signup__brand' }, brandMark(40), el('span', { class: 'oh-eyebrow' }, COORDS)),
-    el('h1', { class: 'oh-wordmark' }, 'Ocean Home'),
+    el('h1', { class: 'oh-wordmark' }, 'Oilrig'),
     el('p', { class: 'oh-signup__tagline' }, 'Create an account to come aboard.'),
     card,
   ),

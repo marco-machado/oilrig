@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { type ApiKeyInfo, ClientMessage } from '@ocean-home/shared';
+import { type ApiKeyInfo, ClientMessage } from '@oilrig/shared';
 import { AgentError } from '../agents/manager.ts';
 import { createApiKey } from '../api/keys.ts';
 import { worldConfig } from '../config.ts';

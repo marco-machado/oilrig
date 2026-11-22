@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { displayKey } from '@ocean-home/shared';
+import { displayKey } from '@oilrig/shared';
 
 export type Registration = { ok: true; userId: string } | { ok: false; code: 'username-taken' | 'name-taken'; message: string };
 export type Rename = { ok: true } | { ok: false; code: 'name-taken' | 'unknown-user'; message: string };

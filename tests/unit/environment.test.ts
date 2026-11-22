@@ -9,7 +9,7 @@ import {
   celestialAt,
   gameTime,
   makeClock,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import { makeWorld, who } from './helpers.ts';
 
 // People can set the time of day, the speed of the day and the weather. These tests check

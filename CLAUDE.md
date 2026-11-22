@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Ocean Home: a first-person multiplayer WebGPU world (a home on an offshore platform). Three.js r187 (`WebGPURenderer` + TSL), Rapier physics, recast-navigation, served by a Cloudflare Worker with Durable Objects. pnpm workspace, Node >= 24, TypeScript 7. The README covers features, controls, the REST/MCP API, accounts and the Worker's variables in detail; read the relevant section there before changing those areas.
+Oilrig: a first-person multiplayer WebGPU world (a home on an offshore platform). Three.js r187 (`WebGPURenderer` + TSL), Rapier physics, recast-navigation, served by a Cloudflare Worker with Durable Objects. pnpm workspace, Node >= 24, TypeScript 7. The README covers features, controls, the REST/MCP API, accounts and the Worker's variables in detail; read the relevant section there before changing those areas.
 
 ## Commands
 
@@ -33,7 +33,7 @@ pnpm exec playwright test tests/e2e/render.spec.ts -g "tender"
 There is no lint script; `pnpm typecheck` is the static check.
 
 - Any Worker variable in `apps/server/wrangler.jsonc` (`vars`) can be overridden from the environment in dev only (`DRONE_STAY_MINUTES=4 pnpm dev`). After editing `wrangler.jsonc`, run `pnpm cf-typegen`: `worker-configuration.d.ts` is gitignored and `tsc -p apps/server` needs it.
-- Wrangler is a dependency of the client package: `pnpm --filter @ocean-home/client exec wrangler …`. Dev Durable Object state lives in `apps/client/.wrangler`.
+- Wrangler is a dependency of the client package: `pnpm --filter @oilrig/client exec wrangler …`. Dev Durable Object state lives in `apps/client/.wrangler`.
 - A second dev server beside the first needs its own port, state and inspector port (`CLIENT_PORT`, `CF_STATE`, `CF_INSPECTOR_PORT`); `.claude/launch.json` has `client` (5173) and `client-alt` (5180, sign-ups open) set up.
 - The `workers` Vitest project overrides bindings (`vitest.config.ts`): sign-ups open, weather seed 5, drone away for the whole run.
 - Playwright uses the installed Chrome with WebGPU flags and starts its own dev servers on 5174 (sign-ups open) and 5175 (closed), with empty state. `PW_BASE_URL` points it at another server instead.
@@ -52,7 +52,7 @@ In a Claude Code cloud session (claude.ai/code) the "Oilrig" environment has alr
 
 ### `packages/shared` is the single source of truth
 
-Client and server both import `@ocean-home/shared` (source `.ts`, no build step). The world is **data**: `layout/` builds every beam, deck, stair, rail, door, piece of furniture, place and zone once (`getLayout()`), each with a semantic `id`/`kind`. Everything else derives from it:
+Client and server both import `@oilrig/shared` (source `.ts`, no build step). The world is **data**: `layout/` builds every beam, deck, stair, rail, door, piece of furniture, place and zone once (`getLayout()`), each with a semantic `id`/`kind`. Everything else derives from it:
 
 - `physics/colliders.ts` builds the Rapier world from the layout (`buildStaticWorld`); the server's navmesh is generated from those colliders' triangles; the client's meshes (`apps/client/src/world/structure.ts`) are built from the same elements.
 - `physics/motor.ts` (`CharacterMotor`) is the one character controller: the browser predicts with it, the server simulates agents with it, the tests walk routes with it.
@@ -94,6 +94,6 @@ From `docs/postmortem-stutter.md` and `docs/startup-shader-compile.md` (both par
 ## Verifying client changes
 
 - Fixed scenes by URL: `?offline&cam=ref&date=2026-12-21&hour=8.4&weather=storm&q=ultra` (camera, weather and drone-phase names are in `debug.ts` and the README's "Visual debug URLs"). `?perf` enables GPU timing and frame-gap logs; `?off=ao,bloom,traa,ssr,shadows,ocean,grass,rain,labels,probes` switches features off; `fixedres` turns automatic resolution off.
-- `window.__oceanHome` exposes state for checks (`stats.frames`, `perf.report()`, `tender.state`, …); the Playwright specs use it.
-- The desktop app's browser pane refuses pointer lock, so the game cannot be played there: verify with `?offline&cam=…` URLs and `__oceanHome`, or with Playwright.
+- `window.__oilrig` exposes state for checks (`stats.frames`, `perf.report()`, `tender.state`, …); the Playwright specs use it.
+- The desktop app's browser pane refuses pointer lock, so the game cannot be played there: verify with `?offline&cam=…` URLs and `__oilrig`, or with Playwright.
 - Any edit to a client source file reloads the page; do not edit client files while someone is in a test session.

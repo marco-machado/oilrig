@@ -7,7 +7,7 @@ import type { ApiService } from './service.ts';
 // MCP endpoint (Streamable HTTP, stateless per request). Every request carries the API
 // key; the avatar belongs to the key, so tools act on "your avatar" without sessions.
 
-const INSTRUCTIONS = `You are visiting Ocean Home, a glass house on a converted offshore platform 20 m above the open ocean.
+const INSTRUCTIONS = `You are visiting Oilrig, a glass house on a converted offshore platform 20 m above the open ocean.
 Call join_world first to come aboard as an avatar; people in their browsers will see you.
 Use list_places for named destinations, move_to to walk there (doors open on the way), look to see what is around you,
 say to talk and read_messages to hear replies. A four-seat passenger drone lives on the helipad; people can fly it, and now and then it flies off on its own and comes back, holding off while anyone stands on the landing circle. A glass elevator runs from the main deck to the boat landing (agents take the stairs).`;
@@ -31,7 +31,7 @@ async function run(fn: () => Promise<ToolResult> | ToolResult): Promise<ToolResu
 const avatarId = { avatar_id: z.string().optional().describe('Which of your avatars (default: your most recent one)') };
 
 export function buildMcpServer(service: ApiService, keyId: string) {
-  const server = new McpServer({ name: 'ocean-home', version: '1.0.0' }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: 'oilrig', version: '1.0.0' }, { instructions: INSTRUCTIONS });
 
   server.registerTool(
     'join_world',

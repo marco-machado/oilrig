@@ -1,4 +1,4 @@
-import { type Account, type ApiKeyInfo, DisplayName, MAX_KEYS_PER_USER, NET, Password } from '@ocean-home/shared';
+import { type Account, type ApiKeyInfo, DisplayName, MAX_KEYS_PER_USER, NET, Password } from '@oilrig/shared';
 import { AuthError, auth } from '../net/auth.ts';
 import { button, el, field, group, icon, iconButton, input, row, section, setButton, setText, type sheet } from './components/index.ts';
 

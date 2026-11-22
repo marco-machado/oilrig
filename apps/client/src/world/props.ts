@@ -23,7 +23,7 @@ import {
   vec3,
 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { type Layout, type PropDef, mulberry32 } from '@ocean-home/shared';
+import { type Layout, type PropDef, mulberry32 } from '@oilrig/shared';
 import { U } from '../state.ts';
 import type { MaterialSet } from './materials/index.ts';
 import { boxGeometry, tubeGeometry } from './structure.ts';

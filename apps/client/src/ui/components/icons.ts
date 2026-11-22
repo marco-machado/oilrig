@@ -38,7 +38,7 @@ export function icon(name: IconName, cls = ''): SVGSVGElement {
   return svg(`<svg class="oh-i${cls ? ` ${cls}` : ''}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name]}</svg>`);
 }
 
-/** The Ocean Home mark: the glass pavilion on the rig's deck, above the swell. Same as index.html. */
+/** The Oilrig mark: the glass pavilion on the rig's deck, above the swell. Same as index.html. */
 export function brandMark(size = 36): SVGSVGElement {
   return svg(
     `<svg class="oh-mark" width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#0a1822"/><rect x=".5" y=".5" width="31" height="31" rx="7.5" fill="none" stroke="rgba(190,222,238,.16)"/><rect x="11" y="6.4" width="10" height="5" rx=".8" fill="rgba(127,216,227,.2)" stroke="#7fd8e3" stroke-width="1.3"/><path d="M6 12h20" stroke="#f2b40c" stroke-width="2.2" stroke-linecap="round"/><path d="M9.5 12v12.5M22.5 12v12.5M9.5 15.8l13 5.2M22.5 15.8l-13 5.2" stroke="#f2b40c" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M4.5 24c1.9 0 1.9-1.2 3.8-1.2s1.9 1.2 3.8 1.2 1.9-1.2 3.8-1.2 1.9 1.2 3.8 1.2 1.9-1.2 3.8-1.2 1.9 1.2 3.8 1.2" stroke="#3f9cc4" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>`,

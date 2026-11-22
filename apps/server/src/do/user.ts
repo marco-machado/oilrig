@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { Account } from '@ocean-home/shared';
+import type { Account } from '@oilrig/shared';
 import { base64url, randomBytes, sha256Hex } from '../api/keys.ts';
 import { hashPassword, verifyPassword } from '../auth/password.ts';
 import { colorFor } from '../world/world.ts';

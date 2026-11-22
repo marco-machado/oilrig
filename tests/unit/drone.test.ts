@@ -13,7 +13,7 @@ import {
   type Vec3,
   droneClearPath,
   dronePose,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import { DT, idle, makeWorld, motor, walk, world as staticWorld, who } from './helpers.ts';
 
 // The drone is a schedule plus a pure pose function when nobody flies it, and a flight model

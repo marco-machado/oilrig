@@ -46,7 +46,7 @@ import {
   viewportDepthTexture,
   viewportSharedTexture,
 } from 'three/tsl';
-import { getLayout } from '@ocean-home/shared';
+import { getLayout } from '@oilrig/shared';
 import { U } from '../../state.ts';
 import { OceanSimulation } from './simulation.ts';
 

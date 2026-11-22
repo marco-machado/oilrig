@@ -1,4 +1,4 @@
-import type { DronePose, Surface, Vec3 } from '@ocean-home/shared';
+import type { DronePose, Surface, Vec3 } from '@oilrig/shared';
 
 /** Where a looping sample plays from: its source, level, filter and 3D panner. */
 interface LoopVoice {

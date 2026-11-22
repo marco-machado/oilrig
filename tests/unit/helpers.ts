@@ -1,6 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { WorldStore } from '../../apps/server/src/world/store.ts';
-import { CharacterMotor, type MoveInput, type StaticWorld, type Vec3, buildStaticWorld, getLayout } from '@ocean-home/shared';
+import { CharacterMotor, type MoveInput, type StaticWorld, type Vec3, buildStaticWorld, getLayout } from '@oilrig/shared';
 
 export const DT = 1 / 60;
 
@@ -74,7 +74,7 @@ export async function makeWorld(opts: { weatherSeed?: number; drone?: { startLan
   const [{ World }, { MemoryWorldStore }, { makeClock }] = await Promise.all([
     import('../../apps/server/src/world/world.ts'),
     import('../../apps/server/src/world/store.ts'),
-    import('@ocean-home/shared'),
+    import('@oilrig/shared'),
   ]);
   await RAPIER.init();
   return World.create({

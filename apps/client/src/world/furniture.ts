@@ -20,7 +20,7 @@ import {
 import { abs, color, float, fract, max, mx_noise_float, positionWorld, sin, smoothstep, uv, vec2, vec3 } from 'three/tsl';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { FurnitureDef, Layout } from '@ocean-home/shared';
+import type { FurnitureDef, Layout } from '@oilrig/shared';
 import { U } from '../state.ts';
 import type { MaterialSet } from './materials/index.ts';
 import { tubeGeometry } from './structure.ts';

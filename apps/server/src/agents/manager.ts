@@ -1,4 +1,4 @@
-import type { Vec3 } from '@ocean-home/shared';
+import type { Vec3 } from '@oilrig/shared';
 import type { World } from '../world/world.ts';
 import { AGENT_DT, Agent, type TaskResult, yawOfHeading } from './agent.ts';
 import { NavigationMesh, type RecastImpl } from './navmesh.ts';

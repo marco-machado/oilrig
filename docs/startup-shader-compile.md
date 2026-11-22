@@ -19,7 +19,7 @@ Times drifted up by as much as 20% over the hours of measuring as the machine wa
 ## How it was measured
 
 - Headless Chrome with Playwright's own profile, `--enable-unsafe-webgpu --use-angle=metal`, on an Apple M5 Pro. The production build was served from disk, with `?offline&q=high` at 2560×1440.
-- The time of each loading step came from the loader's text, and frame counts from `__oceanHome.stats.frames`. The profiler (`perf.ts`) gave each frame's CPU time and gap.
+- The time of each loading step came from the loader's text, and frame counts from `__oilrig.stats.frames`. The profiler (`perf.ts`) gave each frame's CPU time and gap.
 - **Cold** runs changed a constant in the fog shader (`fogFactor` in `env/atmosphere.ts`) for every run. That makes every lit material's shader new to the GPU, the way a first visit or a shader edit does. Post-processing and compute shaders don't use fog, so they stayed cached: a real first visit is somewhat slower than "cold" here.
 - **three dev** builds pointed Vite aliases for `three`, `three/webgpu`, `three/tsl` and `three/addons/*` at a checkout of three's dev branch (commit `087f01f`, 22 Oct 2026). None of this changed the repo.
 

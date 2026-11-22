@@ -1,7 +1,7 @@
 Mode: built-in image_gen
 
 Use case: stylized-concept
-Asset type: male player avatar turnaround reference sheet for Ocean Home, a multiplayer game set in a contemporary glass pavilion on a converted offshore platform off Rio.
+Asset type: male player avatar turnaround reference sheet for Oilrig, a multiplayer game set in a contemporary glass pavilion on a converted offshore platform off Rio.
 Primary request: one consistent adult male avatar shown in a strict T-pose from the front and back, side by side.
 Subject: approachable adult man about 30, medium tan skin, short dark brown hair, subtle stubble, lean average athletic build, realistic human proportions. Simple coastal casual clothing: muted ocean-blue crewneck short-sleeve T-shirt, sand-colored tailored shorts ending just above knees, clean off-white low-top sneakers. No accessories.
 Style/medium: polished game-ready 3D character concept render, restrained stylization, simplified clean forms and readable material surfaces, natural anatomy, modest texture detail, suitable for a contemporary Three.js social world.

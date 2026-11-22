@@ -1,4 +1,4 @@
-import type { Account, ApiKeyInfo, MeResponse } from '@ocean-home/shared';
+import type { Account, ApiKeyInfo, MeResponse } from '@oilrig/shared';
 
 // The Worker's /auth API: sign-up, sign-in and the Account panel. The session is an
 // HttpOnly cookie, so nothing here stores a token.

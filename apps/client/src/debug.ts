@@ -1,4 +1,4 @@
-import { DIMS, type DronePhase, type DroneState, type Vec3, type WeatherState, droneFarPoint, droneHoverPoint, yawFacing } from '@ocean-home/shared';
+import { DIMS, type DronePhase, type DroneState, type Vec3, type WeatherState, droneFarPoint, droneHoverPoint, yawFacing } from '@oilrig/shared';
 import type { QualityName } from './render/quality.ts';
 
 const PRESET_WEATHER: Record<string, Partial<WeatherState>> = {

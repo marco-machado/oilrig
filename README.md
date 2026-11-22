@@ -1,10 +1,10 @@
-# Ocean Home
+# Oilrig
 
 A first-person, multiplayer WebGPU world. Your home is a glass pavilion on a converted single-deck offshore platform, 20 m above the open ocean, with a helipad, a lower walkway, a stair tower and a glass elevator down to a boat landing, and a swim platform. A four-seat electric air taxi lives on the helipad: anyone can fly it, with friends aboard, and now and then it flies off on its own and comes back. A tender is moored at the landing. Anyone aboard can set the time of day, the speed of the day and the weather for everyone. AI agents can come aboard through a REST/SSE API or MCP and appear to everyone as ordinary avatars. Geometry, materials, sky and ocean are procedural; footsteps, the drone, the elevator and the doors use sound effects generated with ElevenLabs (`scripts/sfx.ts`), and the ambience is synthesized.
 
 Built on Three.js r187 (`WebGPURenderer` + TSL), Rapier 0.21 physics and recast-navigation 0.44, served by a Cloudflare Worker with Durable Objects (Hono, WebSocket Hibernation API, SQLite storage).
 
-![Reference vs. Ocean Home](docs/screenshots/compare-reference.webp)
+![Reference vs. Oilrig](docs/screenshots/compare-reference.webp)
 
 ## Run it
 
@@ -24,7 +24,7 @@ Everyone signs in. Sign-ups are closed by default, so to make an account locally
 ALLOW_SIGNUPS=true pnpm dev
 ```
 
-In dev, any of the Worker's variables (see Configuration) can be overridden from the environment like this. To run a second copy next to the first, give it its own port, state and inspector port: `CLIENT_PORT=5180 CF_STATE=.wrangler/state-alt CF_INSPECTOR_PORT=9230 pnpm --filter @ocean-home/client exec vite` (`CF_STATE=off` keeps nothing between runs).
+In dev, any of the Worker's variables (see Configuration) can be overridden from the environment like this. To run a second copy next to the first, give it its own port, state and inspector port: `CLIENT_PORT=5180 CF_STATE=.wrangler/state-alt CF_INSPECTOR_PORT=9230 pnpm --filter @oilrig/client exec vite` (`CF_STATE=off` keeps nothing between runs).
 
 To try the production build locally (`vite preview` runs the built Worker):
 
@@ -49,7 +49,7 @@ ELEVENLABS_API_KEY=… pnpm sfx steps-wood drone-loop
 | T or Enter | Chat |
 | Tab (hold) | Who's on board |
 | Esc | Free the cursor and open the menu. The world keeps running; the menu opens **Time & weather**, **Settings** (graphics quality, automatic resolution, FOV, sensitivity, invert look, volume), **Performance** and **Controls**, one at a time beside it, and **Account** (change your display name and password, and make API keys for AI agents). **Leave** (after a confirmation) returns to the start screen, still signed in; **Sign out** there ends the session. Click the world or **Back to the world** to look around again. |
-| P | Screenshot: saves the world as you see it (without the HUD) as `ocean-home-<date>-<time>.png` |
+| P | Screenshot: saves the world as you see it (without the HUD) as `oilrig-<date>-<time>.png` |
 | F3 | Performance overlay |
 
 Flying the drone (pilot's seat): **W A S D** move relative to where you look, the mouse steers (the drone turns to face your view), **Space** climbs, **Shift** or **C** descends. Let go of the stick and it stops and hovers. On the ground, hold **Space**: the rotors spool up for a moment, then it lifts off. The cabin leans into every acceleration and banks through turns, and the view leans with it. The instruments show an artificial horizon, the flight state (spool, hover, climb, cruise, descent, autopilot) and rotor speed, then altitude, height above whatever is below, speed, climb rate and heading. Passengers look around freely.
@@ -93,10 +93,10 @@ The Worker's variables are in `apps/server/wrangler.jsonc` (`vars`); change them
 
 ## Deploy
 
-Ocean Home runs on Cloudflare Workers with Durable Objects. It needs the **Workers Paid** plan: the world simulation runs continuously while people are aboard, and booting it takes far more CPU than the Free plan's 10 ms per invocation.
+Oilrig runs on Cloudflare Workers with Durable Objects. It needs the **Workers Paid** plan: the world simulation runs continuously while people are aboard, and booting it takes far more CPU than the Free plan's 10 ms per invocation.
 
 ```bash
-pnpm --filter @ocean-home/client exec wrangler login
+pnpm --filter @oilrig/client exec wrangler login
 ```
 
 ```bash
@@ -118,7 +118,7 @@ Agents use bearer API keys that belong to a person. Make one in the game: Esc �
 The server speaks MCP over Streamable HTTP at `/mcp` (`@modelcontextprotocol/server` 2.x, stateless per request). To add it to Claude Code:
 
 ```bash
-claude mcp add --transport http ocean-home https://<your-worker>/mcp --header "Authorization: Bearer ohk_…"
+claude mcp add --transport http oilrig https://<your-worker>/mcp --header "Authorization: Bearer ork_…"
 ```
 
 (Locally, the URL is http://localhost:5173/mcp.) Then ask Claude to join, walk somewhere and say hello. The avatar belongs to the key, so the tools need no session.
@@ -286,7 +286,7 @@ Measures frame rate at 2560×1440 on High (`PERF_QUALITY=ultra` for another pres
 
 ### Performance
 
-Press **F3** for a compact readout in the corner (frames per second, a frame-time graph, average/p95/max), or Esc → **Performance** for the full sheet: frames per second, average/p95/max frame time and a frame-time graph, CPU time of the main loop split by system (player, drone, elevator, ocean, atmosphere, render submission, labels…), draw calls, triangles, compute dispatches, geometries, textures, JS heap, and the canvas size. **Copy report** puts the same numbers on the clipboard as JSON; `window.__oceanHome.perf.report()` returns them too.
+Press **F3** for a compact readout in the corner (frames per second, a frame-time graph, average/p95/max), or Esc → **Performance** for the full sheet: frames per second, average/p95/max frame time and a frame-time graph, CPU time of the main loop split by system (player, drone, elevator, ocean, atmosphere, render submission, labels…), draw calls, triangles, compute dispatches, geometries, textures, JS heap, and the canvas size. **Copy report** puts the same numbers on the clipboard as JSON; `window.__oilrig.perf.report()` returns them too.
 
 - **GPU time** comes from WebGPU timestamp queries, which must be enabled before the renderer starts: turn on **GPU timing** in the Performance sheet (it reloads) or add `?perf`. On Apple GPUs (Metal) the browser's timestamps are coarse and can read far above the real frame time; there, compare frame times instead.
 - **When the GPU is the limit**, the time the CPU spends blocked waiting for it shows up in whichever system submits next (usually `render` or `ocean`), so a large `render` figure with a short real CPU workload means the GPU is the bottleneck.

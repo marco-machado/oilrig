@@ -24,7 +24,7 @@ const post = (p: string, json: unknown, k?: string) => api(p, { method: 'POST', 
 describe('REST API', () => {
   it('rejects missing, malformed and revoked keys; the OpenAPI document is public and complete', async () => {
     expect((await api('/world', { key: null })).status).toBe(401);
-    expect((await api('/world', { key: 'ohk_nothing' })).status).toBe(401);
+    expect((await api('/world', { key: 'ork_nothing' })).status).toBe(401);
     const k = await createKey(owner, 'short-lived');
     expect((await api('/world', { key: k.key })).status).toBe(200);
     expect((await request(`/auth/keys/${k.info.id}`, { method: 'DELETE', cookie: owner.cookie })).status).toBe(200);

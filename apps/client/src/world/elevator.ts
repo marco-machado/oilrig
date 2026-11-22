@@ -1,7 +1,7 @@
 import { BoxGeometry, type BufferGeometry, CylinderGeometry, Group, Mesh, MeshStandardNodeMaterial, PointLight } from 'three/webgpu';
 import { color, uniform } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { DIMS, type ElevatorPose, carPanel, elevatorPanels } from '@ocean-home/shared';
+import { DIMS, type ElevatorPose, carPanel, elevatorPanels } from '@oilrig/shared';
 import { U } from '../state.ts';
 import type { MaterialSet } from './materials/index.ts';
 import { tubeGeometry } from './structure.ts';

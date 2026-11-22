@@ -4,7 +4,7 @@ import { defineConfig } from '@playwright/test';
 // each with its own Worker and empty Durable Object state: 5174 with sign-ups open, and
 // 5175 as deployed by default (ALLOW_SIGNUPS unset).
 const devServer = (port: number, env: Record<string, string>) => ({
-  command: `pnpm --filter @ocean-home/client exec vite --port ${port} --strictPort`,
+  command: `pnpm --filter @oilrig/client exec vite --port ${port} --strictPort`,
   url: `http://localhost:${port}`,
   env: { CF_STATE: 'off', CF_INSPECTOR_PORT: 'off', ...env },
   reuseExistingServer: true,

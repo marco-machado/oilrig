@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { StaticWorld, Vec3 } from '@ocean-home/shared';
-import { findPlace } from '@ocean-home/shared';
+import type { StaticWorld, Vec3 } from '@oilrig/shared';
+import { findPlace } from '@oilrig/shared';
 import { allDoorsOpen, motor, walk, world } from './helpers.ts';
 
 // Every route is walked by the real character controller against the real colliders,

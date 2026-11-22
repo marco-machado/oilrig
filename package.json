@@ -1,5 +1,5 @@
 {
-  "name": "ocean-home",
+  "name": "oilrig",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.11.2",
@@ -7,11 +7,11 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "pnpm --filter @ocean-home/client dev",
-    "build": "pnpm --filter @ocean-home/client build",
-    "preview": "pnpm --filter @ocean-home/client preview",
-    "deploy": "pnpm build && pnpm --filter @ocean-home/client exec wrangler deploy",
-    "cf-typegen": "pnpm --filter @ocean-home/client exec wrangler types -c ../server/wrangler.jsonc --strict-vars=false ../server/worker-configuration.d.ts",
+    "dev": "pnpm --filter @oilrig/client dev",
+    "build": "pnpm --filter @oilrig/client build",
+    "preview": "pnpm --filter @oilrig/client preview",
+    "deploy": "pnpm build && pnpm --filter @oilrig/client exec wrangler deploy",
+    "cf-typegen": "pnpm --filter @oilrig/client exec wrangler types -c ../server/wrangler.jsonc --strict-vars=false ../server/worker-configuration.d.ts",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:workers": "vitest run --project workers",
@@ -29,7 +29,7 @@
     "@cloudflare/vitest-plugin": "1.8.5",
     "@dimforge/rapier3d-compat": "0.21.0",
     "@modelcontextprotocol/client": "2.4.0",
-    "@ocean-home/shared": "workspace:*",
+    "@oilrig/shared": "workspace:*",
     "@playwright/test": "1.65.1",
     "@types/node": "^26.6.6",
     "typescript": "7.0.2",

@@ -1,7 +1,7 @@
 import { SELF } from 'cloudflare:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { findPlace } from '@ocean-home/shared';
+import { findPlace } from '@oilrig/shared';
 import { ORIGIN, Player, createKey, member } from './helpers.ts';
 
 // MCP tool calls over Streamable HTTP, the way Claude or any other MCP client drives an
@@ -14,7 +14,7 @@ beforeAll(async () => {
 });
 
 async function connect(k = key) {
-  const client = new Client({ name: 'ocean-home-tests', version: '1.0.0' });
+  const client = new Client({ name: 'oilrig-tests', version: '1.0.0' });
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`${ORIGIN}/mcp`), {
       requestInit: { headers: { authorization: `Bearer ${k}` } },

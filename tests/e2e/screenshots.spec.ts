@@ -38,7 +38,7 @@ for (const [name, query] of SHOTS) {
   test(`capture ${name}`, async ({ page }) => {
     mkdirSync(OUT, { recursive: true });
     await page.goto(`/?offline&q=high&${query}`);
-    await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 30, undefined, { timeout: 60_000 });
+    await page.waitForFunction(() => (window as any).__oilrig?.stats.frames > 30, undefined, { timeout: 60_000 });
     await page.waitForTimeout(7000); // exposure adaptation, probe bake, temporal AA
     await page.addStyleTag({ content: '.hud{display:none!important}' });
     await page.waitForTimeout(300);
@@ -55,7 +55,7 @@ test('side-by-side with the reference', async ({ page }) => {
       <img src="data:image/png;base64,${ref}" style="width:1536px;height:1024px;object-fit:cover">
       <img src="data:image/png;base64,${ours}" style="width:1536px;height:1024px">
     </div>
-    <div style="display:flex;height:80px;align-items:center"><div style="width:1536px;text-align:center">Reference</div><div style="width:1536px;text-align:center">Ocean Home (High, 1536×1024, cam=ref)</div></div>
+    <div style="display:flex;height:80px;align-items:center"><div style="width:1536px;text-align:center">Reference</div><div style="width:1536px;text-align:center">Oilrig (High, 1536×1024, cam=ref)</div></div>
   </body>`);
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(OUT, 'compare-reference.png') });

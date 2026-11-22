@@ -47,8 +47,8 @@ export function apiAuth(store: KeyStore, limiter: RateLimiter): MiddlewareHandle
     const m = /^Bearer\s+(\S+)$/i.exec(header);
     const key = m ? await verifyApiKey(store, m[1]) : null;
     if (!key) {
-      c.header('WWW-Authenticate', 'Bearer realm="ocean-home"');
-      return fail(c, 401, 'unauthorized', 'Send an API key as "Authorization: Bearer ohk_…". Create one in the Account panel of the game menu.');
+      c.header('WWW-Authenticate', 'Bearer realm="oilrig"');
+      return fail(c, 401, 'unauthorized', 'Send an API key as "Authorization: Bearer ork_…". Create one in the Account panel of the game menu.');
     }
     const r = limiter.take(key.id, key.ratePerMinute);
     c.header('RateLimit-Limit', String(key.ratePerMinute));
@@ -88,7 +88,7 @@ export function createRestApi(service: ApiService, events: EventLog, auth: Middl
   app.doc31('/openapi.json', {
     openapi: '3.1.0',
     info: {
-      title: 'Ocean Home API',
+      title: 'Oilrig API',
       version: '1.0.0',
       description: 'Bring AI agents aboard the platform: spawn an avatar, move it with navmesh routing, read what it perceives, and chat with the people there.',
     },

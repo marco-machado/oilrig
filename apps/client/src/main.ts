@@ -21,7 +21,7 @@ async function boot() {
   const app = document.getElementById('app')!;
   if (!('gpu' in navigator)) {
     hideLoading();
-    app.innerHTML = `<div class="fatal">Ocean Home needs WebGPU.<br/>Use a current Chrome or Edge, or Safari 26+.</div>`;
+    app.innerHTML = `<div class="fatal">Oilrig needs WebGPU.<br/>Use a current Chrome or Edge, or Safari 26+.</div>`;
     return;
   }
   const stage = await buildStage(app);
@@ -85,7 +85,7 @@ async function boot() {
   else await renderer.compileAsync(scene, camera);
   await setLoading('Warming up the ocean and lighting…', 0.9);
   const { frame, stats } = createFrame(g, pipeline);
-  (window as unknown as Record<string, unknown>).__oceanHome = {
+  (window as unknown as Record<string, unknown>).__oilrig = {
     stats,
     perf: prof,
     camera,

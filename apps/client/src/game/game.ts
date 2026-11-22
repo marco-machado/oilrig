@@ -18,7 +18,7 @@ import {
   inDoorway,
   makeClock,
   padOccupied,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import type { NetClient } from '../net/client.ts';
 import { DronePoses } from '../net/dronePoses.ts';
 import type { Player } from '../player/player.ts';

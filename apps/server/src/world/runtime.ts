@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { type Rapier, makeClock } from '@ocean-home/shared';
+import { type Rapier, makeClock } from '@oilrig/shared';
 import { AgentManager } from '../agents/manager.ts';
 import type { RecastImpl } from '../agents/navmesh.ts';
 import { EventLog } from '../api/events.ts';

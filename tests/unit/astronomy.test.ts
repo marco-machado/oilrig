@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sunPosition } from '@ocean-home/shared';
+import { sunPosition } from '@oilrig/shared';
 
 // References are physical facts and published almanac values, not this code:
 //  - the sun's declination at the June solstice is +23.44°, at the March equinox ~0°;

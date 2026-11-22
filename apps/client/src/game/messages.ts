@@ -1,4 +1,4 @@
-import { type DroneState, type WeatherMode, type WeatherState, celestialAt, gameTime } from '@ocean-home/shared';
+import { type DroneState, type WeatherMode, type WeatherState, celestialAt, gameTime } from '@oilrig/shared';
 import { NetClient } from '../net/client.ts';
 import type { Game } from './game.ts';
 

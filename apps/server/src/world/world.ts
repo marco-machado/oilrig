@@ -39,7 +39,7 @@ import {
   inDoorway,
   padOccupied,
   seatPosition,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import { MessageBudget } from './budget.ts';
 import { Emitter } from './emitter.ts';
 import type { WorldStore } from './store.ts';

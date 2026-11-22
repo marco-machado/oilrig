@@ -3,7 +3,7 @@ import { NeutralToneMapping, PerspectiveCamera, type PointLight, Scene, Vector3,
 import { SunLight } from 'three/addons/lights/SunLight.js';
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { buildStaticWorld, getLayout } from '@ocean-home/shared';
+import { buildStaticWorld, getLayout } from '@oilrig/shared';
 import { debugParams } from '../debug.ts';
 import { Atmosphere } from '../env/atmosphere.ts';
 import { SoundEngine } from '../env/audio.ts';

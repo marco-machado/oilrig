@@ -1,5 +1,5 @@
 import { type Light, type Object3D, Vector3 } from 'three/webgpu';
-import { celestialAt } from '@ocean-home/shared';
+import { celestialAt } from '@oilrig/shared';
 import type { createPipeline } from '../render/pipeline.ts';
 import type { Game } from './game.ts';
 

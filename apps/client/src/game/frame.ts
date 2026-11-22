@@ -1,5 +1,5 @@
 import { Euler, Quaternion, type Scene, Timer, Vector3 } from 'three/webgpu';
-import { type AutopilotStage, DIMS, PLAYER, type Vec3, type WeatherState, carPanel, celestialAt, elevatorPanels, elevatorPose, gateOpen, inCar, seatPosition } from '@ocean-home/shared';
+import { type AutopilotStage, DIMS, PLAYER, type Vec3, type WeatherState, carPanel, celestialAt, elevatorPanels, elevatorPose, gateOpen, inCar, seatPosition } from '@oilrig/shared';
 import { hideLoading } from '../loading.ts';
 import type { Interactable } from '../player/player.ts';
 import { lampLightAt } from '../render/localLight.ts';

@@ -6,7 +6,7 @@ import {
   type Vec3,
   celestialAt,
   gameTime,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import type { World } from '../world/world.ts';
 import { headingOf } from './agent.ts';
 

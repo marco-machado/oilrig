@@ -37,10 +37,10 @@ test('performance trace', async ({ browser, page }) => {
   for (const cam of CAMS) {
     await page.goto(`/?offline&perf&cam=${cam}&hour=11&weather=fair&q=${QUALITY}`);
     await mark(`load:${cam}`);
-    await page.waitForFunction(() => (window as any).__oceanHome?.stats.frames > 30, undefined, { timeout: 60_000 });
+    await page.waitForFunction(() => (window as any).__oilrig?.stats.frames > 30, undefined, { timeout: 60_000 });
     await mark(`run:${cam}`);
     await page.waitForTimeout(SECONDS * 1000);
-    reports[cam] = await page.evaluate(() => (window as any).__oceanHome.perf.report());
+    reports[cam] = await page.evaluate(() => (window as any).__oilrig.perf.report());
     await mark(`leave:${cam}`);
   }
   await browser.stopTracing();

@@ -18,7 +18,7 @@ import {
   type WebGPURenderer,
 } from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { DIMS, type VesselDef } from '@ocean-home/shared';
+import { DIMS, type VesselDef } from '@oilrig/shared';
 import type { MaterialSet } from './materials/index.ts';
 import type { Ocean } from '../env/ocean/ocean.ts';
 import { WaveSampler } from '../env/ocean/waveSampler.ts';

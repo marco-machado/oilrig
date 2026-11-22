@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WEATHER_KINDS, WeatherModel, type WeatherState } from '@ocean-home/shared';
+import { WEATHER_KINDS, WeatherModel, type WeatherState } from '@oilrig/shared';
 
 const EPOCH = Date.UTC(2026, 0, 1);
 const MIN = 60_000;

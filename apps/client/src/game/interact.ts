@@ -1,4 +1,4 @@
-import { elevatorPose } from '@ocean-home/shared';
+import { elevatorPose } from '@oilrig/shared';
 import type { Game } from './game.ts';
 
 /** E on whatever the player looks at: a door, the drone, an elevator button. */

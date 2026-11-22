@@ -1,7 +1,7 @@
-/** `ocean-home-2026-10-17-214405.png`, in local time. */
+/** `oilrig-2026-10-17-214405.png`, in local time. */
 export function screenshotName(d = new Date()) {
   const p = (n: number) => String(n).padStart(2, '0');
-  return `ocean-home-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.png`;
+  return `oilrig-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.png`;
 }
 
 /**

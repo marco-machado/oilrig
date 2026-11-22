@@ -49,7 +49,7 @@ import {
 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { DIMS, type DronePose, type Vec3 } from '@ocean-home/shared';
+import { DIMS, type DronePose, type Vec3 } from '@oilrig/shared';
 import type { AimedLight } from '../render/stableClusteredLighting.ts';
 import { U } from '../state.ts';
 import { tubeGeometry } from './structure.ts';
@@ -320,7 +320,7 @@ function wordmarkTexture() {
     ctx.font = `700 150px ${family}`;
     (ctx as any).letterSpacing = '14px';
     // Top 60%: the wordmark; bottom 40%: the registration, each sampled by its own decal.
-    const text = 'OCEAN HOME';
+    const text = 'OILRIG';
     const width = ctx.measureText(text).width;
     const scale = Math.min(1, 940 / width);
     ctx.save();
@@ -330,7 +330,7 @@ function wordmarkTexture() {
     ctx.restore();
     ctx.font = `600 84px ${family}`;
     (ctx as any).letterSpacing = '10px';
-    ctx.fillText('OH-04', 40, 246);
+    ctx.fillText('OR-04', 40, 246);
     tex.needsUpdate = true;
   };
   draw();

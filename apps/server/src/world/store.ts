@@ -1,4 +1,4 @@
-import type { ChatEntry, ClockConfig, WeatherMode } from '@ocean-home/shared';
+import type { ChatEntry, ClockConfig, WeatherMode } from '@oilrig/shared';
 
 /** What the world keeps between restarts: the chat log, and what people changed. */
 export interface WorldStore {

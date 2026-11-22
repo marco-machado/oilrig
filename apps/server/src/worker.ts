@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { CLOSE } from '@ocean-home/shared';
+import { CLOSE } from '@oilrig/shared';
 import { type AuthEnv, authRoutes, currentSession, sameOrigin } from './auth/routes.ts';
 import { IDENTITY_HEADER } from './do/world.ts';
 

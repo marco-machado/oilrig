@@ -10,7 +10,7 @@ import {
 } from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { Layout, LightDef } from '@ocean-home/shared';
+import type { Layout, LightDef } from '@oilrig/shared';
 import type { AimedLight } from '../render/stableClusteredLighting.ts';
 import { U } from '../state.ts';
 import type { MaterialSet } from './materials/index.ts';

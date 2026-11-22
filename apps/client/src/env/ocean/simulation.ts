@@ -19,7 +19,7 @@ import {
   vec2,
   vec4,
 } from 'three/tsl';
-import { mulberry32 } from '@ocean-home/shared';
+import { mulberry32 } from '@oilrig/shared';
 import { FFT } from './fft.ts';
 import {
   type SeaParams,

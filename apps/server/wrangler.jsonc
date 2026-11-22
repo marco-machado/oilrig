@@ -1,6 +1,6 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "ocean-home",
+  "name": "oilrig",
   "main": "src/worker.ts",
   "compatibility_date": "2026-10-15",
   "observability": { "enabled": true },

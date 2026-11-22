@@ -7,7 +7,7 @@ import {
   type Surface,
   type Vec3,
   inCar,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import type { Controls } from './controls.ts';
 
 export type StepSurface = Surface | 'water';

@@ -1,4 +1,4 @@
-<title>Ocean Home UI</title>
+<title>Oilrig UI</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="color-scheme" content="dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -62,7 +62,7 @@
 }
 
 /* ================================================================
-   Ocean Home UI components (the part that ports to the game)
+   Oilrig UI components (the part that ports to the game)
    ================================================================ */
 
 .oh { position: relative; font: 400 14px/1.45 var(--font-ui); color: var(--oh-ink); -webkit-font-smoothing: antialiased; font-synthesis: none; }
@@ -530,7 +530,7 @@ body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 
 
 <div class="doc">
   <header class="doc-top">
-    <div class="doc-top__brand"><span id="top-mark"></span>Ocean Home UI</div>
+    <div class="doc-top__brand"><span id="top-mark"></span>Oilrig UI</div>
     <nav aria-label="Sections">
       <a href="#prototype">Prototype</a>
       <a href="#screens">Screens</a>
@@ -544,7 +544,7 @@ body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 
   <section class="doc-hero">
     <div class="doc-meta"><span class="oh-pill oh-pill--warn"><span class="oh-dot"></span>Proposal · no game code changed yet</span><span class="oh-pill">16 Oct 2026</span></div>
     <h1>Industrial bones, <em>glass</em> skin.</h1>
-    <p>A design system and clickable prototype for every screen in Ocean Home: loading, sign in, the HUD, the menu, settings, time and weather, performance, the drone instruments and the new log out. The world behind each screen is a real capture from the game.</p>
+    <p>A design system and clickable prototype for every screen in Oilrig: loading, sign in, the HUD, the menu, settings, time and weather, performance, the drone instruments and the new log out. The world behind each screen is a real capture from the game.</p>
   </section>
 
   <section class="doc-section" id="prototype">
@@ -554,7 +554,7 @@ body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 
       <p>It starts on the loading screen. Sign in, then click the frame and use the game's keys. Every control in the menu works, including the time slider, which changes the sky behind it.</p>
     </div>
     <div class="proto">
-      <div class="frame" id="live" tabindex="0" aria-label="Ocean Home prototype. Focus it to use the game keys."></div>
+      <div class="frame" id="live" tabindex="0" aria-label="Oilrig prototype. Focus it to use the game keys."></div>
       <div class="proto-bar" id="proto-bar" role="group" aria-label="Jump to a state"></div>
       <div class="proto-keys">
         <span><kbd class="oh-kbd">Esc</kbd> menu</span>
@@ -583,7 +583,7 @@ body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 
   <section class="doc-section" id="foundations">
     <div class="doc-section__head">
       <span class="oh-eyebrow">Foundations</span>
-      <h2>The Ocean Home design system</h2>
+      <h2>The Oilrig design system</h2>
       <p>Three ideas from the platform itself, applied to every surface.</p>
     </div>
     <div class="direction">
@@ -597,7 +597,7 @@ body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 
 
     <div class="subhead"><h3>Type</h3><span class="oh-eyebrow">Self-hosted woff2</span></div>
     <div class="type-specimens">
-      <div class="type-row"><code>Display · Instrument Serif<br>112 / 84 / 64 / 34 / 27</code><div class="sample" style="font:400 64px/1 var(--font-display);letter-spacing:-.02em">Ocean Home</div></div>
+      <div class="type-row"><code>Display · Instrument Serif<br>112 / 84 / 64 / 34 / 27</code><div class="sample" style="font:400 64px/1 var(--font-display);letter-spacing:-.02em">Oilrig</div></div>
       <div class="type-row"><code>Title · Instrument Serif<br>34 / 32</code><div class="sample" style="font:400 34px/1.1 var(--font-display)">Time &amp; weather</div></div>
       <div class="type-row"><code>UI · Instrument Sans<br>16 / 15 / 14 / 13 / 12.5</code><div class="sample" style="font-size:16px;max-width:52ch;color:var(--oh-ink-2)">Lowers the resolution when frames run late, to hold 60 fps. Each change pauses the game for about a second.</div></div>
       <div class="type-row"><code>Data · JetBrains Mono<br>46 / 21 / 15 / 13 / 12</code><div class="sample" style="font:500 21px/1.3 var(--font-mono);font-variant-numeric:tabular-nums">17:35 · NE 14 kn · 0.9 m · 58 fps</div></div>
@@ -810,7 +810,7 @@ body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 
       <canvas class="oh-loader__sea" width="1440" height="348" data-sea></canvas>
       <div class="oh-loader__content">
         <div style="display:flex;align-items:center;gap:14px">${MARK(44)}<span class="oh-eyebrow">23°36′S · 42°24′W · Deck +20 m</span></div>
-        <h1 class="oh-wordmark">Ocean Home</h1>
+        <h1 class="oh-wordmark">Oilrig</h1>
         <p class="oh-loader__tagline">A glass pavilion on a converted platform, 20 m above the open ocean.</p>
       </div>
       <div class="oh-horizon">
@@ -831,7 +831,7 @@ body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 
       <div class="oh-join__scrim"></div>
       <div class="oh-join__col">
         <div class="oh-join__brand oh-enter" style="--i:0">${MARK(40)}<span class="oh-eyebrow">23°36′S · 42°24′W</span></div>
-        <h1 class="oh-wordmark oh-enter" style="--i:1">Ocean Home</h1>
+        <h1 class="oh-wordmark oh-enter" style="--i:1">Oilrig</h1>
         <p class="oh-join__tagline oh-enter" style="--i:2">A glass pavilion on a converted platform, 20 m above the open ocean.</p>
         <form class="oh-join__card oh-glass oh-glass--strong oh-enter" style="--i:3" data-form="join" novalidate>
           <div>${serverPill(s)}</div>
@@ -881,11 +881,11 @@ body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 
   const NAV = [['env', 'horizon', 'Time & weather'], ['settings', 'sliders', 'Settings'], ['perf', 'gauge', 'Performance'], ['controls', 'keyboard', 'Controls']];
   V.menu = (s) => `<div class="oh-scrim" data-act="resume" aria-hidden="true"></div>
     <nav class="oh-rail oh-glass oh-glass--strong" aria-label="Menu" data-act="noop">
-      <div class="oh-brand" style="--i:0">${MARK(38)}<div><div class="oh-brand__name">Ocean Home</div><div class="oh-brand__sub">23°36′S · 42°24′W</div></div></div>
+      <div class="oh-brand" style="--i:0">${MARK(38)}<div><div class="oh-brand__name">Oilrig</div><div class="oh-brand__sub">23°36′S · 42°24′W</div></div></div>
       <div class="oh-identity" style="--i:1"><span class="oh-avatar" style="--c:#f2b40c">M</span><div><div class="oh-identity__name">${esc(s.name || 'Marco')}</div><div class="oh-identity__meta">${s.online ? `<span class="oh-dot oh-dot--good"></span>Online · ${PLAYERS.length} aboard` : '<span class="oh-dot"></span>Exploring offline'}</div></div></div>
       <div class="oh-rail__resume" style="--i:2"><button type="button" class="oh-btn oh-btn--primary oh-btn--block oh-btn--lg" data-act="resume">${icon('play')}Back to the world</button><p class="oh-rail__hint">or click anywhere in the world</p></div>
       <div class="oh-nav" style="--i:3">${NAV.map(([id, ic, label]) => `<button type="button" class="oh-nav__item" data-act="nav" data-section="${id}" aria-current="${s.section === id}">${icon(ic)}${label}<span class="oh-nav__meta">${id === 'perf' ? kbd('F3') : ''}${icon('chev')}</span></button>`).join('')}</div>
-      <div class="oh-rail__foot" style="--i:4"><button type="button" class="oh-btn oh-btn--quiet-danger oh-btn--block" data-act="logout">${icon('logout')}Log out</button><span class="oh-eyebrow oh-rail__version">Ocean Home v3</span></div>
+      <div class="oh-rail__foot" style="--i:4"><button type="button" class="oh-btn oh-btn--quiet-danger oh-btn--block" data-act="logout">${icon('logout')}Log out</button><span class="oh-eyebrow oh-rail__version">Oilrig v3</span></div>
     </nav>`;
 
   const sheet = (title, eyebrow, body, foot = '') => `<section class="oh-sheet oh-glass oh-glass--strong" aria-label="${title}" data-act="noop">
@@ -983,7 +983,7 @@ body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 
   V.dialog = (s) => `<div class="oh-dialog-backdrop" data-act="dialog-cancel">
       <div class="oh-dialog oh-glass oh-glass--strong" role="alertdialog" aria-modal="true" aria-labelledby="${s.uid}-dt" aria-describedby="${s.uid}-dd" data-act="noop">
         <div class="oh-dialog__icon">${icon('logout')}</div>
-        <h2 class="oh-dialog__title" id="${s.uid}-dt">Log out of Ocean Home?</h2>
+        <h2 class="oh-dialog__title" id="${s.uid}-dt">Log out of Oilrig?</h2>
         <p class="oh-dialog__body" id="${s.uid}-dd">${s.online ? 'You’ll leave the platform and go back to the sign-in screen. Everyone aboard will see that you left.' : 'You’ll go back to the sign-in screen.'}</p>
         <div class="oh-dialog__actions"><button type="button" class="oh-btn oh-btn--secondary" data-act="dialog-cancel">Stay aboard</button><button type="button" class="oh-btn oh-btn--danger" data-act="dialog-confirm">${icon('logout')}Log out</button></div>
       </div>
@@ -1406,7 +1406,7 @@ body { margin: 0; background: radial-gradient(1100px 520px at 78% -6%, rgba(63, 
     spec('Menu items', '.oh-nav__item', `<div class="oh-nav">${NAV.map(([id, ic, l], i) => `<button type="button" class="oh-nav__item" aria-current="${i === 0}">${icon(ic)}${l}<span class="oh-nav__meta">${id === 'perf' ? kbd('F3') : ''}${icon('chev')}</span></button>`).join('')}</div><div class="oh-rail__foot" style="margin:0"><button type="button" class="oh-btn oh-btn--quiet-danger oh-btn--block">${icon('logout')}Log out</button></div>`),
     spec('Stats and bars', '.oh-stats .oh-bars', `<div class="oh-group oh-stats"><div class="oh-stat"><span class="oh-eyebrow">CPU</span><span class="oh-stat__value">2.74<span class="oh-stat__unit">ms</span></span></div><div class="oh-stat"><span class="oh-eyebrow">Draw calls</span><span class="oh-stat__value">194</span></div><div class="oh-stat"><span class="oh-eyebrow">Memory</span><span class="oh-stat__value">241<span class="oh-stat__unit">MB</span></span></div></div>
       <div class="oh-bars">${SYSTEMS.slice(0, 4).map(([n, ms]) => `<span>${n}</span><span class="oh-bar"><i style="--w:${Math.max(2, (ms / 2.87) * 100)}%"></i></span><b>${ms.toFixed(2)}</b>`).join('')}</div>`),
-    spec('Dialog', '.oh-dialog', `<div class="oh-dialog oh-glass oh-glass--strong" role="presentation"><div class="oh-dialog__icon">${icon('logout')}</div><h2 class="oh-dialog__title">Log out of Ocean Home?</h2><p class="oh-dialog__body">You’ll leave the platform and go back to the sign-in screen.</p><div class="oh-dialog__actions"><button class="oh-btn oh-btn--secondary">Stay aboard</button><button class="oh-btn oh-btn--danger">Log out</button></div></div>`, 'spec--photo'),
+    spec('Dialog', '.oh-dialog', `<div class="oh-dialog oh-glass oh-glass--strong" role="presentation"><div class="oh-dialog__icon">${icon('logout')}</div><h2 class="oh-dialog__title">Log out of Oilrig?</h2><p class="oh-dialog__body">You’ll leave the platform and go back to the sign-in screen.</p><div class="oh-dialog__actions"><button class="oh-btn oh-btn--secondary">Stay aboard</button><button class="oh-btn oh-btn--danger">Log out</button></div></div>`, 'spec--photo'),
     spec('HUD pieces', '.oh-status .oh-prompt .oh-chat__line', `<div class="spec__row"><div class="oh-glass" style="display:flex;align-items:center;height:38px;padding:0 4px;border-radius:999px"><span class="oh-status__seg oh-status__time">15:29</span><span class="oh-status__seg">${icon('cloudSun')}Fair</span><span class="oh-status__seg">${icon('wind', '', 'transform:rotate(225deg)')}NE 14 kn</span></div></div>
       <div class="spec__row"><div class="oh-glass" style="display:flex;align-items:center;gap:9px;height:34px;padding:0 13px 0 6px;border-radius:999px;font-size:13.5px;font-weight:500">${kbd('E')}Board the drone</div><div class="oh-glass" style="display:flex;align-items:center;gap:9px;height:38px;padding:0 15px 0 13px;border-radius:999px;font-size:13px;font-weight:500"><span class="oh-dot oh-dot--good"></span>4 aboard</div></div>
       <div class="oh-chat__log">${chatLine({ name: 'Ana', c: '#7fd8e3', text: 'the drone is back on the pad' })}${chatLine({ sys: 'Theo came aboard.' })}</div>`, 'spec--photo'),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DisplayName, Password, Username, displayKey } from '@ocean-home/shared';
+import { DisplayName, Password, Username, displayKey } from '@oilrig/shared';
 import { base64url } from '../../apps/server/src/api/keys.ts';
 import { hashPassword, verifyPassword } from '../../apps/server/src/auth/password.ts';
 

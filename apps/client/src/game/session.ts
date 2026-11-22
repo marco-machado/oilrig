@@ -1,4 +1,4 @@
-import { WORLD, adjustClock, celestialAt, gameTime } from '@ocean-home/shared';
+import { WORLD, adjustClock, celestialAt, gameTime } from '@oilrig/shared';
 import { AuthError, auth } from '../net/auth.ts';
 import { probeServer } from '../net/client.ts';
 import { setGpuTimingWanted } from '../perf.ts';

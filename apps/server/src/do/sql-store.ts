@@ -1,4 +1,4 @@
-import type { ChatEntry, ClockConfig, WeatherMode } from '@ocean-home/shared';
+import type { ChatEntry, ClockConfig, WeatherMode } from '@oilrig/shared';
 import type { ApiKeyRow, KeyStore } from '../api/keys.ts';
 import type { WorldStore } from '../world/store.ts';
 

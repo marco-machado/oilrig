@@ -1,5 +1,5 @@
-import type { DronePose, DronePoseMsg, Vec3 } from '@ocean-home/shared';
-import { altitudeOf, lerpAngle } from '@ocean-home/shared';
+import type { DronePose, DronePoseMsg, Vec3 } from '@oilrig/shared';
+import { altitudeOf, lerpAngle } from '@oilrig/shared';
 
 interface Sample {
   t: number;

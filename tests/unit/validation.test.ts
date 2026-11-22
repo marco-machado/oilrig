@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { DIMS, ElevatorController, type MoveInput, PLAYER, type StaticWorld, type Vec3, findPlace, gateOpen, inCar } from '@ocean-home/shared';
+import { DIMS, ElevatorController, type MoveInput, PLAYER, type StaticWorld, type Vec3, findPlace, gateOpen, inCar } from '@oilrig/shared';
 import { MovementValidator, type Verdict } from '../../apps/server/src/world/validation.ts';
 import { DT, allDoorsOpen, idle, makeWorld, motor, walk, who, world } from './helpers.ts';
 

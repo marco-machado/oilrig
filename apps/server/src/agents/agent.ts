@@ -5,7 +5,7 @@ import {
   type MoveInput,
   PLAYER,
   type Vec3,
-} from '@ocean-home/shared';
+} from '@oilrig/shared';
 import type { Player, World } from '../world/world.ts';
 import type { NavigationMesh } from './navmesh.ts';
 

@@ -1,4 +1,4 @@
-import { type ClientMessage, NET } from '@ocean-home/shared';
+import { type ClientMessage, NET } from '@oilrig/shared';
 
 type Kind = ClientMessage['type'];
 

@@ -1,4 +1,4 @@
-/* Ocean Home components. Tokens live in base.css; screens.css places these on screen. */
+/* Oilrig components. Tokens live in base.css; screens.css places these on screen. */
 
 :where(.oh) :where(button, input) {
   font: inherit;

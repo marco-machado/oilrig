@@ -1,4 +1,4 @@
-import { type ChatEntry, DIMS, type Vec3, elevatorPose } from '@ocean-home/shared';
+import { type ChatEntry, DIMS, type Vec3, elevatorPose } from '@oilrig/shared';
 import type { Agent, TaskResult } from '../agents/agent.ts';
 import { AgentError, type AgentManager, type AvatarStatus } from '../agents/manager.ts';
 import { type Perception, areaAt, timeReport, weatherReport } from '../agents/perception.ts';

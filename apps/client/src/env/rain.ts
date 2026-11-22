@@ -26,7 +26,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl';
-import { DIMS } from '@ocean-home/shared';
+import { DIMS } from '@oilrig/shared';
 import { U } from '../state.ts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

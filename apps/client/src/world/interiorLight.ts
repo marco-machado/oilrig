@@ -12,7 +12,7 @@ import {
 } from 'three/webgpu';
 import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js';
 import { replaceSunLights, restoreSunLights } from 'three/addons/lighting/LightProbeGridUtils.js';
-import { DIMS } from '@ocean-home/shared';
+import { DIMS } from '@oilrig/shared';
 
 // Each probe renders the scene six times (a cube map), all on the GPU: 15 a frame stalled
 // the next frame about 100 ms. In the running game 4 a frame still made frames of 30–110 ms

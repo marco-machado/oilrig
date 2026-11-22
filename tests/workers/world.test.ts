@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLOSE, PROTOCOL_VERSION, type Vec3 } from '@ocean-home/shared';
+import { CLOSE, PROTOCOL_VERSION, type Vec3 } from '@oilrig/shared';
 import { Player, member, request } from './helpers.ts';
 
 // The game socket through the Worker into the World DO, as browsers use it.

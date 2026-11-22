@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InterpolationBuffer } from '@ocean-home/shared';
+import { InterpolationBuffer } from '@oilrig/shared';
 import { mulberry } from './helpers.ts';
 
 // A remote player walks east at 2 m/s; snapshots are stamped every 50 ms but arrive

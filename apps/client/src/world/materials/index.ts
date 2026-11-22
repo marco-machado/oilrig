@@ -34,8 +34,8 @@ import {
   vec2,
   vec3,
 } from 'three/tsl';
-import type { MaterialId } from '@ocean-home/shared';
-import { DIMS } from '@ocean-home/shared';
+import type { MaterialId } from '@oilrig/shared';
+import { DIMS } from '@oilrig/shared';
 import { U } from '../../state.ts';
 
 // TSL graph builders: node types are kept loose on purpose.

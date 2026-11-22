@@ -1,4 +1,4 @@
-import { DIMS, DroneAutopilot, DroneFlight, type DronePose, type DroneState, PLAYER, type Vec3, droneClearPath, dronePose, padOccupied } from '@ocean-home/shared';
+import { DIMS, DroneAutopilot, DroneFlight, type DronePose, type DroneState, PLAYER, type Vec3, droneClearPath, dronePose, padOccupied } from '@oilrig/shared';
 import type { Controls } from '../player/controls.ts';
 import { type Game, LOCAL_ID } from './game.ts';
 

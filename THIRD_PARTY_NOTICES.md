@@ -1,6 +1,6 @@
 # Third-party notices
 
-Ocean Home's code was written for this project. It adapts the following open-source work.
+Oilrig's code was written for this project. It adapts the following open-source work.
 
 ## FFT ocean: owenyuwono/poseidon (MIT), after gasgiant/FFT-Ocean (MIT)
 

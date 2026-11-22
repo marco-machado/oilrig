@@ -1,4 +1,4 @@
-import type { DroneScheduleOptions } from '@ocean-home/shared';
+import type { DroneScheduleOptions } from '@oilrig/shared';
 import type { AgentLimits } from './agents/manager.ts';
 
 /** World settings, from the Worker's environment variables (wrangler.jsonc `vars`). */

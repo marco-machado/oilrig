@@ -1,7 +1,7 @@
-import { MAX_KEYS_PER_USER } from '@ocean-home/shared';
+import { MAX_KEYS_PER_USER } from '@oilrig/shared';
 import { AgentError } from '../agents/manager.ts';
 
-// API keys look like `ohk_<id>_<secret>` and belong to a user. Only a SHA-256 of the whole
+// API keys look like `ork_<id>_<secret>` and belong to a user. Only a SHA-256 of the whole
 // key is stored; the plaintext is shown once, when the key is created.
 
 export const DEFAULT_RATE_PER_MINUTE = 120;
@@ -49,15 +49,15 @@ export async function createApiKey(store: KeyStore, ownerId: string, name: strin
     throw new AgentError('too-many-keys', `You already have ${MAX_KEYS_PER_USER} keys. Revoke one first.`, 409);
   }
   const id = hex(randomBytes(4));
-  const key = `ohk_${id}_${base64url(randomBytes(24))}`;
+  const key = `ork_${id}_${base64url(randomBytes(24))}`;
   const ratePerMinute = DEFAULT_RATE_PER_MINUTE;
-  store.addApiKey({ id, ownerId, name, hash: await hashKey(key), prefix: `ohk_${id}`, ratePerMinute });
-  return { id, key, name, prefix: `ohk_${id}`, ratePerMinute };
+  store.addApiKey({ id, ownerId, name, hash: await hashKey(key), prefix: `ork_${id}`, ratePerMinute });
+  return { id, key, name, prefix: `ork_${id}`, ratePerMinute };
 }
 
 /** Looks a bearer token up; revoked or unknown keys give null. */
 export async function verifyApiKey(store: KeyStore, token: string): Promise<ApiKeyRow | null> {
-  if (!/^ohk_[0-9a-f]{8}_[A-Za-z0-9_-]{32}$/.test(token)) return null;
+  if (!/^ork_[0-9a-f]{8}_[A-Za-z0-9_-]{32}$/.test(token)) return null;
   const row = store.apiKeyByHash(await hashKey(token));
   if (!row || row.revoked) return null;
   return row;

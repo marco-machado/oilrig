@@ -1,4 +1,4 @@
-import { WORLD } from '@ocean-home/shared';
+import { WORLD } from '@oilrig/shared';
 
 function coordinate(v: number, pos: string, neg: string) {
   const a = Math.abs(v);

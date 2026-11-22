@@ -8,7 +8,7 @@ import {
   SphereGeometry,
 } from 'three/webgpu';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { InterpolationBuffer, NET, type PlayerInfo, type PlayerPose, type Vec3 } from '@ocean-home/shared';
+import { InterpolationBuffer, NET, type PlayerInfo, type PlayerPose, type Vec3 } from '@oilrig/shared';
 
 interface Avatar {
   info: PlayerInfo;

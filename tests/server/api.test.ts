@@ -1,6 +1,5 @@
-import { env, runInDurableObject } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { type Member, Player, createKey, member, readEvents, request } from './helpers.ts';
+import { type Member, Player, createKey, member, readEvents, request, server } from './helpers.ts';
 
 // The REST + SSE API with users' keys, while a browser-like player watches the same world.
 
@@ -43,7 +42,7 @@ describe('REST API', () => {
 
   it('never stores a key in plain text', async () => {
     const k = await createKey(owner, 'secretive');
-    const rows = await runInDurableObject(env.WORLD.getByName('world'), (_, state) => JSON.stringify(state.storage.sql.exec('SELECT * FROM api_keys').toArray()));
+    const rows = JSON.stringify(server.db.all('SELECT * FROM api_keys'));
     expect(rows).not.toContain(k.key.split('_').slice(2).join('_'));
     expect(rows).toContain(k.info.id);
     expect(rows).toContain(owner.account.id);

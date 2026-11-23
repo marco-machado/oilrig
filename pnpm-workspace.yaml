@@ -3,4 +3,3 @@ packages:
   - apps/*
 allowBuilds:
   esbuild: true
-  workerd: true

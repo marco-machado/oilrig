@@ -34,8 +34,9 @@ describe('world socket', () => {
     expect((await anon.closed).code).toBe(CLOSE.unauthorized);
 
     const m = await member('Origin');
-    const cross = await request('/ws', { headers: { upgrade: 'websocket', origin: 'https://evil.example' }, cookie: m.cookie });
-    expect(cross.status).toBe(403);
+    expect(await Player.refused(m.cookie, { origin: 'https://evil.example' })).toBe(403);
+    // Not a WebSocket upgrade at all.
+    expect((await request('/ws', { cookie: m.cookie })).status).toBe(426);
   });
 
   it('survives a barrage of malformed messages and keeps serving', async () => {

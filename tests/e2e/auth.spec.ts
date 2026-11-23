@@ -1,9 +1,9 @@
 import { type Page, expect, test } from '@playwright/test';
 
-// Accounts end to end against the dev Worker: sign up, come aboard, leave, the same account
+// Accounts end to end against the dev server: sign up, come aboard, leave, the same account
 // in a second tab, sign out, sign back in. 5175 runs with sign-ups closed (the default).
 
-const CLOSED = 'http://localhost:5175';
+const CLOSED = process.env.PW_CLOSED_URL ?? 'http://localhost:5175';
 const stamp = Date.now().toString(36);
 const username = `e2e-${stamp}`;
 const displayName = `E2E ${stamp}`;

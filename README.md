@@ -2,7 +2,7 @@
 
 A first-person, multiplayer WebGPU world. Your home is a glass pavilion on a converted single-deck offshore platform, 20 m above the open ocean, with a helipad, a lower walkway, a stair tower and a glass elevator down to a boat landing, and a swim platform. A four-seat electric air taxi lives on the helipad: anyone can fly it, with friends aboard, and now and then it flies off on its own and comes back. A tender is moored at the landing. Anyone aboard can set the time of day, the speed of the day and the weather for everyone. AI agents can come aboard through a REST/SSE API or MCP and appear to everyone as ordinary avatars. Geometry, materials, sky and ocean are procedural; footsteps, the drone, the elevator and the doors use sound effects generated with ElevenLabs (`scripts/sfx.ts`), and the ambience is synthesized.
 
-Built on Three.js r187 (`WebGPURenderer` + TSL), Rapier 0.21 physics and recast-navigation 0.44, served by a Cloudflare Worker with Durable Objects (Hono, WebSocket Hibernation API, SQLite storage).
+Built on Three.js r187 (`WebGPURenderer` + TSL), Rapier 0.21 physics and recast-navigation 0.44, served by one Node process (Hono, WebSockets, SQLite) that runs anywhere Node 24 does: a Docker container on a VPS, for example.
 
 ![Reference vs. Oilrig](docs/screenshots/compare-reference.webp)
 
@@ -16,7 +16,7 @@ pnpm install
 pnpm dev
 ```
 
-Open http://localhost:5173. Vite serves the client and, through the Cloudflare Vite plugin, runs the Worker and its Durable Objects in `workerd` on the same port; their data persists in `apps/client/.wrangler`. You need a WebGPU browser: current Chrome or Edge, or Safari 26+.
+Open http://localhost:5173. Vite serves the client and passes `/auth`, `/ws`, `/api`, `/mcp` and `/healthz` on to the Node server, which `pnpm dev` starts beside it (on port 8787, restarted when its source changes); its database is `apps/server/data/oilrig.db`. You need a WebGPU browser: current Chrome or Edge, or Safari 26+.
 
 Everyone signs in. Sign-ups are closed by default, so to make an account locally start the dev server with them open, then visit http://localhost:5173/signup:
 
@@ -24,12 +24,12 @@ Everyone signs in. Sign-ups are closed by default, so to make an account locally
 ALLOW_SIGNUPS=true pnpm dev
 ```
 
-In dev, any of the Worker's variables (see Configuration) can be overridden from the environment like this. To run a second copy next to the first, give it its own port, state and inspector port: `CLIENT_PORT=5180 CF_STATE=.wrangler/state-alt CF_INSPECTOR_PORT=9230 pnpm --filter @oilrig/client exec vite` (`CF_STATE=off` keeps nothing between runs).
+Any of the server's variables (see Configuration) can be set in the environment like this. To run a second copy next to the first, give it its own two ports and data directory: `CLIENT_PORT=5180 SERVER_PORT=8790 DATA_DIR=apps/server/data-alt pnpm dev` (`DATA_DIR=:memory:` keeps nothing between runs).
 
-To try the production build locally (`vite preview` runs the built Worker):
+To try the production build locally (the Node server alone, serving the built client on http://localhost:8787):
 
 ```bash
-pnpm build && pnpm preview
+pnpm preview
 ```
 
 The sound effects in `apps/client/public/sfx` are committed. To generate them again (all, or by name prefix):
@@ -68,14 +68,14 @@ Joining needs an account. Sign-ups at `/signup` (username, display name and pass
 
 - **Usernames** are 3 to 24 of `a-z`, `0-9`, `_` and `-`, typed in any case. **Display names** (shown above avatars and in chat) are 1 to 24 characters; no two people can have the same one, ignoring case, spacing and invisible characters, and an AI agent cannot take one either.
 - **Passwords** are at least 8 characters, hashed with PBKDF2-SHA256 (600,000 iterations, the count stored with each hash).
-- **Sessions** are an HttpOnly, SameSite=Lax cookie (Secure over HTTPS) that lasts 30 days and is renewed as you use it. Signing out ends it on the server. Changing your password ends your other sessions.
+- **Sessions** are an HttpOnly, SameSite=Lax cookie (Secure over HTTPS; behind a proxy, when `PUBLIC_ORIGIN` is `https://…`) that lasts 30 days and is renewed as you use it. Signing out ends it on the server. Changing your password ends your other sessions.
 - **Five wrong passwords** in a row lock the account's sign-in for a minute.
 - **One place at a time:** if the same account comes aboard from another tab or device, that one takes over and the older one is told it was signed in elsewhere.
 - Changing your display name updates it for everyone aboard at once; earlier chat lines keep the name they were said under.
 
 ## Configuration
 
-The Worker's variables are in `apps/server/wrangler.jsonc` (`vars`); change them there, or per deployment in the Cloudflare dashboard.
+The server reads its settings from environment variables. The world's:
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -91,21 +91,48 @@ The Worker's variables are in `apps/server/wrangler.jsonc` (`vars`); change them
 | `AGENTS_PER_KEY` / `MAX_AGENTS` | `3` / `24` | AI avatars per API key, and in total |
 | `AGENT_IDLE_MINUTES` | `30` | An agent with no API calls for this long leaves. Event streams are closed once nobody has been aboard for this long |
 
+And the server's own:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` / `HOST` | `8787` / `localhost` | Where it listens (the container image sets `0.0.0.0`) |
+| `DATA_DIR` | `apps/server/data` | Directory of the SQLite database `oilrig.db` (`/data` in the image), or `:memory:` |
+| `STATIC_DIR` | `apps/client/dist/client` | The built client to serve |
+| `PUBLIC_ORIGIN` | unset | The address people open, such as `https://rig.example.com`. **Set it behind any proxy that terminates TLS:** the server refuses sign-in and the game socket from pages of another origin, and behind a proxy it sees plain HTTP. Unset, it goes by each request's `Host` |
+
 ## Deploy
 
-Oilrig runs on Cloudflare Workers with Durable Objects. It needs the **Workers Paid** plan: the world simulation runs continuously while people are aboard, and booting it takes far more CPU than the Free plan's 10 ms per invocation.
+Oilrig is one Node 24 process with a SQLite file: it serves the built client, the accounts, the game socket and the agents' API. The repository has a `Dockerfile` and a `docker-compose.yaml` for it. WebGPU needs HTTPS, so something in front must terminate TLS and pass WebSockets through.
+
+**On a VPS with nothing else on ports 80 and 443** (point the domain's DNS at the machine first), from a checkout of the repository:
 
 ```bash
-pnpm --filter @oilrig/client exec wrangler login
+DOMAIN=rig.example.com ALLOW_SIGNUPS=true docker compose --profile tls up -d --build
 ```
+
+The `tls` profile adds Caddy, which gets a certificate for `DOMAIN` by itself, and `PUBLIC_ORIGIN` defaults to `https://$DOMAIN`. Make your account at `/signup`, then run the same command without `ALLOW_SIGNUPS=true` to close sign-ups again. Put the variables in a `.env` file beside the compose file to keep them.
+
+**Behind a proxy of your own** (Traefik, nginx, a panel's proxy), leave the profile out and set the address yourself:
 
 ```bash
-pnpm deploy
+PUBLIC_ORIGIN=https://rig.example.com docker compose up -d --build
 ```
 
-That builds the client and the Worker with Vite and uploads both (the client as static assets). Workers serve over HTTPS, which WebGPU needs. To open sign-ups on the deployed Worker, set `ALLOW_SIGNUPS` to `true` in the dashboard (Settings → Variables) or in `wrangler.jsonc` and deploy again.
+The app then listens on `127.0.0.1:8787` (`APP_PORT` changes the port). The proxy must pass WebSocket upgrades on `/ws` and must not buffer or compress `/api/v1/events` and `/mcp`, which stream.
 
-After changing `wrangler.jsonc`, run `pnpm cf-typegen` to regenerate the Worker's types (`pnpm typecheck` does it too).
+**From a compose file alone** (a panel that deploys from the file's URL, such as Hostinger's Docker Manager): there is no checkout to build from, so build the image elsewhere, push it to a registry the machine can pull from, and name it in `OILRIG_IMAGE`. Give the panel the URL of the compose file itself (`…/main/docker-compose.yaml`) and the variables above; `COMPOSE_PROFILES=tls` turns Caddy on where `--profile` cannot be passed. This path was tested with a local registry and the compose file by itself, not on Hostinger: how its panel takes variables and whether it can build from a repository is for you to check there.
+
+```bash
+docker build -t ghcr.io/you/oilrig:1 . && docker push ghcr.io/you/oilrig:1
+```
+
+To check a deployment end to end (pages, sign-in, the game socket, the event stream, an MCP call):
+
+```bash
+SMOKE_URL=https://rig.example.com SMOKE_USER=you SMOKE_PASSWORD=… pnpm smoke
+```
+
+Everything worth keeping is in the `oilrig-data` volume (`/data/oilrig.db`: accounts, API keys, chat, doors, the clock). Back that up; a container without the volume starts empty. `docker compose stop` lets the server close its sockets and the database first.
 
 ## Bring an AI agent aboard
 
@@ -118,7 +145,7 @@ Agents use bearer API keys that belong to a person. Make one in the game: Esc �
 The server speaks MCP over Streamable HTTP at `/mcp` (`@modelcontextprotocol/server` 2.x, stateless per request). To add it to Claude Code:
 
 ```bash
-claude mcp add --transport http oilrig https://<your-worker>/mcp --header "Authorization: Bearer ork_…"
+claude mcp add --transport http oilrig https://rig.example.com/mcp --header "Authorization: Bearer ork_…"
 ```
 
 (Locally, the URL is http://localhost:5173/mcp.) Then ask Claude to join, walk somewhere and say hello. The avatar belongs to the key, so the tools need no session.
@@ -208,25 +235,22 @@ packages/shared   One source of truth for client and server:
                   seeded weather model and weather control, the clock, the drone schedule, pose
                   function, flight model and autopilot, the elevator timeline, zod protocol
                   schemas, snapshot interpolation.
-apps/server       The Cloudflare Worker (wrangler.jsonc) and its Durable Objects:
-  src/worker.ts   The Worker in front: /auth (sign-up, sign-in, the Account panel), checks
-                  who opens a game socket (/ws), passes /api, /mcp and /healthz to the world.
-                  Static files (the built client) are served without running it.
-  src/do          WorldDO ("world", one instance): the server. Players over hibernatable
-                  WebSockets, agents, the REST/SSE/MCP API, chat, API keys; SQLite for chat,
-                  keys, saved time/weather and doors. Its clocks run only while someone is
-                  aboard, an agent is out or an event stream is open (a stream alone holds it for
-                  half an hour after the last of them left), with a heartbeat alarm.
-                  UserDO (one per account): profile, password hash, sessions, sign-in throttle.
-                  DirectoryDO ("directory", one instance): the registry of usernames and
-                  display names.
+apps/server       The Node server (run as TypeScript, no build step):
+  src/main.ts     Reads the environment, starts the server, stops it on SIGTERM.
+  src/server.ts   HTTP (Hono), the game socket (/ws: checks the session cookie and the
+                  origin, then hands messages to the world), the built client's files, and
+                  the world's life: built on first need, its clocks run only while someone
+                  is aboard, an agent is out or an event stream is open (a stream alone holds
+                  it for half an hour after the last of them left).
+  src/auth        /auth: sign-up, sign-in, the Account panel; password hashing.
+  src/db          SQLite (node:sqlite): accounts (usernames, display names, password
+                  hashes, sessions, sign-in throttle) and the world's store (chat, API keys,
+                  saved time/weather and doors).
   src/world       Shared world: clock + weather, players and agents, server-side movement
                   validation (Rapier shape casts), doors, chat, drone schedule and crew,
                   elevator, time and weather control.
   src/agents      Navmesh (recast tile cache), agent bodies and tasks, perception.
   src/api         REST + SSE (/api/v1), MCP (/mcp), API keys and rate limits.
-  src/wasm        Rapier and Recast load precompiled WASM modules (Workers cannot compile
-                  WASM from bytes at run time); vite-wasm.ts resolves the files.
 apps/client       WebGPU renderer, FFT ocean (TSL compute) with GPU height readback, physical
                   sky with stars and moon, TSL procedural materials, furniture, the drone and its
                   rotor wash, the elevator, tender, clustered night lights (downlights
@@ -246,7 +270,7 @@ Every layout element, place and zone has a semantic `id`/`kind`; the server's in
 pnpm test
 ```
 
-These are behaviour tests (Vitest), with no mocks and no snapshot-of-self. The `unit` project runs in Node; the `workers` project runs the real Worker and Durable Objects inside `workerd` (`@cloudflare/vitest-plugin`), with sign-ups open and the drone away:
+These are behaviour tests (Vitest), with no mocks and no snapshot-of-self. Both projects run in Node. `unit` drives the shared code and the world directly; in `server`, each test file starts the real server on a free port with its own database and talks to it over HTTP and WebSockets, with sign-ups open and the drone away:
 
 - **Walkability:** the real character controller walks every route: in through each of the five doors and out through the one opposite, pool, helipad, both stairs, a full walkway lap, and down the tower to the swim platform, all with the furniture in place; it is stopped by a lounge sofa, reaches the firepit lounge, and can jump onto a hammock net. It jumps as high at the browser's 120 Hz physics step as at 60 Hz.
 - **Elevator:** the car never overspeeds or jumps and arrives exactly at the stop; calls queue; the doors reopen for someone in the doorway; a person standing in the car rides from the deck to the landing without sinking through the floor and walks out; the shaft stays closed wherever the car is not; a call from far away is refused.
@@ -255,7 +279,7 @@ These are behaviour tests (Vitest), with no mocks and no snapshot-of-self. The `
 - **Containment:** random walkers for 4 simulated minutes from 11 starting points (including the hammock nets and the firepit lounge) never fall into the sea.
 - **Agent navigation:** an agent walks navmesh routes from the terrace to all 20 places (stairs, tower and all), opens closed doors on its way, keeps a body's width from furniture, goes around the parked drone, gets as close as it can to an unreachable roof, and is stopped by the helipad's net stop.
 - **Perception:** clear glass does not block sight (it sees right through the pavilion); objects outside the field of view are not reported; bearings and distances of other avatars are right; zone, area, time and weather are reported.
-- **Accounts:** sign-up sets the cookie and stores usernames lower-case; usernames and display names stay unique (case, spacing and invisible characters ignored); bad input is refused; sign-ups are refused unless `ALLOW_SIGNUPS` is `true`; wrong passwords are refused alike for unknown users; signing out ends the session on the server; five wrong passwords lock sign-in for a minute; tampered cookies are rejected; sessions renew at most once a day; changing the password ends the other sessions; cross-site requests are refused; keys: five at most, never listed with their secret, revocable only by their owner. Validators, password hashing and key encoding are also checked in Node.
+- **Accounts:** sign-up sets the cookie and stores usernames lower-case; usernames and display names stay unique (case, spacing and invisible characters ignored); bad input is refused; sign-ups are refused unless `ALLOW_SIGNUPS` is `true`; wrong passwords are refused alike for unknown users; signing out ends the session on the server; five wrong passwords lock sign-in for a minute; tampered cookies are rejected; sessions renew at most once a day; changing the password ends the other sessions; cross-site requests are refused; keys: five at most, never listed with their secret, revocable only by their owner; one account's password change, lock or sign-out leaves the others alone; wrong passwords and key requests sent at the same moment are all counted; behind a TLS proxy (`PUBLIC_ORIGIN`) the public origin is accepted, others refused and the cookie is Secure. Validators, password hashing and key encoding are also checked in Node.
 - **REST and SSE API:** missing, malformed and revoked keys are refused; keys are never stored in plain text; rate limits are per key; a spawned avatar is seen by a WebSocket player, walks to a place and chats; events stream in order and replay with `Last-Event-ID`; avatars are private to their key; an agent cannot take a registered person's name; revoking a key sends its avatars away.
 - **MCP:** over Streamable HTTP with the official client: the eleven tools are listed; join → move_to the helipad → say hello is seen and heard by a WebSocket player; `read_messages` hears a reply once; `interact` refuses doors out of reach and opens one in reach; `leave_world` is seen.
 - **Sun position:** checked against independent references: solstice and equinox geometry, and NOAA solar-noon times.
@@ -263,7 +287,7 @@ These are behaviour tests (Vitest), with no mocks and no snapshot-of-self. The `
 - **Movement validation:** honest runs, stair climbs, jumps, a long fall, a ride in the elevator and every long route across the platform are accepted, also when poses arrive late or in bursts; teleports and clipping through doors or rails are rejected; a speed hack is held to a run however fast the poses are sent; flying, hovering and walking on air end back on the ground; a wall does not count as ground.
 - **Interpolation:** snapshots under jitter and out-of-order delivery still produce smooth motion.
 - **World socket:** signed-out and cross-site sockets are refused; protocol fuzzing; sixty changes of weather or door presses sent at once are cut down to a handful, and the sender is told once; two-player sync (movement, chat, doors) and coming back to the same place; the newest connection of an account wins; a new display name reaches everyone while old chat lines keep the old one.
-- **Durable Object life:** `/healthz` does not boot the world; it runs while someone is aboard or an agent is out and stops when nobody needs it; an event stream with nobody left to watch is closed and does not keep it running; event ids keep growing across a restart, so a reconnect is sent what happened since; time, weather, doors and chat survive an eviction.
+- **The server's life:** `/healthz` does not build the world; it runs while someone is aboard or an agent is out and stops when nobody needs it; an event stream with nobody left to watch is closed and does not keep it running; event ids keep growing across a restart, so a reconnect is sent what happened since; time, weather, doors and chat survive a restart; stopping with a stream open, an agent walking and someone aboard finishes within seconds and answers them all; each page of the built client is served at its address, and a missing file or endpoint is a 404, not the game's page.
 
 Browser checks use Playwright with the installed Chrome and a temporary profile:
 
@@ -277,7 +301,7 @@ Every quality preset renders with no console or WebGPU errors. More checks run i
 pnpm test:auth
 ```
 
-Accounts end to end against two dev Workers (sign-ups open on one, closed on the other): the closed sign-up page, then sign up, come aboard, leave, lose the seat to a second tab, sign out, a wrong password, and sign back in.
+Accounts end to end against two dev servers (sign-ups open on one, closed on the other): the closed sign-up page, then sign up, come aboard, leave, lose the seat to a second tab, sign out, a wrong password, and sign back in.
 
 ```bash
 pnpm perf

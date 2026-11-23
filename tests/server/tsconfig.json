@@ -1,0 +1,9 @@
+{
+  // Tests against the real server (vitest project "server").
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024"],
+    "types": ["node"]
+  },
+  "include": ["."]
+}

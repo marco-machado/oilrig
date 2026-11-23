@@ -51,7 +51,7 @@ export interface Connection {
   close(code?: number, reason?: string): void;
 }
 
-/** A signed-in person, as the Worker vouches for them. */
+/** A signed-in person, as their session cookie says. */
 export interface Identity {
   userId: string;
   name: string;
@@ -195,6 +195,8 @@ export class World extends Emitter<WorldEvents> {
     if (this.timers.length) return;
     // The drone and the elevator have been idle; their schedules pick up from now.
     const now = Date.now();
+    // Nor did anyone's place expire while the clocks were stopped.
+    this.expirePlayers(now);
     this.drone.update(now);
     this.elevator.update(now);
     this.syncElevator(now);

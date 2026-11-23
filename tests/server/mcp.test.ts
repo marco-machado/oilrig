@@ -1,8 +1,7 @@
-import { SELF } from 'cloudflare:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { findPlace } from '@oilrig/shared';
-import { ORIGIN, Player, createKey, member } from './helpers.ts';
+import { Player, createKey, member, request, server } from './helpers.ts';
 
 // MCP tool calls over Streamable HTTP, the way Claude or any other MCP client drives an
 // avatar with a user's key, while a browser-like player watches.
@@ -16,10 +15,7 @@ beforeAll(async () => {
 async function connect(k = key) {
   const client = new Client({ name: 'oilrig-tests', version: '1.0.0' });
   await client.connect(
-    new StreamableHTTPClientTransport(new URL(`${ORIGIN}/mcp`), {
-      requestInit: { headers: { authorization: `Bearer ${k}` } },
-      fetch: (url, init) => SELF.fetch(url, init),
-    }),
+    new StreamableHTTPClientTransport(new URL(`${server.url}/mcp`), { requestInit: { headers: { authorization: `Bearer ${k}` } } }),
   );
   return client;
 }
@@ -38,7 +34,7 @@ const data = (r: Result) => JSON.parse(text(r).slice(text(r).indexOf('\n') + 1))
 
 describe('MCP server', () => {
   it('refuses clients without an API key', async () => {
-    const res = await SELF.fetch(`${ORIGIN}/mcp`, {
+    const res = await request('/mcp', {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),

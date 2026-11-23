@@ -1,6 +1,4 @@
-import { cloudflareTest } from '@cloudflare/vitest-plugin';
 import { defineConfig } from 'vitest/config';
-import { workerWasm } from './apps/server/vite-wasm.ts';
 
 export default defineConfig({
   test: {
@@ -14,20 +12,12 @@ export default defineConfig({
         },
       },
       {
-        plugins: [
-          cloudflareTest({
-            wrangler: { configPath: './apps/server/wrangler.jsonc' },
-            miniflare: {
-              // Sign-ups open; the drone stays away (off the pad) for the whole run.
-              bindings: { ALLOW_SIGNUPS: 'true', WEATHER_SEED: '5', DRONE_START_AWAY: 'true', DRONE_FIRST_ARRIVAL_MINUTES: '1440' },
-            },
-          }),
-          workerWasm(),
-        ],
+        // The real server, started by each test file on a free port (tests/server/helpers.ts).
         test: {
-          name: 'workers',
-          include: ['tests/workers/**/*.test.ts'],
+          name: 'server',
+          include: ['tests/server/**/*.test.ts'],
           testTimeout: 60_000,
+          pool: 'forks',
         },
       },
     ],

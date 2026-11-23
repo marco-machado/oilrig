@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
+    "@hono/node-server": "^2.1.11",
     "@hono/zod-openapi": "1.6.3",
     "@modelcontextprotocol/server": "2.4.0",
     "@oilrig/shared": "workspace:*",
@@ -11,6 +12,10 @@
     "@recast-navigation/generators": "0.44.0",
     "@recast-navigation/wasm": "0.44.0",
     "hono": "4.13.19",
+    "ws": "^8.23.0",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
   }
 }

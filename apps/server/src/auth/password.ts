@@ -1,6 +1,6 @@
 import { base64url } from '../api/keys.ts';
 
-// Password hashes: PBKDF2-SHA256 through WebCrypto (native in Workers). The iteration count
+// Password hashes: PBKDF2-SHA256 through WebCrypto. The iteration count
 // is stored with each hash, so it can be raised later without breaking old passwords.
 // Format: pbkdf2-sha256$<iterations>$<salt>$<hash>, salt and hash in base64url.
 

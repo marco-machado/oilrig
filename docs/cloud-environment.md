@@ -8,13 +8,13 @@ How the "Oilrig" cloud environment for Claude Code sessions (claude.ai/code) is 
 | --- | --- |
 | Node | 24 (`node -v`), as `package.json` requires. The image defaults to Node 22 |
 | `pnpm install --frozen-lockfile` | done by the setup script before the session starts |
-| `pnpm typecheck` | passes; `worker-configuration.d.ts` is already generated |
-| `pnpm test` (unit and workers) | passes: 19 files, 126 tests, about a minute |
+| `pnpm typecheck` | passes |
+| `pnpm test` (unit and server) | passes: 19 files, 146 tests, under a minute |
 | `pnpm build` | passes |
 | `pnpm dev`, `pnpm preview` | start; the world itself needs WebGPU to draw (see below) |
 | `pnpm test:render`, `pnpm perf`, `pnpm trace`, `pnpm screenshots` | do not work: no GPU |
 | `pnpm test:auth` | partly: the account flow passes, the check that waits for the world to load times out |
-| `pnpm deploy` | not set up: the environment holds no Cloudflare credentials, on purpose |
+| Deploying | not from here: the server runs in a container on a VPS (README, "Deploy"), and the environment holds no credentials for it, on purpose |
 
 ## The Playwright suites need a real GPU
 
@@ -74,15 +74,15 @@ if [ -x /opt/node24/bin/node ]; then
 fi
 export PATH="$HOME/.local/bin:/opt/node22/bin:$PATH"
 
-# 4. Dependencies and the Worker types that tsc needs. Never fail the session start.
+# 4. Dependencies. Never fail the session start.
 if [ -d oilrig ]; then
-  (cd oilrig && pnpm install --frozen-lockfile && pnpm cf-typegen) || echo "oilrig: dependency setup failed"
+  (cd oilrig && pnpm install --frozen-lockfile) || echo "oilrig: dependency setup failed"
 fi
 exit 0
 ```
 
 ## Environment settings
 
-- Network access: unrestricted (the npm registry, and Cloudflare's endpoints for `wrangler types`, must be reachable).
+- Network access: unrestricted (the npm registry must be reachable).
 - Variables: the four `GIT_*` identity variables above, and `GITHUB_TOKEN`.
 - Repositories: `marco-machado/oilrig`.

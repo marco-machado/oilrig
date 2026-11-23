@@ -1,8 +1,7 @@
-import { env, evictDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { Player, member } from './helpers.ts';
+import { Player, member, restart } from './helpers.ts';
 
-// The World DO forgets everything in memory when it unloads; what people changed is saved.
+// The server forgets everything in memory when it stops; what people changed is saved.
 
 describe('world state across restarts', () => {
   it('keeps the clock, the weather mode, open doors and the chat', async () => {
@@ -25,7 +24,7 @@ describe('world state across restarts', () => {
     p.close();
     await p.closed;
 
-    await evictDurableObject(env.WORLD.getByName('world'), { webSockets: 'close' });
+    await restart();
 
     const [again, w2] = await Player.join(m);
     expect(w2.clock).toEqual(ctl.clock);

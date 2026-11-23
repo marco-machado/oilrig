@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "client",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@oilrig/client", "dev"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/dev.ts"],
       "port": 5173
     },
     {
@@ -12,17 +12,13 @@
       "runtimeExecutable": "env",
       "runtimeArgs": [
         "CLIENT_PORT=5180",
-        "CF_STATE=.wrangler/state-alt",
-        "CF_INSPECTOR_PORT=9230",
+        "SERVER_PORT=8790",
+        "DATA_DIR=apps/server/data-alt",
         "ALLOW_SIGNUPS=true",
         "DRONE_STAY_MINUTES=4",
         "DRONE_AWAY_MINUTES=1",
-        "pnpm",
-        "--filter",
-        "@oilrig/client",
-        "exec",
-        "vite",
-        "--strictPort"
+        "node",
+        "scripts/dev.ts"
       ],
       "port": 5180
     }

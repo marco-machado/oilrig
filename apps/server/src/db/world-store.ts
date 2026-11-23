@@ -1,6 +1,7 @@
 import type { ChatEntry, ClockConfig, WeatherMode } from '@oilrig/shared';
 import type { ApiKeyRow, KeyStore } from '../api/keys.ts';
 import type { WorldStore } from '../world/store.ts';
+import type { Database } from './database.ts';
 
 /** How many chat lines are kept (the world replays the last 50). */
 const CHAT_KEEP = 1000;
@@ -8,14 +9,14 @@ const CHAT_KEEP = 1000;
 const KEY_COLUMNS =
   'id, owner_id AS ownerId, name, prefix, rate_per_minute AS ratePerMinute, created, last_used AS lastUsed, revoked';
 
-/** The World DO's tables: chat, saved environment, doors and API keys. */
+/** The world's tables: chat, saved environment, doors and API keys. */
 export class SqlWorldStore implements WorldStore, KeyStore {
-  private readonly sql: SqlStorage;
+  private readonly db: Database;
   private chatWrites = 0;
 
-  constructor(sql: SqlStorage) {
-    this.sql = sql;
-    sql.exec(`
+  constructor(db: Database) {
+    this.db = db;
+    db.exec(`
       CREATE TABLE IF NOT EXISTS chat (
         seq INTEGER PRIMARY KEY AUTOINCREMENT,
         id TEXT NOT NULL,
@@ -44,29 +45,24 @@ export class SqlWorldStore implements WorldStore, KeyStore {
   // ---------- chat ----------
 
   addChat(e: ChatEntry) {
-    this.sql.exec('INSERT INTO chat (id, player_id, name, text, t) VALUES (?, ?, ?, ?, ?)', e.id, e.from, e.name, e.text, e.t);
-    if (++this.chatWrites % 100 === 0) this.sql.exec('DELETE FROM chat WHERE seq <= (SELECT MAX(seq) FROM chat) - ?', CHAT_KEEP);
+    this.db.run('INSERT INTO chat (id, player_id, name, text, t) VALUES (?, ?, ?, ?, ?)', e.id, e.from, e.name, e.text, e.t);
+    if (++this.chatWrites % 100 === 0) this.db.run('DELETE FROM chat WHERE seq <= (SELECT MAX(seq) FROM chat) - ?', CHAT_KEEP);
   }
 
   recentChat(limit: number): ChatEntry[] {
-    const rows = this.sql
-      .exec<{ id: string; from: string; name: string; text: string; t: number }>(
-        'SELECT id, player_id AS "from", name, text, t FROM chat ORDER BY seq DESC LIMIT ?',
-        limit,
-      )
-      .toArray();
+    const rows = this.db.all<ChatEntry>('SELECT id, player_id AS "from", name, text, t FROM chat ORDER BY seq DESC LIMIT ?', limit);
     return rows.reverse().map((r) => ({ id: r.id, from: r.from, name: r.name, text: r.text, t: r.t }));
   }
 
   // ---------- environment ----------
 
   private get<T>(key: string): T | null {
-    const row = this.sql.exec<{ value: string }>('SELECT value FROM env WHERE key = ?', key).toArray()[0];
+    const row = this.db.get<{ value: string }>('SELECT value FROM env WHERE key = ?', key);
     return row ? (JSON.parse(row.value) as T) : null;
   }
 
   private put(key: string, value: unknown) {
-    this.sql.exec('INSERT INTO env (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', key, JSON.stringify(value));
+    this.db.run('INSERT INTO env (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', key, JSON.stringify(value));
   }
 
   savedClock() {
@@ -94,18 +90,18 @@ export class SqlWorldStore implements WorldStore, KeyStore {
   }
 
   doors(): Record<string, boolean> {
-    const rows = this.sql.exec<{ id: string; open: number }>('SELECT id, open FROM doors').toArray();
+    const rows = this.db.all<{ id: string; open: number }>('SELECT id, open FROM doors');
     return Object.fromEntries(rows.map((r) => [r.id, r.open === 1]));
   }
 
   saveDoor(id: string, open: boolean) {
-    this.sql.exec('INSERT INTO doors (id, open) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET open = excluded.open', id, open ? 1 : 0);
+    this.db.run('INSERT INTO doors (id, open) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET open = excluded.open', id, open ? 1 : 0);
   }
 
   // ---------- API keys ----------
 
   addApiKey(k: { id: string; ownerId: string; name: string; hash: string; prefix: string; ratePerMinute: number }) {
-    this.sql.exec(
+    this.db.run(
       'INSERT INTO api_keys (id, owner_id, name, hash, prefix, rate_per_minute, created) VALUES (?, ?, ?, ?, ?, ?, ?)',
       k.id,
       k.ownerId,
@@ -118,23 +114,18 @@ export class SqlWorldStore implements WorldStore, KeyStore {
   }
 
   apiKeyByHash(hash: string): ApiKeyRow | null {
-    return this.sql.exec<ApiKeyRow>(`SELECT ${KEY_COLUMNS} FROM api_keys WHERE hash = ?`, hash).toArray()[0] ?? null;
+    return this.db.get<ApiKeyRow>(`SELECT ${KEY_COLUMNS} FROM api_keys WHERE hash = ?`, hash);
   }
 
   activeKeys(ownerId: string): ApiKeyRow[] {
-    return this.sql.exec<ApiKeyRow>(`SELECT ${KEY_COLUMNS} FROM api_keys WHERE owner_id = ? AND revoked IS NULL ORDER BY created`, ownerId).toArray();
+    return this.db.all<ApiKeyRow>(`SELECT ${KEY_COLUMNS} FROM api_keys WHERE owner_id = ? AND revoked IS NULL ORDER BY created`, ownerId);
   }
 
   revokeApiKey(ownerId: string, id: string): boolean {
-    return this.sql.exec('UPDATE api_keys SET revoked = ? WHERE id = ? AND owner_id = ? AND revoked IS NULL', Date.now(), id, ownerId).rowsWritten > 0;
+    return this.db.run('UPDATE api_keys SET revoked = ? WHERE id = ? AND owner_id = ? AND revoked IS NULL', Date.now(), id, ownerId) > 0;
   }
 
   touchApiKey(id: string, at: number) {
-    this.sql.exec('UPDATE api_keys SET last_used = ? WHERE id = ?', at, id);
-  }
-
-  /** Raw rows, for tests that check what is stored. */
-  dumpApiKeyTable(): Array<Record<string, SqlStorageValue>> {
-    return this.sql.exec('SELECT * FROM api_keys').toArray();
+    this.db.run('UPDATE api_keys SET last_used = ? WHERE id = ?', at, id);
   }
 }

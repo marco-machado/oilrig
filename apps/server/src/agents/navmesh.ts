@@ -39,7 +39,7 @@ export class NavigationMesh {
     this.query = new NavMeshQuery(navMesh);
   }
 
-  /** `impl`: the Recast WASM module factory (Workers pass a precompiled one; default: the inline build). */
+  /** `impl`: the Recast WASM module factory (default: the inline build). */
   static async build(sw: StaticWorld, impl?: RecastImpl): Promise<NavigationMesh> {
     recastReady ??= initRecast(impl);
     await recastReady;

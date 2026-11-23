@@ -4,24 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Oilrig: a first-person multiplayer WebGPU world (a home on an offshore platform). Three.js r187 (`WebGPURenderer` + TSL), Rapier physics, recast-navigation, served by a Cloudflare Worker with Durable Objects. pnpm workspace, Node >= 24, TypeScript 7. The README covers features, controls, the REST/MCP API, accounts and the Worker's variables in detail; read the relevant section there before changing those areas.
+Oilrig: a first-person multiplayer WebGPU world (a home on an offshore platform). Three.js r187 (`WebGPURenderer` + TSL), Rapier physics, recast-navigation, served by one Node process (Hono, `ws`, `node:sqlite`) that is deployed as a Docker container. pnpm workspace, Node >= 24, TypeScript 7. The README covers features, controls, the REST/MCP API, accounts, the server's variables and deployment in detail; read the relevant section there before changing those areas.
 
 ## Commands
 
 ```bash
-pnpm dev                          # client + Worker (in workerd) on http://localhost:5173
+pnpm dev                          # scripts/dev.ts: the Node server (8787, restarts on change) + Vite on http://localhost:5173
 ALLOW_SIGNUPS=true pnpm dev       # sign-ups are closed by default; open them to make a local account at /signup
-pnpm build && pnpm preview        # production build, served by the built Worker
-pnpm typecheck                    # cf-typegen, then tsc for root, client, server and both test projects
+pnpm preview                      # production build, served by the Node server alone on http://localhost:8787
+pnpm typecheck                    # tsc for root, client, server and both test projects
 pnpm test                         # all Vitest projects
-pnpm test:unit                    # Node project (tests/unit)
-pnpm test:workers                 # real Worker + Durable Objects in workerd (tests/workers)
+pnpm test:unit                    # shared code and the world, driven directly (tests/unit)
+pnpm test:server                  # the real server over HTTP and WebSockets (tests/server)
 pnpm test:render                  # Playwright: every quality preset renders with no console/WebGPU errors
 pnpm test:auth                    # Playwright: accounts end to end
 pnpm perf                         # frame times from six viewpoints (PERF_QUALITY=ultra for another preset)
 pnpm screenshots                  # writes PNG captures to docs/screenshots (gitignored; the README uses .webp copies)
 pnpm bench timing --build new=apps/client/dist/client   # frame pacing of a built client; docs/performance.md has the suites
-pnpm deploy                       # build + wrangler deploy
+docker compose up -d --build      # the container (README "Deploy"; `--profile tls` adds Caddy)
+SMOKE_URL=https://… pnpm smoke    # checks a running deployment end to end
 ```
 
 A single test file, or a single test by name:
@@ -33,19 +34,19 @@ pnpm exec playwright test tests/e2e/render.spec.ts -g "tender"
 
 There is no lint script; `pnpm typecheck` is the static check.
 
-- Any Worker variable in `apps/server/wrangler.jsonc` (`vars`) can be overridden from the environment in dev only (`DRONE_STAY_MINUTES=4 pnpm dev`). After editing `wrangler.jsonc`, run `pnpm cf-typegen`: `worker-configuration.d.ts` is gitignored and `tsc -p apps/server` needs it.
-- Wrangler is a dependency of the client package: `pnpm --filter @oilrig/client exec wrangler …`. Dev Durable Object state lives in `apps/client/.wrangler`.
-- A second dev server beside the first needs its own port, state and inspector port (`CLIENT_PORT`, `CF_STATE`, `CF_INSPECTOR_PORT`); `.claude/launch.json` has `client` (5173) and `client-alt` (5180, sign-ups open) set up.
-- The `workers` Vitest project overrides bindings (`vitest.config.ts`): sign-ups open, weather seed 5, drone away for the whole run.
-- Playwright uses the installed Chrome with WebGPU flags and starts its own dev servers on 5174 (sign-ups open) and 5175 (closed), with empty state. `PW_BASE_URL` points it at another server instead.
-- `scripts/*.ts` run directly under Node (`pnpm bot`, `pnpm sfx`, `pnpm trace:report`, `pnpm bench`).
+- The server reads its settings from the environment (`apps/server/src/config.ts`): the world's variables (`DRONE_STAY_MINUTES=4 pnpm dev`), plus `PORT`, `HOST`, `DATA_DIR`, `STATIC_DIR` and `PUBLIC_ORIGIN`. The README's "Configuration" lists them.
+- The dev database is `apps/server/data/oilrig.db` (`DATA_DIR`; `:memory:` keeps nothing).
+- A second dev server beside the first needs its own two ports and data directory (`CLIENT_PORT`, `SERVER_PORT`, `DATA_DIR`); `.claude/launch.json` has `client` (5173) and `client-alt` (5180, sign-ups open) set up.
+- Each file of the `server` Vitest project starts its own server on a free port with a temporary database (`tests/server/helpers.ts`): sign-ups open, weather seed 5, drone away for the whole run.
+- Playwright uses the installed Chrome with WebGPU flags and starts its own dev servers on 5174 (sign-ups open) and 5175 (closed), with in-memory databases. `PW_BASE_URL` (and `PW_CLOSED_URL`) point it at other servers instead.
+- `scripts/*.ts` run directly under Node (`pnpm bot`, `pnpm smoke`, `pnpm sfx`, `pnpm trace:report`, `pnpm bench`).
 
 ## Cloud sessions
 
-In a Claude Code cloud session (claude.ai/code) the "Oilrig" environment has already put Node 24 on `PATH`, installed dependencies and generated `worker-configuration.d.ts`; `docs/cloud-environment.md` has the setup script and the details.
+In a Claude Code cloud session (claude.ai/code) the "Oilrig" environment has already put Node 24 on `PATH` and installed dependencies; `docs/cloud-environment.md` has the setup script and the details.
 
 - `pnpm typecheck`, `pnpm test` and `pnpm build` work there. The Playwright suites (`test:render`, `perf`, `trace`, `screenshots`, most of `test:auth`) do not: the container has no GPU and software WebGPU cannot run this world. Do not report them as run; say they need a machine with a GPU.
-- There are no Cloudflare credentials: `pnpm deploy` is not available.
+- Nothing can be deployed from there: the server runs in a container on a VPS, and the session has no access to it.
 - The no-attribution rule under Conventions is enforced by `.claude/settings.json` and a `commit-msg` hook, and commits carry the owner's git identity. PR and issue text is not covered by the hook, so the rule still has to be followed by hand there.
 - The GitHub tool has appended a "Generated by" footer to a PR body on creation, despite the settings. After creating or editing a PR, issue or comment, read it back and edit out any such line.
 
@@ -64,24 +65,25 @@ So a change to geometry or movement belongs in `shared`, not in the client or se
 
 ### Server (`apps/server`)
 
-- `worker.ts` is a thin Hono front: `/auth/*`, the session check on `/ws` (it passes identity to the World DO in a header that it strips from incoming requests), and forwarding of `/api/*`, `/mcp`, `/healthz`. Static assets are served without running the Worker except on the paths in `run_worker_first`.
-- Three Durable Objects (SQLite): `WorldDO` (one instance, "world": sockets via the Hibernation API, chat, API keys, saved time/weather/doors), `UserDO` (one per account), `DirectoryDO` (one instance: username and display-name registry).
-- `WorldDO` is a shell around `WorldRuntime` (`world/runtime.ts`), which takes Rapier, Recast, config and a store as options and has no Cloudflare dependencies. Unit tests in Node build a `World` with `MemoryWorldStore` (`tests/unit/helpers.ts`); the DO supplies `SqlWorldStore`. Keep world logic in `world/`, `agents/` and `api/`, not in `do/`.
-- The runtime's clocks run only while a person is aboard, an agent is out or an SSE stream is open (a stream alone holds it only for `AGENT_IDLE_MINUTES` after the last person or agent left, then it is closed); a heartbeat alarm keeps the DO in memory meanwhile. `/healthz` must not boot the world.
+- One Node process, run from the TypeScript sources (no build step; `main.ts` reads the environment and handles SIGTERM). `server.ts` (`startServer`) is everything platform-specific: HTTP through `@hono/node-server`, the game socket through `ws`, the built client's files, and the world's lifecycle.
+- `/ws` upgrades do not pass through Hono: `upgrade()` in `server.ts` checks the origin and the session cookie itself, then feeds messages to `World.handle`. A signed-out socket is accepted, told why and closed, because browsers cannot read a refused upgrade.
+- **Origin.** `auth/origin.ts` decides what counts as the site's own origin and whether cookies are `Secure`: `PUBLIC_ORIGIN` when set (required behind a TLS proxy, where the server sees plain HTTP), else the request's `Host`. Both `/auth` and the socket upgrade go through it.
+- SQLite (`node:sqlite`, synchronous) in `db/`: `Accounts` (users, sessions, sign-in throttle) and `SqlWorldStore` (chat, API keys, saved time/weather/doors). **Requests interleave at every `await`:** a method that hashes (password, token, key) does so first, then reads the rows again and writes without awaiting in between. Keep that shape when changing them.
+- `WorldRuntime` (`world/runtime.ts`) takes Rapier, config and a store as options and knows nothing about HTTP or sockets. Unit tests build a `World` with `MemoryWorldStore` (`tests/unit/helpers.ts`); the server supplies `SqlWorldStore`. Keep world logic in `world/`, `agents/` and `api/`, not in `server.ts`.
+- The world is built on first need, and its clocks run only while a person is aboard, an agent is out or an SSE stream is open (a stream alone holds it only for `AGENT_IDLE_MINUTES` after the last person or agent left, then it is closed). Activity is checked after each socket message, API request and stream change; a 30 s timer (`checkIdle`) pauses it. `/healthz` must not build the world. Shutdown (`close()`) is a separate path from pausing: it also sends agents away and closes sockets and the database.
 - **Authority model:** people send poses, and `world/validation.ts` accepts them only if physically plausible (Rapier shape casts), otherwise it sends a correction. Agents are simulated by the server at 60 Hz with the same motor and need no validation. The drone's pilot runs the flight model in the browser and streams poses; the server rejects impossible jumps.
 - `api/service.ts` (`ApiService`) holds the operations behind both the REST endpoints (`api/rest.ts`, OpenAPI from the zod schemas) and the MCP tools (`api/mcp.ts`). Add behaviour there so both stay alike. An in-process event bus feeds SSE and the agents' inboxes.
-- **WASM in Workers:** Workers cannot compile WASM from bytes. `vite-wasm.ts` resolves `virtual:oh/*.wasm` to `?module` imports (server environment only) and `src/wasm/workerd.ts` hands the precompiled modules to Rapier and Recast. The same plugin is used by the client's Vite config and by the `workers` Vitest project.
 
 ### Client (`apps/client`)
 
-Vite app with three entries: the game (`index.html` → `src/main.ts`), the sign-up page and a standalone object viewer (`viewer.html`). The Cloudflare Vite plugin runs the Worker alongside. `main.ts` only wires the game together; its parts are in `src/game/`: `stage.ts` builds the renderer, the scene and the world, `game.ts` (`Game`) holds the state they share (what the server last said, and the local stand-ins offline), `session.ts` is coming aboard, leaving and the UI's handlers, `messages.ts` the server's messages, `droneSeat.ts` boarding and flying the drone, `interact.ts` the E key, `precompile.ts` the startup precompile and `frame.ts` the frame loop; `state.ts` exports `U`, the global TSL uniforms shared by materials, sky, ocean and weather; `render/pipeline.ts` is the post-processing chain; `debug.ts` parses the debug URL parameters.
+Vite app with three entries: the game (`index.html` → `src/main.ts`), the sign-up page and a standalone object viewer (`viewer.html`). In dev, Vite proxies `/auth`, `/ws`, `/api`, `/mcp` and `/healthz` to the Node server (`changeOrigin: false`, or the server's origin check fails). `main.ts` only wires the game together; its parts are in `src/game/`: `stage.ts` builds the renderer, the scene and the world, `game.ts` (`Game`) holds the state they share (what the server last said, and the local stand-ins offline), `session.ts` is coming aboard, leaving and the UI's handlers, `messages.ts` the server's messages, `droneSeat.ts` boarding and flying the drone, `interact.ts` the E key, `precompile.ts` the startup precompile and `frame.ts` the frame loop; `state.ts` exports `U`, the global TSL uniforms shared by materials, sky, ocean and weather; `render/pipeline.ts` is the post-processing chain; `debug.ts` parses the debug URL parameters.
 
 ## Conventions
 
 - Imports carry the `.ts` extension. `erasableSyntaxOnly` is on (no enums, no constructor parameter properties) and so is `verbatimModuleSyntax` (`import type` / inline `type`).
 - Three is imported from `three/webgpu`, `three/tsl` and `three/addons/…`, never bare `three`.
 - No AI attribution anywhere: commit messages, PR titles and bodies, issues, comments and code carry no "Generated with", `Co-Authored-By` or similar line naming an AI tool or model.
-- Tests are behaviour tests with no mocks: they drive the real motor, the real Rapier world and the real Worker. Workers tests go through `SELF.fetch` (`tests/workers/helpers.ts`).
+- Tests are behaviour tests with no mocks: they drive the real motor, the real Rapier world and the real server. Server tests use `fetch` and a `ws` client against a server they start (`tests/server/helpers.ts`).
 
 ## Rendering rules that are easy to break
 

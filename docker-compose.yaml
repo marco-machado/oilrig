@@ -1,0 +1,77 @@
+# Oilrig on one machine.
+#
+# With a proxy of your own in front (it must pass WebSockets and not buffer /api/v1/events
+# and /mcp), the app listens on 127.0.0.1:${APP_PORT}:
+#
+#   PUBLIC_ORIGIN=https://rig.example.com docker compose up -d
+#
+# With nothing else on the machine, the "tls" profile adds Caddy, which gets a certificate
+# for DOMAIN by itself (ports 80 and 443 must reach this machine):
+#
+#   DOMAIN=rig.example.com docker compose --profile tls up -d
+#
+# (COMPOSE_PROFILES=tls does the same where the flag cannot be passed.)
+#
+# OILRIG_IMAGE names the image: one pulled from a registry, or (with `--build`, in a checkout
+# of the repository) the one built here. The README's "Deploy" section has the details.
+
+services:
+  app:
+    image: ${OILRIG_IMAGE:-oilrig}
+    build: .
+    restart: unless-stopped
+    environment:
+      # The address people open. Needed behind any proxy that terminates TLS: sign-in and the
+      # game socket are refused when a page's origin is not this one.
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-${DOMAIN:+https://${DOMAIN}}}
+      # "true" to let people create accounts (for the first one, then turn it off again).
+      ALLOW_SIGNUPS: ${ALLOW_SIGNUPS:-false}
+      DAY_LENGTH_MINUTES: ${DAY_LENGTH_MINUTES:-120}
+      REAL_TIME: ${REAL_TIME:-false}
+      TIME_OFFSET_HOURS: ${TIME_OFFSET_HOURS:-0}
+      WEATHER_SEED: ${WEATHER_SEED:-1337}
+      DRONE_AWAY_MINUTES: ${DRONE_AWAY_MINUTES:-3}
+      DRONE_STAY_MINUTES: ${DRONE_STAY_MINUTES:-12}
+      DRONE_FIRST_ARRIVAL_MINUTES: ${DRONE_FIRST_ARRIVAL_MINUTES:-1}
+      DRONE_START_AWAY: ${DRONE_START_AWAY:-false}
+      AGENTS_PER_KEY: ${AGENTS_PER_KEY:-3}
+      MAX_AGENTS: ${MAX_AGENTS:-24}
+      AGENT_IDLE_MINUTES: ${AGENT_IDLE_MINUTES:-30}
+    volumes:
+      - oilrig-data:/data
+    ports:
+      - "127.0.0.1:${APP_PORT:-8787}:8787"
+
+  caddy:
+    image: caddy:2
+    profiles: [tls]
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+
+configs:
+  caddyfile:
+    content: |
+      {$$DOMAIN} {
+      	# Event streams (SSE and MCP) must reach the client as they are written, not once a
+      	# compressor has filled its buffer.
+      	@compressible not path /api/v1/events /mcp
+      	encode @compressible zstd gzip
+      	reverse_proxy app:8787
+      }
+
+volumes:
+  oilrig-data:
+  caddy-data:
+  caddy-config:

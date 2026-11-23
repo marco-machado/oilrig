@@ -60,7 +60,7 @@ export class AgentManager {
     });
   }
 
-  /** `recast`: the Recast WASM module factory (Workers pass a precompiled one). */
+  /** `recast`: the Recast WASM module factory, if not the default. */
   static async create(world: World, limits: Partial<AgentLimits> = {}, recast?: RecastImpl) {
     const nav = await NavigationMesh.build(world.sw, recast);
     const s = world.drone.state;

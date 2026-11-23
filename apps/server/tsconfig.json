@@ -1,9 +1,9 @@
 {
-  // The Worker and its Durable Objects: Workers runtime types (from `pnpm cf-typegen`), no DOM, no Node.
+  // The Node server: no DOM.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2024"],
-    "types": []
+    "types": ["node"]
   },
-  "include": ["src", "worker-configuration.d.ts", "../../packages/shared/src"]
+  "include": ["src", "../../packages/shared/src"]
 }

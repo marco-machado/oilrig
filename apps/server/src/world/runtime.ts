@@ -36,6 +36,7 @@ export class WorldRuntime {
    * that stopped for want of company does not start listening again just by being woken. */
   private lastPresence: number;
   private readonly store: WorldStore & KeyStore;
+  private readonly mcp: ReturnType<typeof createMcpEndpoint>;
 
   private constructor(world: World, agents: AgentManager, store: WorldStore & KeyStore, listenMs: number, nameTaken?: (name: string) => Promise<boolean>) {
     this.world = world;
@@ -48,6 +49,7 @@ export class WorldRuntime {
     const service = new ApiService(world, agents, nameTaken);
     const auth = apiAuth(store, new RateLimiter());
     const mcp = createMcpEndpoint(service);
+    this.mcp = mcp;
     this.api = new Hono<ApiEnv>();
     this.api.route('/api/v1', createRestApi(service, this.events, auth));
     this.api.all('/mcp', auth, (c) => mcp.fetch(c.req.raw, c.get('apiKey').id, c.req.header('authorization')!.replace(/^Bearer\s+/i, '')));
@@ -90,11 +92,19 @@ export class WorldRuntime {
   }
 
   /** Stops the clocks; agents and people's places are kept. Streams still open are ended:
-   * left open they would hold the object in memory with nothing to send. */
+   * left open they would have nothing to send. */
   pause() {
     this.world.stop();
     this.agents.pause();
     this.events.end();
     this.store.saveLastPresence(this.lastPresence);
+  }
+
+  /** The server is shutting down: stops the clocks, ends the streams, sends the agents away
+   * (which settles the requests waiting on them) and closes the MCP handler. */
+  async close() {
+    this.pause();
+    this.agents.stop();
+    await this.mcp.close();
   }
 }

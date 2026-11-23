@@ -1,12 +1,13 @@
 import { defineConfig } from '@playwright/test';
 
-// Headless Chromium with WebGPU, using Playwright's own temporary profile. Two dev servers,
-// each with its own Worker and empty Durable Object state: 5174 with sign-ups open, and
-// 5175 as deployed by default (ALLOW_SIGNUPS unset).
-const devServer = (port: number, env: Record<string, string>) => ({
-  command: `pnpm --filter @oilrig/client exec vite --port ${port} --strictPort`,
-  url: `http://localhost:${port}`,
-  env: { CF_STATE: 'off', CF_INSPECTOR_PORT: 'off', ...env },
+// Headless Chromium with WebGPU, using Playwright's own temporary profile. Two dev servers
+// (`pnpm dev`), each with an empty in-memory database: 5174 with sign-ups open, and 5175 as
+// deployed by default (sign-ups closed).
+const devServer = (port: number, serverPort: number, signups: boolean) => ({
+  command: 'node scripts/dev.ts',
+  // Ready once Vite passes requests on to a server that answers.
+  url: `http://localhost:${port}/healthz`,
+  env: { CLIENT_PORT: String(port), SERVER_PORT: String(serverPort), DATA_DIR: ':memory:', ALLOW_SIGNUPS: String(signups) },
   reuseExistingServer: true,
   timeout: 60_000,
 });
@@ -24,5 +25,5 @@ export default defineConfig({
       args: ['--enable-unsafe-webgpu', '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=metal'],
     },
   },
-  webServer: process.env.PW_BASE_URL ? undefined : [devServer(5174, { ALLOW_SIGNUPS: 'true' }), devServer(5175, {})],
+  webServer: process.env.PW_BASE_URL ? undefined : [devServer(5174, 8774, true), devServer(5175, 8775, false)],
 });

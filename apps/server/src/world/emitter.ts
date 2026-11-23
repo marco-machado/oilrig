@@ -1,4 +1,4 @@
-/** A small typed event emitter (node:events is not part of the Workers runtime). */
+/** A small typed event emitter. */
 export class Emitter<Events extends Record<keyof Events, unknown[]>> {
   private readonly listeners = new Map<keyof Events, Set<(...args: never[]) => void>>();
 

@@ -1,7 +1,8 @@
+import { fileURLToPath } from 'node:url';
 import type { DroneScheduleOptions } from '@oilrig/shared';
 import type { AgentLimits } from './agents/manager.ts';
 
-/** World settings, from the Worker's environment variables (wrangler.jsonc `vars`). */
+/** World settings, from environment variables. */
 export interface WorldConfig {
   dayLengthMinutes: number;
   realTime: boolean;
@@ -56,3 +57,41 @@ export function worldConfig(env: Vars): WorldConfig {
 
 /** Sign-ups are open only when ALLOW_SIGNUPS is exactly "true". */
 export const signupsOpen = (env: Vars) => env.ALLOW_SIGNUPS === 'true';
+
+/** Where the server listens and keeps its files, from environment variables. */
+export interface ServerConfig {
+  port: number;
+  host: string;
+  /** Directory of the SQLite file, or `:memory:`. */
+  dataDir: string;
+  /** The built client; nothing static is served when it does not exist. */
+  staticDir: string;
+  /** The origin people open in their browser (`https://rig.example.com`) when a proxy in front
+   * terminates TLS; null to go by each request's Host header. */
+  publicOrigin: string | null;
+  signupsOpen: boolean;
+  world: WorldConfig;
+}
+
+export type ServerVars = Vars & Partial<Record<'PORT' | 'HOST' | 'DATA_DIR' | 'STATIC_DIR' | 'PUBLIC_ORIGIN', string>>;
+
+const here = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
+
+function publicOrigin(v: string | undefined) {
+  if (!v) return null;
+  const url = new URL(v);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`PUBLIC_ORIGIN must be an http(s) origin, got ${v}`);
+  return url.origin;
+}
+
+export function serverConfig(env: ServerVars = process.env): ServerConfig {
+  return {
+    port: Math.trunc(num(env.PORT, 8787)),
+    host: env.HOST || 'localhost',
+    dataDir: env.DATA_DIR || here('../data'),
+    staticDir: env.STATIC_DIR || here('../../client/dist/client'),
+    publicOrigin: publicOrigin(env.PUBLIC_ORIGIN),
+    signupsOpen: signupsOpen(env),
+    world: worldConfig(env),
+  };
+}

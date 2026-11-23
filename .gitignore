@@ -9,9 +9,11 @@ bench-results
 playwright-report
 .playwright-cli
 .idea
+# Local state left from when the server ran in workerd; delete the directory and this line.
 .wrangler
-.dev.vars*
-worker-configuration.d.ts
+# The dev server's database (DATA_DIR).
+apps/server/data*
+.env
 
 # Verification captures from `pnpm screenshots`; the README uses the committed .webp copies.
 docs/screenshots/*.png

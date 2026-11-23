@@ -1,15 +1,47 @@
-import { SELF } from 'cloudflare:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll } from 'vitest';
+import WebSocket from 'ws';
 import { type Account, PROTOCOL_VERSION, type ServerMessage, type WelcomeMessage } from '@oilrig/shared';
+import { type ServerVars, serverConfig } from '../../apps/server/src/config.ts';
+import { type RunningServer, startServer } from '../../apps/server/src/server.ts';
 
-// Requests go through the real Worker (SELF): routing, cookies, the Durable Objects.
+// Each test file runs the real server on a free port, with its own empty database in a
+// temporary directory, and talks to it over HTTP and WebSockets like a browser or an agent.
 
-export const ORIGIN = 'http://localhost';
+/** Sign-ups open; the drone stays away (off the pad) for the whole run. */
+const TEST_VARS: ServerVars = { ALLOW_SIGNUPS: 'true', WEATHER_SEED: '5', DRONE_START_AWAY: 'true', DRONE_FIRST_ARRIVAL_MINUTES: '1440' };
+
+/** Starts a server of its own (`DATA_DIR` defaults to memory, and no client is served unless `STATIC_DIR` is given). */
+export const startTestServer = (vars: ServerVars = {}) =>
+  startServer(serverConfig({ ...TEST_VARS, PORT: '0', DATA_DIR: ':memory:', STATIC_DIR: path.join(tmpdir(), 'oilrig-no-client'), ...vars }));
+
+/** The file's server. */
+export let server: RunningServer;
+let dataDir: string;
+
+beforeAll(async () => {
+  dataDir = mkdtempSync(path.join(tmpdir(), 'oilrig-test-'));
+  server = await startTestServer({ DATA_DIR: dataDir });
+});
+
+afterAll(async () => {
+  await server.close();
+  rmSync(dataDir, { recursive: true, force: true });
+});
+
+/** Stops the server and starts it again on the same database, as a restart of the container does. */
+export async function restart() {
+  await server.close();
+  server = await startTestServer({ DATA_DIR: dataDir });
+}
 
 let counter = 0;
 /** A username nobody in this run has used yet. */
 export const uniqueName = (base: string) => `${base.toLowerCase()}-${Date.now().toString(36)}${(counter++).toString(36)}`.slice(0, 24);
 
-export function request(path: string, init: RequestInit & { cookie?: string; json?: unknown } = {}) {
+export function request(path: string, init: RequestInit & { cookie?: string; json?: unknown; server?: RunningServer } = {}) {
   const headers = new Headers(init.headers);
   if (init.cookie) headers.set('cookie', init.cookie);
   let body = init.body;
@@ -17,7 +49,7 @@ export function request(path: string, init: RequestInit & { cookie?: string; jso
     headers.set('content-type', 'application/json');
     body = JSON.stringify(init.json);
   }
-  return SELF.fetch(`${ORIGIN}${path}`, { ...init, headers, body });
+  return fetch(`${init.server?.url ?? server.url}${path}`, { ...init, headers, body });
 }
 
 /** The session cookie from a response, as a Cookie header value. */
@@ -49,18 +81,40 @@ export async function createKey(m: Member, name = 'tests') {
   return (await res.json()) as { key: string; info: { id: string } };
 }
 
-/** A browser-like player: a WebSocket through the Worker with a typed inbox. */
+/** The server answered a WebSocket upgrade with an HTTP error. */
+export class Refused extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(`upgrade refused: ${status}`);
+    this.status = status;
+  }
+}
+
+/** A browser-like player: a WebSocket to the server with a typed inbox. */
 export class Player {
   readonly ws: WebSocket;
+  /** The Set-Cookie header that came with the upgrade, if any. */
+  setCookie: string | null = null;
   readonly inbox: ServerMessage[] = [];
   readonly closed: Promise<{ code: number; reason: string }>;
+  /** Resolves once the socket is open; rejects with the HTTP status of a refused upgrade. */
+  private readonly opened: Promise<void>;
   private waiters: Array<{ pred: (m: ServerMessage) => boolean; resolve: (m: ServerMessage) => void }> = [];
 
   private constructor(ws: WebSocket) {
     this.ws = ws;
-    this.closed = new Promise((resolve) => ws.addEventListener('close', (e) => resolve({ code: e.code, reason: e.reason })));
-    ws.addEventListener('message', (e) => {
-      const m = JSON.parse(String(e.data)) as ServerMessage;
+    this.closed = new Promise((resolve) => ws.once('close', (code, reason) => resolve({ code, reason: reason.toString() })));
+    this.opened = new Promise((resolve, reject) => {
+      ws.once('upgrade', (res) => (this.setCookie = res.headers['set-cookie']?.[0] ?? null));
+      ws.once('open', () => resolve());
+      ws.once('unexpected-response', (_req, res) => {
+        res.resume();
+        reject(new Refused(res.statusCode ?? 0));
+      });
+      ws.once('error', reject);
+    });
+    ws.on('message', (data) => {
+      const m = JSON.parse(data.toString()) as ServerMessage;
       this.inbox.push(m);
       this.waiters = this.waiters.filter((w) => {
         if (!w.pred(m)) return true;
@@ -70,12 +124,22 @@ export class Player {
     });
   }
 
-  /** Opens /ws with a member's cookie (or none). */
-  static async connect(cookie?: string, headers: Record<string, string> = {}) {
-    const res = await request('/ws', { headers: { upgrade: 'websocket', ...headers }, cookie });
-    if (!res.webSocket) throw new Error(`no socket: ${res.status} ${await res.text()}`);
-    res.webSocket.accept();
-    return new Player(res.webSocket);
+  /** Opens /ws with a member's cookie (or none). Throws `Refused` when the server answers with an HTTP error. */
+  static async connect(cookie?: string, headers: Record<string, string> = {}, to: RunningServer = server) {
+    const p = new Player(new WebSocket(`${to.url.replace('http', 'ws')}/ws`, { headers: { ...headers, ...(cookie ? { cookie } : {}) } }));
+    await p.opened;
+    return p;
+  }
+
+  /** The HTTP status of an upgrade the server refuses. */
+  static async refused(cookie: string | undefined, headers: Record<string, string> = {}, to: RunningServer = server) {
+    try {
+      (await Player.connect(cookie, headers, to)).close();
+    } catch (err) {
+      if (err instanceof Refused) return err.status;
+      throw err;
+    }
+    throw new Error('the socket opened');
   }
 
   /** Connects and joins, returning the welcome. */

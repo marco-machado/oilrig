@@ -476,7 +476,7 @@ A re-bake completes in half the time and half the calls, and each call takes abo
 - **The 60 Hz cap hides the gain on High.** The uncapped figures measure throughput in a browser that is not waiting for a display; they are not what a 60 Hz player sees, who was at 60 fps before. The headroom matters on slower GPUs, higher resolutions and displays above 60 Hz, none of which were measured.
 - **GPU time was not measured** (see the method), and nothing here is inferred from JavaScript time.
 - **Presets.** Timing covers High and Ultra. Low and Medium are in the pictures only.
-- **Offline client only.** No Worker, no other players, no agents: the networked game's main-thread work (messages, avatars) is not in these numbers.
+- **Offline client only.** No server, no other players, no agents: the networked game's main-thread work (messages, avatars) is not in these numbers.
 - **Cold start** is a warm browser with fragment shaders made new to the driver's cache, not a first install; the comparison is of the "usable" times only.
 - **Memory.** GPU texture sizes are estimates from format and size; process footprints are whole-process figures from macOS and include the browser's own share. The GPU process's peak is its high-water mark since the browser started, not per scene.
 - **Chrome's periodic wait** (above) is still there, less often.

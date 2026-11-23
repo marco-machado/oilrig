@@ -7,15 +7,14 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "pnpm --filter @oilrig/client dev",
+    "dev": "node scripts/dev.ts",
     "build": "pnpm --filter @oilrig/client build",
-    "preview": "pnpm --filter @oilrig/client preview",
-    "deploy": "pnpm build && pnpm --filter @oilrig/client exec wrangler deploy",
-    "cf-typegen": "pnpm --filter @oilrig/client exec wrangler types -c ../server/wrangler.jsonc --strict-vars=false ../server/worker-configuration.d.ts",
+    "start": "node apps/server/src/main.ts",
+    "preview": "pnpm build && pnpm start",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
-    "test:workers": "vitest run --project workers",
-    "typecheck": "pnpm cf-typegen && tsc -p tsconfig.json && tsc -p apps/client && tsc -p apps/server && tsc -p tests/unit && tsc -p tests/workers",
+    "test:server": "vitest run --project server",
+    "typecheck": "tsc -p tsconfig.json && tsc -p apps/client && tsc -p apps/server && tsc -p tests/unit && tsc -p tests/server",
     "test:render": "playwright test tests/e2e/render.spec.ts",
     "test:auth": "playwright test tests/e2e/auth.spec.ts",
     "perf": "PERF=1 playwright test tests/e2e/perf.spec.ts",
@@ -24,17 +23,19 @@
     "bench": "node scripts/bench.ts",
     "screenshots": "SHOTS=1 playwright test tests/e2e/screenshots.spec.ts",
     "bot": "node scripts/bot.ts",
+    "smoke": "node scripts/smoke.ts",
     "sfx": "node scripts/sfx.ts"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "1.8.5",
     "@dimforge/rapier3d-compat": "0.21.0",
     "@modelcontextprotocol/client": "2.4.0",
     "@oilrig/shared": "workspace:*",
     "@playwright/test": "1.65.1",
     "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2",
     "typescript": "7.0.2",
     "vite": "8.3.8",
-    "vitest": "5.1.1"
+    "vitest": "5.1.1",
+    "ws": "^8.23.0"
   }
 }

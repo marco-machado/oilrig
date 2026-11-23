@@ -1,9 +1,0 @@
-{
-  // Tests that run inside workerd (vitest project "workers").
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "lib": ["ES2024"],
-    "types": ["@cloudflare/vitest-plugin/types"]
-  },
-  "include": [".", "../../apps/server/worker-configuration.d.ts", "../../apps/server/src/wasm/modules.d.ts"]
-}

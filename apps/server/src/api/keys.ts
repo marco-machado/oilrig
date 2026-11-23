@@ -45,13 +45,15 @@ export const hashKey = sha256Hex;
 
 /** Creates a key for a user, up to MAX_KEYS_PER_USER active at a time. */
 export async function createApiKey(store: KeyStore, ownerId: string, name: string) {
+  const id = hex(randomBytes(4));
+  const key = `ork_${id}_${base64url(randomBytes(24))}`;
+  const hash = await hashKey(key);
+  const ratePerMinute = DEFAULT_RATE_PER_MINUTE;
+  // Counted and added without awaiting in between, so requests made at once cannot pass the limit.
   if (store.activeKeys(ownerId).length >= MAX_KEYS_PER_USER) {
     throw new AgentError('too-many-keys', `You already have ${MAX_KEYS_PER_USER} keys. Revoke one first.`, 409);
   }
-  const id = hex(randomBytes(4));
-  const key = `ork_${id}_${base64url(randomBytes(24))}`;
-  const ratePerMinute = DEFAULT_RATE_PER_MINUTE;
-  store.addApiKey({ id, ownerId, name, hash: await hashKey(key), prefix: `ork_${id}`, ratePerMinute });
+  store.addApiKey({ id, ownerId, name, hash, prefix: `ork_${id}`, ratePerMinute });
   return { id, key, name, prefix: `ork_${id}`, ratePerMinute };
 }
 
